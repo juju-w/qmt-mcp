@@ -160,6 +160,7 @@ def main():
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     lines = {
         "QMT_BROKER_ID": broker_id,
+        "QMT_CLIENT": os.path.abspath(client),         # linux path (wine accepts it)
         "QMT_CLIENT_WIN": win(client),
         "QMT_BIN_DIR_WIN": win(bin_dir),
         "QMT_BIN_DIR": os.path.abspath(bin_dir),       # linux path (start-qmt cwd)
@@ -167,9 +168,11 @@ def main():
         "QMT_XTQUANT_DIR_WIN": win(xtq_dir),
         "QMT_MCP_MODE": mode,
     }
+    # Single-quote values: Wine paths contain backslashes that bash `source`
+    # would otherwise eat. Paths never contain single quotes.
     with open(OUT, "w", encoding="utf-8") as fh:
         for k, v in lines.items():
-            fh.write(f"{k}={v}\n")
+            fh.write(f"{k}='{v}'\n")
 
     log(f"broker resolved: id={broker_id} mode={mode}")
     log(f"  client   = {client}")

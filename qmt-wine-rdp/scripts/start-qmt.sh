@@ -14,9 +14,12 @@ export QT_OPENGL="${QT_OPENGL:-software}"
 export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
 export QTWEBENGINE_DISABLE_SANDBOX="${QTWEBENGINE_DISABLE_SANDBOX:-1}"
 
-CLIENT_WIN="${QMT_CLIENT_WIN:?detect-broker did not resolve a client; check the broker pack}"
+# Launch via the resolved Linux path — Wine accepts unix paths and this avoids
+# any backslash-escaping pitfalls. Fall back to the Wine path if unset.
+CLIENT="${QMT_CLIENT:-}"
 BIN_DIR="${QMT_BIN_DIR:-/broker}"
+: "${CLIENT:?detect-broker did not resolve a client; check the broker pack}"
 
-echo "[start-qmt] broker=${QMT_BROKER_ID:-?} client=$CLIENT_WIN"
+echo "[start-qmt] broker=${QMT_BROKER_ID:-?} client=$CLIENT"
 cd "$BIN_DIR"
-exec wine "$CLIENT_WIN"
+exec wine "$CLIENT"

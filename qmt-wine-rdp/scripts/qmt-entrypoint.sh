@@ -7,10 +7,15 @@ set -euo pipefail
 # shellcheck disable=SC1091
 . /run/qmt/broker.env
 
-# 2) Derive the RDP password hash from the friendly env, if provided.
+# 2) RDP password. We pre-create wineuser at BUILD time (for Wine provisioning),
+#    so the base entrypoint finds the user already present and SKIPS useradd —
+#    meaning it never applies USER_PASSWD. Set the password directly each start.
 if [ -z "${USER_PASSWD:-}" ] && [ -n "${QMT_RDP_PASSWORD:-}" ]; then
   USER_PASSWD="$(openssl passwd -1 -salt qmt "${QMT_RDP_PASSWORD}")"
   export USER_PASSWD
+fi
+if [ -n "${QMT_RDP_PASSWORD:-}" ]; then
+  echo "${USER_NAME:-wineuser}:${QMT_RDP_PASSWORD}" | chpasswd
 fi
 
 # 3) Bridge runtime + resolved config to the RDP/XFCE session (which does not

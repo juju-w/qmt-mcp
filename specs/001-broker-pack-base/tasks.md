@@ -32,7 +32,7 @@ Tests are lightweight contract/smoke checks (no unit-test framework requested).
 - [x] T011 [US1] Rewrite `qmt-wine-rdp/docker-compose.yml`: mount `${BROKER_PACK}:/broker` read-write; parameterize `container_name`, RDP/MCP host ports, and `QMT_MCP_TOKEN` from `.env`; drop baked-workspace assumptions.
 - [x] T012 [P] [US1] Create `qmt-wine-rdp/scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant.rar> <out-dir>`: 7z-extract the terminal + unrar xtquant into out-dir and drop a starter `broker.yaml`.
 - [x] T013 [US1] Create `qmt-wine-rdp/brokers/guangda-jinyangguang/broker.yaml` example (光大金阳光) with explicit paths.
-- [ ] T014 [US1] On the NAS, build a 金阳光 pack with `make-broker-pack.sh` (reuse the already-downloaded setup_qmt.exe + xtquant rar), mount it, `docker compose up -d`, verify resolution + RDP reachable.
+- [x] T014 [US1] On the NAS, build a 金阳光 pack with `make-broker-pack.sh` (reuse the already-downloaded setup_qmt.exe + xtquant rar), mount it, `docker compose up -d`, verify resolution + RDP reachable.
 - [ ] T015 [US1] Verify switch: bring down, point `BROKER_PACK` at a second pack dir, `up -d` with the same image tag (no build), confirm it drives the second pack.
 - [ ] T016 [US1] Verify two instances concurrently (distinct ports/tokens/packs) run without interference.
 
@@ -46,7 +46,7 @@ Tests are lightweight contract/smoke checks (no unit-test framework requested).
 
 - [x] T017 [US2] Implement auto-detection in `detect-broker.py`: client by known names (`XtItClient.exe`,`XtMiniQmt.exe`), `userdata_mini` dir, `xtquant/__init__.py` dir; explicit value still wins.
 - [x] T018 [P] [US2] Create `qmt-wine-rdp/brokers/template/broker.yaml` (documented, all-optional template).
-- [ ] T019 [US2] On the NAS, verify a pack with NO `broker.yaml` resolves and starts via auto-detection; verify an explicit `terminal.client` override is honored.
+- [x] T019 [US2] On the NAS, verify a pack with NO `broker.yaml` resolves and starts via auto-detection; verify an explicit `terminal.client` override is honored.
 
 **Checkpoint**: low-friction onboarding via auto-detection.
 
@@ -57,7 +57,7 @@ Tests are lightweight contract/smoke checks (no unit-test framework requested).
 **Independent test**: empty mount, missing xtquant, ambiguous client each exit with a distinct message and no RDP/MCP up.
 
 - [x] T020 [US3] Implement the fail-fast matrix + exit codes (10–14) in `detect-broker.py` per contracts/detect-broker.md (empty/unwritable mount, malformed yaml, missing explicit path, client 0/>1, xtquant 0/>1) with specific messages.
-- [ ] T021 [US3] On the NAS, run the fail-fast scenarios; confirm distinct messages, correct non-zero exit codes, and that no RDP/MCP port is left listening.
+- [x] T021 [US3] On the NAS, run the fail-fast scenarios; confirm distinct messages, correct non-zero exit codes, and that no RDP/MCP port is left listening.
 
 **Checkpoint**: fail-closed behavior verified.
 

@@ -74,6 +74,15 @@ RUN install -d -o wineuser -g wineuser /home/wineuser/.config/autostart \
       'Terminal=false' \
       'X-GNOME-Autostart-enabled=true' \
       > /home/wineuser/.config/autostart/qmt-mcp.desktop \
+ && printf '%s\n' \
+      '[Desktop Entry]' \
+      'Type=Application' \
+      'Name=QMT Client' \
+      'Comment=Launch the broker QMT terminal on login' \
+      'Exec=/usr/local/bin/start-qmt.sh' \
+      'Terminal=false' \
+      'X-GNOME-Autostart-enabled=true' \
+      > /home/wineuser/.config/autostart/qmt-client.desktop \
  && chown -R wineuser:wineuser /opt/qmt-mcp /home/wineuser/.config /opt/installers
 
 # ---- Wine-side provisioning as wineuser (prefix + Python + fonts + MCP deps) ----

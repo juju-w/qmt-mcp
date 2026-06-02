@@ -1,4 +1,12 @@
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+Active feature: 001-broker-pack-base
+Plan: specs/001-broker-pack-base/plan.md
+Spec: specs/001-broker-pack-base/spec.md
+Constitution: .specify/memory/constitution.md
+
+Project: broker-agnostic QMT-MCP appliance. Base image (Wine wow64 + Windows
+Python 3.12 + CJK fonts + fastmcp/uvicorn + MCP launcher + xrdp) is
+broker-neutral; the QMT terminal + matching xtquant + broker.yaml are mounted
+at /broker (read-write) as a "broker pack". Build/run on a native amd64 host
+(x86 NAS); Apple Silicon only under emulation (Rosetta AVX limitation).
 <!-- SPECKIT END -->

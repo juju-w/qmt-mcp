@@ -85,13 +85,23 @@ def filter_trade_tools():
     log(f"trade tools kept (read-only): {sorted(remaining & TRADE_QUERY_ALLOW) or '?'}")
 
 
+def _ensure_xtquant_on_path():
+    """Put the broker pack's xtquant (resolved by detect-broker) on sys.path."""
+    xtq = os.environ.get("QMT_XTQUANT_DIR_WIN", "").strip()
+    if xtq and xtq not in sys.path:
+        sys.path.insert(0, xtq)
+        log(f"xtquant dir on sys.path: {xtq}")
+
+
 # --- background trader connector -------------------------------------------
 def connector():
-    path = os.environ.get(
-        "QMT_MINI_PATH", r"Z:\workspace\QMT\extracted\userdata_mini"
-    )
+    path = os.environ.get("QMT_USERDATA_WIN", "").strip()
+    if not path:
+        log("connector: QMT_USERDATA_WIN unset (no broker resolved); trader disabled")
+        return
     retry = int(os.environ.get("QMT_CONNECT_RETRY", "8"))
     log(f"connector: waiting for MiniQMT at {path!r} (retry {retry}s)")
+    _ensure_xtquant_on_path()
     while True:
         try:
             from xtquant import xttrader

@@ -4,8 +4,9 @@
 *.local.json
 .claude/settings.local.json
 
-# broker terminal binaries & generated QMT data (huge, broker-specific, not source)
+# broker packs & terminal binaries & generated QMT data (huge, broker-specific)
 qmt-wine-rdp/workspace/
+qmt-wine-rdp/brokers/*/pack/
 **/userdata_mini/
 **/userdata/
 *.rar

@@ -1,52 +1,74 @@
-# Broker Pack contract
+# Broker Packs
 
-A **broker pack** is everything broker-specific, kept *outside* the image so you
-can switch QMT environments by swapping a mounted directory — the base image is
-identical for every broker.
+The appliance is split into a **broker-neutral base image** and a runtime-mounted
+**broker pack**. Switch brokers by swapping the pack — never by rebuilding.
 
-## What a broker pack contains
+## What's in the base image (broker-neutral)
+Wine new-WoW64, Windows Python 3.12, CJK fonts, `fastmcp`+`uvicorn`, the read-only
+MCP launcher + scripts + XFCE autostart, xrdp, and `detect-broker`. **No** QMT
+terminal, **no** xtquant, **no** account data.
 
+## What's in a broker pack (mounted read-write at `/broker`)
+```text
+<pack>/
+├── broker.yaml                 # optional (schema v1); see contract
+├── bin.x64/XtItClient.exe      # the broker's extracted QMT terminal
+├── userdata_mini/              # created/written at login
+├── ... rest of the QMT tree ...
+└── xtquant/                    # the MATCHING xtquant package (has __init__.py)
 ```
-<broker-pack>/                 # mounted at /broker (read-only is fine)
-├── bin.x64/XtItClient.exe     # the broker's QMT/MiniQMT client (the "exe to swap")
-├── userdata_mini/             # created/populated by the client after login
-├── xtquant/                   # the xtquant python package matching this build
-└── broker.yaml                # the contract file (see brokers/template/broker.yaml)
+The pack is mounted **read-write** (QMT writes userdata/logs/config in-tree).
+xtquant is **always** supplied by the pack (the base ships none) so its version
+matches the terminal.
+
+## `broker.yaml` (schema v1)
+All fields optional; omitted → auto-detected. Full contract:
+`specs/001-broker-pack-base/contracts/broker.yaml.schema.md`.
+```yaml
+schema_version: 1
+broker: { id: my-broker, name: 我的券商 QMT }
+terminal: { client: bin.x64/XtItClient.exe, userdata: userdata_mini }
+xtquant:  { path: xtquant }
+mcp:      { mode: readonly }   # readonly (default) | trade (deferred)
 ```
 
-Only `broker.yaml` is authored by you; the rest is the broker's extracted QMT
-install (from their `setup_qmt.exe`, 7z-extracted) plus the matching `xtquant`.
-
-## How the base image consumes it
-
-On container start the entrypoint:
-
-1. Reads `/broker/broker.yaml` (all fields optional).
-2. **Auto-detects** anything omitted by scanning `/broker`:
-   - client exe — first match among known client names,
-   - `userdata_mini` — first dir of that name,
-   - `xtquant` — first `xtquant/` package dir.
-3. Resolves Wine paths (`Z:\broker\...`), exports them, fails fast with a clear
-   message if the client exe or xtquant can't be found.
-4. Puts the pack's `xtquant` on the Wine Python path when `xtquant.source: pack`.
-5. Starts xrdp; on RDP/XFCE login the client + MCP auto-start.
-
-## Switching brokers
-
+## Build a pack
 ```bash
-# point the volume at a different broker's extracted QMT + its broker.yaml
-BROKER_PACK=/srv/brokers/haitong  docker compose up -d
+scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
+```
+Extracts the NSIS terminal (`7z`) and the RAR5 xtquant (`unrar`) and drops a
+starter `broker.yaml`.
+
+## Run / switch / multi-instance
+```bash
+# .env: QMT_MCP_TOKEN, INSTANCE, RDP_PORT, MCP_PORT, BROKER_PACK
+docker compose up -d                       # run
+# switch broker: point BROKER_PACK at another pack, same image — no rebuild
+docker compose down && docker compose up -d
+# multiple brokers on one host: one .env per instance (distinct INSTANCE/ports/
+# token/BROKER_PACK), then:
+docker compose --env-file broker-a.env -p qmt-a up -d
+docker compose --env-file broker-b.env -p qmt-b up -d
 ```
 
-No rebuild. Run several brokers at once by giving each its own pack, port and
-`QMT_MCP_TOKEN` (compose profiles / one service per broker).
+## Startup resolution & fail-fast
+`detect-broker` resolves client / userdata / xtquant (explicit `broker.yaml` wins;
+otherwise auto-detect) and writes `/run/qmt/broker.env`. It **fails fast** (the
+container exits, nothing left listening) when:
 
-## Making a new broker pack
+| Exit | Cause |
+|---|---|
+| 10 | `/broker` empty / unreadable / not writable |
+| 11 | `broker.yaml` malformed / unsupported `schema_version` / bad `mcp.mode` |
+| 12 | an explicit path in `broker.yaml` does not exist |
+| 13 | client unresolved (0 or >1 candidates — set `terminal.client`) |
+| 14 | xtquant unresolved (0 or >1 — set `xtquant.path`) |
 
-1. Get the broker's QMT installer, 7z-extract it into `<pack>/` (so
-   `<pack>/bin.x64/<client>.exe` exists).
-2. Drop the matching `xtquant/` into `<pack>/xtquant`.
-3. Copy `brokers/template/broker.yaml` to `<pack>/broker.yaml`; set `broker.id`,
-   and only override `client_exe`/`userdata_mini` if auto-detect picks wrong.
-4. `docker compose up -d` pointing `BROKER_PACK` at it. Connect via RDP, log in,
-   confirm `/healthz` reports `xtdata`/`trader` connected.
+## Login & MCP
+Log into the QMT terminal manually over RDP (`<host>:RDP_PORT`, user `wineuser`).
+The MCP (`<host>:MCP_PORT/sse`, bearer `QMT_MCP_TOKEN`) starts with the desktop
+session; its trader tools come live after login (read-only by default).
+
+## Apple Silicon
+Build/run only under emulation; QMT native services may hit the Rosetta AVX
+assertion. Use a native amd64 host (the x86 NAS).

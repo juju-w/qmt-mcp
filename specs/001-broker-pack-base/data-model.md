@@ -67,8 +67,9 @@ path) via `/opt/qmt-mcp/mcp.env`.
 | `/broker` empty/unreadable | exit non-zero: "broker pack mount /broker is empty/unreadable" |
 | `broker.yaml` malformed / bad `schema_version` | exit: parse/version error, no guessing |
 | explicit path set but missing | exit: "configured X not found at <path>" |
-| client: 0 candidates | exit: "no QMT client found; set terminal.client" |
-| client: >1 candidates | exit: list candidates, "set terminal.client to disambiguate" |
+| client: 0 candidates (no known name) | exit 13: "no QMT client found; set terminal.client" |
+| client: top-priority name has >1 copies | exit 13: list candidates, "set terminal.client" |
+| client: different names present (e.g. XtItClient + XtMiniQmt) | resolved by priority (XtItClient first); not an error |
 | xtquant: 0 found (and not set) | exit: "no xtquant package found in pack" |
 | xtquant: >1 found | exit: list candidates, "set xtquant.path" |
 | read-only mount | exit: "/broker must be mounted read-write" |

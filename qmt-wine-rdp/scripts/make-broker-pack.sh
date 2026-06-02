@@ -37,20 +37,29 @@ esac
 XTQ_PKG="$(find "$OUT" -maxdepth 3 -type d -name xtquant -exec test -f '{}/__init__.py' ';' -print | head -1)"
 test -n "$XTQ_PKG" || { echo "ERROR: no importable xtquant package after extracting $XTQ" >&2; exit 1; }
 
+# Prefer XtItClient.exe; fall back to XtMiniQmt.exe. Pin it in broker.yaml so the
+# pack is self-describing (real QMT trees ship several client-named exes).
+CLIENT="$(find "$OUT" -iname 'XtItClient.exe' | head -1)"
+[ -n "$CLIENT" ] || CLIENT="$(find "$OUT" -iname 'XtMiniQmt.exe' | head -1)"
+CLIENT_REL="${CLIENT#"$OUT"/}"
+XTQ_REL="${XTQ_PKG#"$OUT"/}"
+
 if [ ! -f "$OUT/broker.yaml" ]; then
-  echo "[make-pack] writing starter broker.yaml"
+  echo "[make-pack] writing starter broker.yaml (client + xtquant pinned)"
   cat > "$OUT/broker.yaml" <<YAML
 schema_version: 1
 broker:
   id: ${BROKER_ID}
-# terminal.client / terminal.userdata / xtquant.path are auto-detected;
-# set them only if auto-detection is ambiguous.
+terminal:
+  client: ${CLIENT_REL}
+xtquant:
+  path: ${XTQ_REL}
 mcp:
   mode: readonly
 YAML
 fi
 
 echo "[make-pack] done."
-echo "  client : $(find "$OUT" -iname 'XtItClient.exe' -o -iname 'XtMiniQmt.exe' | head -1)"
+echo "  client : $CLIENT"
 echo "  xtquant: $XTQ_PKG"
 echo "  config : $OUT/broker.yaml"

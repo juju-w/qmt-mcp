@@ -84,7 +84,7 @@ message and no partially-started services.
 
 1. **Given** no pack mounted (or an empty mount), **When** the container starts, **Then** it exits with a message stating the broker pack mount point is empty and what is expected there.
 2. **Given** a pack missing xtquant and `xtquant.source` is `pack`, **When** the container starts, **Then** it exits with a message that xtquant was not found in the pack and how to supply it.
-3. **Given** a pack with multiple plausible client executables and no override, **When** the container starts, **Then** it exits listing the candidates and asking the operator to disambiguate via `broker.yaml`.
+3. **Given** a pack whose client cannot be unambiguously resolved by priority (e.g. two copies of the same top-priority client name) and no override, **When** the container starts, **Then** it exits listing the candidates and asking the operator to disambiguate via `broker.yaml`. (Different client names — e.g. `XtItClient.exe` + `XtMiniQmt.exe` — are resolved by priority order, not treated as an error.)
 
 ---
 

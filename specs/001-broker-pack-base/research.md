@@ -33,9 +33,15 @@ The remaining decisions are technical and recorded below.
 
 ## D4 — Auto-detection algorithm
 - **Decision**:
-  - **client**: `terminal.client` if set (must exist, else fail); else scan the
-    pack for known names (`XtItClient.exe`, `XtMiniQmt.exe`) under a `bin*`/root;
-    exactly one match → use it; zero → fail; multiple → fail listing candidates.
+  - **client**: `terminal.client` if set (must exist, else fail); else scan by a
+    **priority-ordered** known-name list (`XtItClient.exe` first, then
+    `XtMiniQmt.exe`). The first name with exactly one match wins; the top-priority
+    name with >1 copies → fail; no name matching → fail listing candidates.
+    (Real QMT trees ship several client-named exes — e.g. both `XtItClient.exe`
+    and `XtMiniQmt.exe` in `bin.x64` — so a flat "any-match" scan is always
+    ambiguous; the priority order resolves the canonical interactive client
+    without guessing. `make-broker-pack` additionally pins the resolved client in
+    the starter `broker.yaml` so packs are self-describing.)
   - **userdata**: `terminal.userdata` if set; else find a dir named
     `userdata_mini` (prefer one beside the client); zero is allowed (created on
     first login) but the parent must be writable; multiple → fail listing.

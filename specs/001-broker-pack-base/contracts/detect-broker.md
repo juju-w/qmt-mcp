@@ -14,8 +14,11 @@ side) before `exec /usr/bin/entrypoint`. Implemented in Python 3 (linux), using
 2. Load `broker.yaml` if present; validate `schema_version == 1` and `mcp.mode`
    ∈ {`readonly`,`trade`}; malformed → fail fast (no fallback to guessing).
 3. Resolve **client**, **userdata**, **xtquant** per the auto-detection algorithm
-   (research D4): explicit value wins and must exist; otherwise scan; ambiguity
-   (>1) or absence (0, where required) → fail fast with a specific message.
+   (research D4): explicit value wins and must exist; otherwise scan. The client
+   scan is **priority-ordered** (`XtItClient.exe` then `XtMiniQmt.exe`) — the first
+   name with exactly one match wins, since real QMT trees contain several
+   client-named exes. xtquant/userdata ambiguity (>1) or absence (0, where
+   required) → fail fast with a specific message.
 4. Convert resolved Linux paths to Wine paths with `winepath -w` (run as the
    target user).
 5. Write `/run/qmt/broker.env` with the resolved keys (data-model), no secrets,

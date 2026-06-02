@@ -89,12 +89,20 @@ def resolve_client(cfg: dict) -> str:
         if not os.path.isfile(p):
             die(12, f"configured terminal.client not found: {p}")
         return p
-    hits = find_files(MOUNT, CLIENT_NAMES)
-    if not hits:
+    # Real QMT trees ship several client-named exes; prefer in CLIENT_NAMES order
+    # (XtItClient.exe first). The first name with exactly one match wins; only the
+    # top-priority name with >1 copies is treated as ambiguous.
+    all_hits: list[str] = []
+    for name in CLIENT_NAMES:
+        hits = find_files(MOUNT, (name,))
+        all_hits += hits
+        if len(hits) == 1:
+            return hits[0]
+        if len(hits) > 1:
+            die(13, f"multiple {name} copies; set terminal.client:\n  " + "\n  ".join(hits))
+    if not all_hits:
         die(13, f"no QMT client {CLIENT_NAMES} under {MOUNT}; set terminal.client in broker.yaml")
-    if len(hits) > 1:
-        die(13, "multiple client candidates; set terminal.client:\n  " + "\n  ".join(hits))
-    return hits[0]
+    die(13, "ambiguous client candidates; set terminal.client:\n  " + "\n  ".join(all_hits))
 
 
 def resolve_xtquant(cfg: dict) -> str:

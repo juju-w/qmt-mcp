@@ -1,0 +1,40 @@
+services:
+  qmt-wine:
+    build: .
+    image: qmt-wine-rdp:x86
+    container_name: qmt-wine-rdp-x86
+    platform: linux/amd64
+    ports:
+      - "13389:3389"   # RDP
+      - "18765:8765"   # reserved read-only QMT gateway
+    environment:
+      RDP_SERVER: "yes"
+      USER_NAME: "wineuser"
+      USER_UID: "1000"
+      USER_GID: "1000"
+      QMT_RDP_PASSWORD: "qmt"
+      TZ: "Asia/Shanghai"
+      WINEARCH: "wow64"
+      WINEPREFIX: "/home/wineuser/.wine"
+      # WINE_APP: "/workspace/QMT/extracted/bin.x64/XtItClient.exe"
+      # ---- read-only QMT MCP (auto-started by the XFCE session on RDP login) ----
+      QMT_MCP_TOKEN: "${QMT_MCP_TOKEN:?set QMT_MCP_TOKEN in qmt-wine-rdp/.env}"
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "8765"
+      QMT_MINI_PATH: "Z:\\workspace\\QMT\\extracted\\userdata_mini"
+    shm_size: "1g"
+    restart: unless-stopped
+
+    # Fully baked image: Python, xtquant, QMT and the Wine prefix all live
+    # inside the image, so no bind mount or volume is required to start.
+    #
+    # To PERSIST the QMT login / userdata_mini and the Wine prefix across
+    # container recreation, uncomment the volume below. An EMPTY named volume
+    # is seeded from the image's /home/wineuser on first start; reusing an old
+    # volume will mask the baked prefix, so always start from a fresh one.
+    #
+    # volumes:
+    #   - wine-home:/home/wineuser
+
+# volumes:
+#   wine-home:

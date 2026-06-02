@@ -1,0 +1,24 @@
+# secrets — never commit
+.env
+**/.env
+*.local.json
+.claude/settings.local.json
+
+# broker terminal binaries & generated QMT data (huge, broker-specific, not source)
+qmt-wine-rdp/workspace/
+**/userdata_mini/
+**/userdata/
+*.rar
+*.exe
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# os / ide
+.DS_Store
+.idea/
+*.swp

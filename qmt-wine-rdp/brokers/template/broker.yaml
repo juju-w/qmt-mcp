@@ -1,0 +1,37 @@
+# broker pack contract — drop one of these next to a mounted QMT terminal to
+# tell the broker-agnostic base image how to drive it. Everything here is
+# optional: anything omitted is auto-detected by scanning the mounted root.
+# Swapping brokers = swap the mounted terminal + this file. The image never changes.
+
+schema: 1
+
+broker:
+  id: example-broker            # short slug, used in logs / container name
+  name: 示例券商 QMT             # human-readable
+
+terminal:
+  # Where the broker pack volume is mounted inside the container.
+  root: /broker
+  # Client exe relative to root. Omit to auto-detect among known names
+  # (XtItClient.exe, XtMiniQmt.exe, XtQuant.exe, ...).
+  client_exe: bin.x64/XtItClient.exe
+  # userdata_mini dir relative to root. Omit to auto-detect.
+  userdata_mini: userdata_mini
+
+xtquant:
+  # 'pack' = use the xtquant shipped in this broker pack (preferred, since the
+  # python API is often version-coupled to the terminal build).
+  # 'base' = use the xtquant baked into the base image (fallback).
+  source: pack
+  path: xtquant                 # relative to root when source=pack
+
+mcp:
+  mode: read-only               # read-only | trade
+  # Required ONLY when mode=trade. Orders/cancels are refused for any account
+  # not listed here, regardless of what the agent passes.
+  account_allowlist: []
+  # Accounts the MCP may auto-subscribe / query (read-only is fine to list all).
+  accounts:
+    - id: "1234567890"
+      type: STOCK               # STOCK | CREDIT | FUTURE
+  # Bearer token comes from the QMT_MCP_TOKEN env (deploy/.env), not from here.

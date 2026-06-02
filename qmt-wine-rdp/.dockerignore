@@ -1,0 +1,9 @@
+.git
+.gitignore
+.DS_Store
+.env
+mcp/vendor/**/__pycache__
+workspace/**
+!workspace/QMT/.gitkeep
+!workspace/app/.gitkeep
+!workspace/python/.gitkeep

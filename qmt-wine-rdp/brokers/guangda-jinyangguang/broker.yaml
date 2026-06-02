@@ -1,0 +1,20 @@
+# 光大证券 金阳光 QMT — the build we validated end-to-end.
+schema: 1
+
+broker:
+  id: guangda-jinyangguang
+  name: 光大金阳光 QMT
+
+terminal:
+  root: /broker
+  client_exe: bin.x64/XtItClient.exe
+  userdata_mini: userdata_mini
+
+xtquant:
+  source: pack
+  path: xtquant            # xtquant_250807 placed at <root>/xtquant
+
+mcp:
+  mode: read-only
+  account_allowlist: []
+  accounts: []             # fill in your fund account(s) to enable auto-subscribe

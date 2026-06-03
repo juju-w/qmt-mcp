@@ -117,9 +117,24 @@ specs/                  # Spec-Driven Development：001~005 规格/计划/任务
 原则见 [`.specify/memory/constitution.md`](.specify/memory/constitution.md)，AI 协作见
 [`AGENT.md`](AGENT.md)。
 
+## 赞助支持 ☕
+
+这个项目是我用业余时间开发和维护的，完全开源免费。开发过程里很依赖 AI 编程助手
+（Claude 等），订阅费用不便宜 😅。如果这个项目帮到了你，欢迎请我喝杯咖啡 / 支持一下
+AI 订阅费，让它能持续更新——非常感谢你的支持！🙏
+
+| 微信 | 支付宝 |
+|:---:|:---:|
+| <img src="docs/sponsor/wechat.jpg" width="220" alt="微信赞赏码"> | <img src="docs/sponsor/alipay.jpg" width="220" alt="支付宝收款码"> |
+
+哪怕只是点个 ⭐ Star，也是对我莫大的鼓励！
+
 ## 致谢 / 许可
 
+- 本仓库以 **MIT 许可证**发布，见 [`LICENSE`](LICENSE)。
 - MCP 工具部分 vendor 自 [`qmt-trade-mcp`](https://github.com/yywx55/qmt-trade-mcp)（MIT），
-  见 `qmt-wine-rdp/mcp/vendor/`。
+  见 `qmt-wine-rdp/mcp/vendor/` 与 `qmt-wine-rdp/mcp/NOTICE`。
 - 基础镜像基于 [`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine)。
 - QMT 终端、xtquant 为各券商/迅投所有，**不包含在本仓库**，由使用者自行获取。
+
+安全问题请按 [`SECURITY.md`](SECURITY.md) 私下报告；贡献流程见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。

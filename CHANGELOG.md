@@ -42,6 +42,8 @@ gates).
   (community PR); boundary/gating host-tested.
 
 ### Planned
+- **012 — Database persistence (PostgreSQL, optional)**: spec written — opt-in
+  external/compose PG to warehouse large market data + caches, file/JSONL default.
 - **007 — qmtctl CLI**: planned.
 - **011 — Release & versioning**: this scaffolding.
 

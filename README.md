@@ -1,5 +1,7 @@
 # qmt-mcp · Docker 部署的券商无关 QMT × MCP 网关
 
+🌐 **简体中文** · [English](README.en.md)
+
 [![CI](https://github.com/juju-w/qmt-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/juju-w/qmt-mcp/actions/workflows/ci.yml)
 [![Release](https://github.com/juju-w/qmt-mcp/actions/workflows/release.yml/badge.svg)](https://github.com/juju-w/qmt-mcp/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -109,13 +111,13 @@ specs/       # Spec-Driven Development（spec-kit）：001~011 规格/计划/任
 
 ## 参与贡献 / Help wanted 🙋
 
-非常欢迎 PR！尤其这两块**我个人没有条件、急需社区协助**：
+最需要社区帮忙的是 **04 账户查询工具（`xttrader` 只读）**：联调"成功路径"需要一个**已开通
+「程序化交易 / 外部 Python 接口」权限**（`m_nPythonConnectNet`）的账户，而我自己的账户没有此权限
+（达不到券商门槛），只能验证"未授权时优雅降级"。**如果你有已开通权限的账户，欢迎一起把 04 跑通并提
+PR** —— 见 [`specs/004`](specs/004-account-query-tools/spec.md)。
 
-- **04 账户查询（`xttrader` 只读）** —— 需要**已开通程序化交易权限的账户**才能联调成功路径，
-  我自己的账户没有此权限。有权限的朋友欢迎来验证并提 PR：[`specs/004`](specs/004-account-query-tools/spec.md)。
-- **05 监管 / 就绪 / 自启** —— 设计与契约已就绪，欢迎认领实现：[`specs/005`](specs/005-supervision-readiness/spec.md)。
-
-流程见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；安全问题请按 [`SECURITY.md`](SECURITY.md) 私下报告。
+其它方向（行情工具、部署示例、文档等）也欢迎 PR。流程见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；
+安全问题请按 [`SECURITY.md`](SECURITY.md) 私下报告。
 
 ## 赞助支持 ☕
 

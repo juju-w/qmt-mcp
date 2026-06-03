@@ -68,9 +68,15 @@
 | `qmt_xtdata_trading_dates` · `qmt_xtdata_trading_calendar` · `qmt_xtdata_holidays` | 交易日历 |
 | `qmt_xtdata_download_history` · `_batch` | 下载历史数据到本地 |
 | `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | 搜索缓存状态 / 刷新 |
-| 账户 / 交易 `xttrader`（feature 04） | ⏸ 需券商权限，未开通时 `not_authorized` |
+| 账户只读查询 `xttrader`（04，**选配**） | `qmt_xttrade_asset/positions/orders/trades/...`，默认关闭 |
 
 所有工具均为**只读**、带鉴权与审计、返回结构化 JSON（无写/下单工具）。
+
+> **账户查询（feature 04）** 默认关闭，需显式开启 `QMT_ENABLE_XTTRADE_QUERY=1` **且**配置
+> 账户白名单 `QMT_TRADE_ACCOUNTS`；且仍需券商开通程序化交易权限才能联调成功路径，未开通时
+> 报 `not_authorized` 优雅降级。提供 asset/positions/orders（含可撤单过滤）/trades/
+> account_status/position_statistics/new_purchase_limit/ipo_data，**纯只读、无下单/撤单/划转**。
+> 成功路径待有权限的账户验证（欢迎 PR）。
 
 ## 快速开始
 

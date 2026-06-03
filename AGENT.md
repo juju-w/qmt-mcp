@@ -20,7 +20,7 @@
 | 009 开源就绪 | ✅ 完成——LICENSE(MIT)/SECURITY/CONTRIBUTING |
 | 010 部署与安全加固 | ✅ 完成——DEPLOY.md/Caddy TLS 示例/compose.tls/harden-check.sh |
 | 011 发布与版本 | ✅ 完成——VERSION/CHANGELOG/release.yml（tag→GHCR `ghcr.io/juju-w/qmt-mcp`）|
-| 004 账户只读查询 xttrade | ⏸ 被券商权限硬卡（`m_nPythonConnectNet`），优雅降级；**欢迎有权限者 PR** |
+| 004 账户只读查询 xttrade | 🟡 只读查询族已实现（gated：flag+allowlist，readiness-gated，边界已宿主测试）；成功路径被券商权限硬卡（`m_nPythonConnectNet`），**欢迎有权限者 PR 验证** |
 | 005 进程守护/就绪/autostart | ⏳ 已出 plan+contracts；autostart 已落地，待系统化（supervisor/readiness/healthcheck）|
 | 007 qmtctl CLI | 📋 已出 spec/plan/tasks，待实现 |
 

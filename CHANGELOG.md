@@ -32,10 +32,16 @@ gates).
   `CONTRIBUTING.md`; README license link.
 - **010 — Deploy & hardening**: `docs/DEPLOY.md`, Caddy TLS reverse-proxy example,
   `docker-compose.tls.yml` (MCP internal-only), `scripts/harden-check.sh` pre-flight.
+- **005 — Supervision, readiness & autostart** (core): live readiness probe +
+  `/healthz` `readiness` object, unauthenticated `/livez`, background trader
+  connector, session supervisor + `HEALTHCHECK`, tmpfs storage guard (warn-by-
+  default). Container behaviors pending amd64 validation (see specs/005).
+- **004 — Account-query tools** (read-only, opt-in): `xttrade_query` family
+  (`asset/positions/orders/trades/...`) behind an enable flag + account allowlist,
+  readiness-gated, audited. Success paths need a broker-permissioned account
+  (community PR); boundary/gating host-tested.
 
 ### Planned
-- **005 — Supervision, readiness & autostart**: planned (plan + contracts written).
-- **004 — Account-query tools**: blocked on broker programmatic permission.
 - **007 — qmtctl CLI**: planned.
 - **011 — Release & versioning**: this scaffolding.
 

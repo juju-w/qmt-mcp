@@ -61,6 +61,10 @@ class CoreConfig:
     enable_connector: bool = False
     connect_retry: int = 8
     connect_backoff_max_s: float = 60.0
+    # 004 read-only account-query family (off by default; needs an allowlist).
+    enable_xttrade_query: bool = False
+    trade_accounts: str = ""
+    trade_account_type: str = "STOCK"
 
     @property
     def auth_required(self) -> bool:
@@ -103,6 +107,9 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         enable_connector=env.get("QMT_ENABLE_CONNECTOR", "0") == "1",
         connect_retry=max(1, int(env.get("QMT_CONNECT_RETRY", "8"))),
         connect_backoff_max_s=max(1.0, float(env.get("QMT_CONNECT_BACKOFF_MAX_S", "60"))),
+        enable_xttrade_query=env.get("QMT_ENABLE_XTTRADE_QUERY", "0") == "1",
+        trade_accounts=env.get("QMT_TRADE_ACCOUNTS", ""),
+        trade_account_type=env.get("QMT_TRADE_ACCOUNT_TYPE", "STOCK") or "STOCK",
     )
     cfg.validate_security()
     return cfg

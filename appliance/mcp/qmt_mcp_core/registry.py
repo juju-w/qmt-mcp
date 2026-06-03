@@ -13,16 +13,22 @@ from .errors import McpCoreError, error_envelope, from_exception
 from .health import HealthState
 from .workers import WorkerPool
 
+# Write/trade VERBS that must never be exposed. Matched as substrings of the tool
+# name. Deliberately precise so read-only listings are not false-positives:
+#   - "orders" (a listing) must pass; only "order_stock"/"place_order"/"passorder"
+#     (placement) are blocked.
+#   - credit/smt READ queries (slo/compact/negotiate) are NOT write tools.
 WRITE_TOOL_KEYWORDS = (
-    "order",
+    "place_order",
+    "order_stock",
+    "order_credit",
+    "passorder",
     "cancel",
     "transfer",
     "borrow",
-    "slo",
-    "compact",
-    "negotiate",
     "export",
-    "passorder",
+    "buy",
+    "sell",
 )
 
 

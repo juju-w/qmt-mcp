@@ -67,19 +67,25 @@ def _make_readiness_probe(config: CoreConfig, health: HealthState) -> ReadinessP
     return ReadinessProbe(health, fs_ready=fs_ready, sdk_ready=sdk_ready, poll_s=config.readiness_poll_s)
 
 
-def _make_connector(config: CoreConfig, health: HealthState) -> TraderConnector:
-    """Connector scaffold for 005. A real connect_fn is supplied by feature 004;
-    until then it reports not_authorized (no broker programmatic permission)."""
+def _make_connector(config: CoreConfig, health: HealthState, session=None) -> TraderConnector:
+    """Build the 005 trader connector. When 004 supplies a TraderSession, use its
+    real xttrader handshake; otherwise a scaffold that reports not_authorized (no
+    account-query family enabled / no broker permission)."""
+    if session is not None:
+        connect_fn = session.connect
+        is_connected = session.is_connected
+    else:
 
-    def connect_fn() -> str:
-        # Feature 004 will inject a real xttrader handshake here. Without it / without
-        # broker permission, the honest state is not_authorized.
-        return "not_authorized"
+        def connect_fn() -> str:
+            return "not_authorized"
+
+        is_connected = None
 
     return TraderConnector(
         health,
         connect_fn=connect_fn,
         is_logged_in=lambda: health.qmt_login == "logged_in",
+        is_connected=is_connected,
         max_retry=config.connect_retry,
         backoff_max=config.connect_backoff_max_s,
     )
@@ -154,6 +160,40 @@ def register_optional_xtdata(mcp: FastMCP, registry: ToolRegistry, health: Healt
         health.set_family("xtdata", "error", f"failed to register xtdata tools: {type(exc).__name__}", [])
 
 
+def register_optional_xttrade(mcp: FastMCP, registry: ToolRegistry, health: HealthState, config: CoreConfig):
+    """Register the read-only account-query family iff enabled + allow-listed.
+
+    Returns a TraderSession (for the connector) when registered, else None. Fails
+    closed: enabled-but-no-allowlist does NOT expose any account tool.
+    """
+    if not config.enable_xttrade_query:
+        health.set_family("xttrade_query", "disabled", "account-query disabled (QMT_ENABLE_XTTRADE_QUERY=0)", [])
+        return None
+    try:
+        from qmt_mcp_xttrade.accounts import Allowlist
+        from qmt_mcp_xttrade.session import TraderSession
+        from qmt_mcp_xttrade.tools import register_xttrade_tools
+
+        allowlist = Allowlist.from_config(config.trade_accounts, config.trade_account_type)
+        if not allowlist:
+            health.set_family(
+                "xttrade_query", "disabled", "enabled but no QMT_TRADE_ACCOUNTS allowlist — refusing (fail-closed)", []
+            )
+            return None
+        session = TraderSession(_win_to_unix(config.userdata_win), allowlist)
+        register_xttrade_tools(mcp, registry, health, session, allowlist)
+        health.set_family(
+            "xttrade_query",
+            "enabled",
+            f"read-only account-query enabled for {len(allowlist.ids())} allow-listed account(s)",
+            registry.tool_names("xttrade_query"),
+        )
+        return session
+    except Exception as exc:
+        health.set_family("xttrade_query", "error", f"failed to register account-query tools: {type(exc).__name__}", [])
+        return None
+
+
 def create_app(config: CoreConfig | None = None):
     config = config or load_config()
     _add_xtquant_path(config)
@@ -172,6 +212,7 @@ def create_app(config: CoreConfig | None = None):
     registry = ToolRegistry(health, audit, workers)
     register_core_tools(mcp, registry, health)
     register_optional_xtdata(mcp, registry, health, config)
+    trader_session = register_optional_xttrade(mcp, registry, health, config)
     registry.assert_no_write_tools()
 
     app = mcp.http_app(transport=config.transport)
@@ -180,7 +221,7 @@ def create_app(config: CoreConfig | None = None):
     # main() starts them; tests can drive .step()/.attempt() directly.
     if config.enable_xtdata:
         core.readiness_probe = _make_readiness_probe(config, health)
-    core.connector = _make_connector(config, health)
+    core.connector = _make_connector(config, health, session=trader_session)
     return core, config, health, registry
 
 
@@ -192,16 +233,17 @@ def main() -> None:
         f"tools={registry.tool_names()}"
     )
     # Start background readiness probe (always when xtdata is enabled) and the
-    # trader connector (only when explicitly enabled). Both are daemon threads and
-    # never block serving.
+    # trader connector. The connector runs when explicitly enabled OR when the
+    # account-query family (004) is on (it needs the session connected). Both are
+    # daemon threads and never block serving.
     if app.readiness_probe is not None:
         app.readiness_probe.start()
         log("readiness probe started")
-    if config.enable_connector and app.connector is not None:
+    if (config.enable_connector or config.enable_xttrade_query) and app.connector is not None:
         app.connector.start()
         log("trader connector started")
     else:
-        log("trader connector disabled (QMT_ENABLE_CONNECTOR=0)")
+        log("trader connector disabled (set QMT_ENABLE_CONNECTOR=1 or QMT_ENABLE_XTTRADE_QUERY=1)")
 
     import uvicorn
 

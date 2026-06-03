@@ -83,12 +83,10 @@ MCP:  http://<host>:18765/mcp   需 Authorization: Bearer <QMT_MCP_TOKEN>
 更多：[broker pack 制作与切换](appliance/docs/BROKER-PACK.md) ·
 [部署与安全加固](appliance/docs/DEPLOY.md)
 
-## ⚠️ 踩过的坑
+## ⚠️ 运行要求
 
-- **原生 amd64**，不要在 Apple Silicon 跑生产。
-- **broker pack / 构建目录必须在真实磁盘**，绝不能放 `tmpfs`（内存盘）——会撑满内存导致 OOM。
+- **原生 amd64**：不要在 Apple Silicon 上跑生产（仅模拟，可能触发 Rosetta AVX 崩溃）。
 - **GBK 区域**：QMT 是 cp936 中文程序，镜像用 `zh_CN.GBK` 构建 Wine prefix。
-- **密钥不入镜像/Git**：token、账号密码只在运行时 `.env` / RDP 会话里。
 
 ## 项目结构与开发
 

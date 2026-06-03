@@ -14,12 +14,15 @@
 # them on start. Switch brokers by swapping the mounted pack — never rebuild.
 #
 # Build MUST run on linux/amd64. Apple Silicon only works under emulation, where
-# QMT native services can hit the Rosetta AVX assertion; build/run on the x86 NAS.
+# QMT native services can hit the Rosetta AVX assertion; build/run on a native
+# amd64 host.
 #
-# Base image PINNED by digest: `:stable` is a moving tag, and pulling a different
-# base has produced Wine prefixes that fail to load a display driver
-# (nodrv_CreateWindow). Re-pin deliberately when upgrading the base.
-FROM docker.1ms.run/scottyhardy/docker-wine@sha256:2a4243f5f49cde7a6e63e6b963d95d90d96ba3cc9f84f58575ca0ae54c7eceb0
+# Base image PINNED to a date-stamped stable tag (immutable in practice). Do NOT
+# use the floating `:stable` tag — pulling a different base has produced Wine
+# prefixes that fail to load a display driver (nodrv_CreateWindow). Bump this tag
+# deliberately when upgrading the base (optionally append @sha256:... for a hard
+# pin).
+FROM docker.1ms.run/scottyhardy/docker-wine:stable-11.0-20260531
 
 # ---- pinned versions / sources (override with --build-arg) ----
 ARG PY_VERSION=3.12.10

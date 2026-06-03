@@ -31,8 +31,7 @@
 
 - 开发机写代码，**构建/运行在一台原生 amd64 Linux 主机上**（Wine 需要真 amd64；可本机或远程）。
 - 若用远程主机，访问信息放本地 `.env`（如 `SSH_*`）——**已 gitignore，绝不提交**。
-- 在该主机上用 docker 构建/部署。镜像 tag `qmt-appliance-base:local`，容器按实例命名（如 `qmt-<broker-id>`）。
-- **构建上下文 / broker pack 放持久磁盘**，**不要用 `tmpfs`（如某些系统的 `/tmp`）**——QMT 缓存会撑满内存/磁盘 → OOM、wine 崩、磁盘满。
+- 在该主机上用 docker 构建/部署。本地构建 tag `qmt-appliance-base:local`，发布镜像 `ghcr.io/juju-w/qmt-mcp`；容器按实例命名（如 `qmt-<broker-id>`）。
 
 ## 构建 / 部署 / 测试
 
@@ -60,8 +59,9 @@ registry._tools['qmt_xtdata_snapshot']['callable'](codes=['000001.SZ'])
 
 ## 踩过的坑（务必遵守）
 
-1. **base 镜像必须钉 digest**。`scottyhardy/docker-wine:stable` 是浮动 tag，拉到不同 base 会
-   产出**加载不出显示驱动**的 wine prefix（`nodrv_CreateWindow`）。升级 base 要显式重新钉。
+1. **base 镜像钉到日期版 stable tag**（如 `scottyhardy/docker-wine:stable-11.0-20260531`，实际上不可变）。
+   **不要**用浮动的 `:stable`——拉到不同 base 会产出**加载不出显示驱动**的 wine prefix
+   （`nodrv_CreateWindow`）。升级 base 要显式改 tag（可再 `@sha256:` 硬钉）。
 2. **wine prefix 显示驱动**：base 钉了 digest 后，烤进镜像的 prefix 开机即健康，start-qmt.sh
    **不再做** `wineboot -u` 运行时自愈（旧自愈会卡在 `wineserver -w`，已于 771cbc7 移除）。
    万一某次 prefix 坏了（`nodrv_CreateWindow`），手动 `wineboot -u` 修复，**切勿**再加 `wineserver -w`。
@@ -70,12 +70,11 @@ registry._tools['qmt_xtdata_snapshot']['callable'](codes=['000001.SZ'])
    `source` 会把反斜杠吃掉 → wine 打不开文件。启动客户端用 **unix 路径**（wine 接受）最稳。
 4. **GBK/cp936**：QMT 是中文 GBK 程序。镜像用 `LANG=zh_CN.GBK` 建 prefix，否则 `get_sector_list`
    等读中文文件的路径会 UnicodeDecode/charmap 崩。`detect-broker` 读 broker.yaml 显式用 utf-8，不受影响。
-5. **不要用 tmpfs 放数据**（见上）。
-6. **docker exec 复杂命令用脚本文件**（scp 上去再 `bash file.sh`），别在 `ssh "... sudo bash -c '...'"`
+5. **docker exec 复杂命令用脚本文件**（scp 上去再 `bash file.sh`），别在 `ssh "... sudo bash -c '...'"`
    里塞多层引号/括号/heredoc——会被层层 shell 吃掉。heredoc 喂 `docker exec` 要加 `-i`。
-7. **交易权限**：`xttrader.connect()==-1` 多半是账户没开 `m_nPythonConnectNet/程序化交易`
+6. **交易权限**：`xttrader.connect()==-1` 多半是账户没开 `m_nPythonConnectNet/程序化交易`
    （券商后台授权），不是代码问题。账户余额可从 mini 日志 `push accountdetail` 读到（非 API）。
-8. **client 探测优先级**：真实 QMT 树里 `bin.x64` 同时有 `XtItClient.exe`(投研版) 和
+7. **client 探测优先级**：真实 QMT 树里 `bin.x64` 同时有 `XtItClient.exe`(投研版) 和
    `XtMiniQmt.exe`。投研版 + 独立交易会拉起 `XtMiniQmt linkMini`。detect-broker 按优先级选
    `XtItClient.exe`；独立的 `XtMiniQmt.exe` 直接启在 wine 下不一定稳。
 

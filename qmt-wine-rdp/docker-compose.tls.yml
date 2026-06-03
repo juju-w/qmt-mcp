@@ -1,0 +1,61 @@
+# Hardened TLS deployment example (standalone — use INSTEAD of docker-compose.yml).
+#
+#   docker compose -f docker-compose.tls.yml up -d
+#
+# Differences vs. the dev docker-compose.yml:
+#   - The MCP port (8765) is NOT published to the host. Caddy reaches it on the
+#     internal compose network as `qmt:8765`, so the raw bearer endpoint is never
+#     exposed on the LAN.
+#   - RDP is bound to loopback only (127.0.0.1) — tunnel/VPN in for the desktop.
+#   - A Caddy reverse proxy terminates TLS and publishes 80/443.
+#
+# Run scripts/harden-check.sh first. Provide ./Caddyfile (from
+# deploy/Caddyfile.example) and set a real domain + email + a strong token.
+
+services:
+  qmt:
+    build: .
+    image: qmt-appliance-base:local
+    container_name: "qmt-${INSTANCE:-tls}"
+    platform: linux/amd64
+    # MCP (8765) intentionally NOT published — internal-only, reached by caddy.
+    ports:
+      - "127.0.0.1:${RDP_PORT:-13389}:3389"   # RDP: loopback only
+    expose:
+      - "8765"
+    environment:
+      RDP_SERVER: "yes"
+      USER_NAME: "wineuser"
+      USER_UID: "1000"
+      USER_GID: "1000"
+      QMT_RDP_PASSWORD: "${QMT_RDP_PASSWORD:?set a strong QMT_RDP_PASSWORD in .env}"
+      TZ: "Asia/Shanghai"
+      WINEARCH: "wow64"
+      WINEPREFIX: "/home/wineuser/.wine"
+      BROKER_MOUNT: "/broker"
+      QMT_MCP_TOKEN: "${QMT_MCP_TOKEN:?set a strong QMT_MCP_TOKEN in .env}"
+      QMT_BEHIND_TLS_PROXY: "1"
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "8765"
+    volumes:
+      - "${BROKER_PACK:?set BROKER_PACK in .env to a broker pack dir}:/broker"
+    shm_size: "1g"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    container_name: "qmt-${INSTANCE:-tls}-caddy"
+    depends_on:
+      - qmt
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "./Caddyfile:/etc/caddy/Caddyfile:ro"
+      - "caddy_data:/data"
+      - "caddy_config:/config"
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

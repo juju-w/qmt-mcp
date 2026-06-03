@@ -1,0 +1,39 @@
+# Example Caddy reverse proxy: TLS termination in front of the QMT-MCP appliance.
+# Copy to ./Caddyfile, set your domain + email, and run via docker-compose.tls.yml.
+# Caddy obtains/renews Let's Encrypt certs automatically for a public domain.
+#
+# The MCP container is NOT host-published in the TLS override; Caddy reaches it on
+# the internal compose network as `qmt:8765`. The bearer token is still required
+# by the MCP itself — Caddy only adds TLS, it does not authenticate.
+
+mcp.example.com {
+	# Use a real email for ACME/Let's Encrypt notifications.
+	tls you@example.com
+
+	# Health: 005 exposes an unauthenticated, detail-free liveness endpoint.
+	handle /livez {
+		reverse_proxy qmt:8765
+	}
+
+	# Everything else (the MCP streamable-http endpoint + authed /healthz).
+	# The client's Authorization: Bearer <token> header is forwarded as-is.
+	reverse_proxy qmt:8765 {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+	}
+
+	# Basic hardening headers.
+	header {
+		Strict-Transport-Security "max-age=31536000;"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
+
+# Local/dev without a public domain: use Caddy's internal CA instead of ACME.
+# Replace the site label above with `https://localhost` and `tls internal`.

@@ -14,7 +14,7 @@
 |---|---|---|
 | 001 基础镜像 + broker pack | `001-broker-pack-base` | ✅ 完成（含 exe 自愈、路径转义、client 优先级、密码、autostart 等修复）|
 | 002 MCP server core | `002-mcp-server-core` | ✅ 实现+验证（`qmt_mcp_core`：鉴权/健康/审计/注册表/线程池/无写工具断言）|
-| 003 行情工具 xtdata | `003-market-data-tools` | ✅ 9/11 工具真机验证；sector 工具靠 zh_CN.GBK 修复 |
+| 003 行情工具 xtdata | `003-market-data-tools` | ✅ 完成——11/11 工具真机验证（含中文板块，经 zh_CN.GBK 修复）；见 specs/003/VERIFICATION.md |
 | 004 账户只读查询 xttrade | spec | ⏸ 被券商权限硬卡（`m_nPythonConnectNet`），优雅降级 |
 | 005 进程守护/就绪/autostart | spec | ⏳ 部分已落地（autostart、自愈），待系统化 |
 

@@ -1,4 +1,4 @@
-# QMT-MCP Appliance · 券商无关的 QMT 接入网关
+# qmt-mcp · Docker 部署的券商无关 QMT × MCP 网关
 
 [![CI](https://github.com/juju-w/qmt-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/juju-w/qmt-mcp/actions/workflows/ci.yml)
 [![Release](https://github.com/juju-w/qmt-mcp/actions/workflows/release.yml/badge.svg)](https://github.com/juju-w/qmt-mcp/actions/workflows/release.yml)
@@ -8,8 +8,9 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/juju-w/qmt-mcp?style=social)](https://github.com/juju-w/qmt-mcp/stargazers)
 
-把 Windows 版 **QMT / MiniQMT 终端**用 Wine 跑在原生 Linux 容器里，通过 **MCP（Model
-Context Protocol）** 把行情与账户能力安全地暴露给 AI Agent。
+用 **Docker** 一键把 Windows 版 **QMT / MiniQMT 终端**（跑在容器内的 Wine 里）封装成
+**MCP（Model Context Protocol）** 服务，把 A 股行情与账户能力安全地暴露给 AI Agent。
+`docker compose up` 起一个容器，挂上券商 pack 就能用。
 
 > **核心理念**：基础镜像与券商无关，换券商只换一个挂载的 **broker pack**，镜像永不重建。
 > 一台机可并行多券商。
@@ -22,9 +23,16 @@ Context Protocol）** 把行情与账户能力安全地暴露给 AI Agent。
 
 ## 截图 / Screenshots
 
-> 📸 征集中（欢迎 PR）。建议展示：① AI Agent 用**模糊搜索**（中文名/拼音 → 代码 → 行情）的对话；
-> ② client（Claude / GPT 等）里的 MCP 工具列表；③ 结构化行情返回。拍摄清单见
-> [`docs/screenshots/`](docs/screenshots/)，图片放进该目录后会接入此处。
+**✨ 合约模糊搜索（核心亮点）** —— AI Agent 用一句中文（"中证500 最好的 ETF"）即可让 MCP
+按流动性排序返回候选合约，不必预先知道 QMT 代码：
+
+<p align="center">
+  <img src="docs/screenshots/fuzzy-search-etf.png" width="680" alt="AI agent 用 MCP 模糊搜索 ETF">
+</p>
+
+| 个股行情快照 | 行业板块成分 | Docker 内 QMT 终端（RDP） |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/snapshot-stock.png" width="250" alt="xtdata 个股行情"> | <img src="docs/screenshots/sector-board.png" width="250" alt="xtdata 行业板块"> | <img src="docs/screenshots/rdp-qmt-in-docker.png" width="250" alt="RDP 登录 Docker 内的 QMT 终端"> |
 
 ## 能力现状
 

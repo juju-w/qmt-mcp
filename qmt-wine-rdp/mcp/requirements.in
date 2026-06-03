@@ -1,0 +1,22 @@
+# Declared runtime dependencies for the in-Wine MCP server (Windows Python 3.12).
+# This is the SOURCE OF TRUTH for what the image installs. The pinned lockfile
+# (requirements.txt) MUST be generated from the actual amd64 Wine build to satisfy
+# the constitution's "pinned, reproducible" rule:
+#
+#   # inside the built image, in the Wine Python:
+#   wine python -m pip install -r requirements.in
+#   wine python -m pip freeze > requirements.txt
+#
+# then change the Dockerfile from the unpinned
+#   pip install fastmcp uvicorn numpy pandas
+# to
+#   pip install -r requirements.txt
+# and rebuild + smoke-test on amd64.
+#
+# (Pinning cannot be verified from a non-amd64 host, so the lock is intentionally
+# not committed by automation — generate it on a real build. See 011 spec FR-006.)
+
+fastmcp
+uvicorn
+numpy
+pandas

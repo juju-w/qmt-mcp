@@ -8,7 +8,7 @@ an unknown id is refused (fail-closed, constitution VI).
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import StrEnum
 
 from qmt_mcp_core.errors import McpCoreError
 
@@ -17,7 +17,7 @@ from qmt_mcp_core.errors import McpCoreError
 ACCOUNT_ID_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z\-]{1,31}$")
 
 
-class AccountType(str, Enum):
+class AccountType(StrEnum):
     STOCK = "STOCK"
     CREDIT = "CREDIT"
     FUTURE = "FUTURE"

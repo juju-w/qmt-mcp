@@ -17,16 +17,11 @@ export QT_OPENGL="${QT_OPENGL:-software}"
 export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
 export QTWEBENGINE_DISABLE_SANDBOX="${QTWEBENGINE_DISABLE_SANDBOX:-1}"
 
-# Self-heal the Wine prefix once per container boot: a baked prefix can come up
-# without a usable display driver ("nodrv_CreateWindow: no driver could be
-# loaded") until `wineboot -u` runs. /tmp is fresh each container start, so the
-# marker makes this run exactly once per boot.
-if [ ! -f /tmp/.wine-healed ]; then
-  echo "[start-qmt] healing wine prefix (wineboot -u)..."
-  wineboot -u >/dev/null 2>&1 || true
-  wineserver -w 2>/dev/null || true
-  touch /tmp/.wine-healed
-fi
+# NOTE: no wineboot self-heal here. It was a workaround for display-driverless
+# prefixes produced by the moving `:stable` base; the base is now pinned by
+# digest and the prefix comes up healthy. (The old heal also hung on
+# `wineserver -w`, which never returns inside a live session.) If a prefix ever
+# breaks again, run `wineboot -u` manually — do NOT add `wineserver -w`.
 
 # Launch via the resolved Linux path — Wine accepts unix paths and this avoids
 # any backslash-escaping pitfalls. Fall back to the Wine path if unset.

@@ -5,9 +5,13 @@ name: Release
 # data — those are supplied at runtime as a mounted broker pack — so publishing it
 # publicly is safe. amd64-only by design (Apple Silicon is emulation-only).
 #
-# Triggers:
-#   - push a tag vX.Y.Z   -> image :X.Y.Z + :latest, and a GitHub Release
-#   - "Run workflow" (manual) -> image :edge (+ :sha), no Release
+# Build policy (keep image builds deliberate & infrequent):
+#   - The heavy Wine image is NEVER built on push/PR (that is ci.yml's job, which
+#     only lints + unit-tests — it does not touch the image).
+#   - It builds ONLY on an explicit version tag or a manual run:
+#       push a tag vX.Y.Z      -> image :X.Y.Z + :latest, and a GitHub Release
+#       "Run workflow" (manual) -> image :edge, no Release
+#   - concurrency cancels an older in-flight build for the same ref.
 
 on:
   push:
@@ -17,6 +21,10 @@ on:
 permissions:
   contents: write   # create the GitHub Release
   packages: write   # push to GHCR
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   image:
@@ -52,7 +60,6 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
             type=raw,value=edge,enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=sha
 
       - name: Build & push (linux/amd64)
         uses: docker/build-push-action@v6

@@ -20,3 +20,4 @@ fastmcp
 uvicorn
 numpy
 pandas
+asyncpg   # 012: only used when QMT_DB_URL is set (optional PostgreSQL persistence)

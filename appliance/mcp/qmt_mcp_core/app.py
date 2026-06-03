@@ -146,7 +146,37 @@ def register_core_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthStat
         return health.capabilities()
 
 
-def register_optional_xtdata(mcp: FastMCP, registry: ToolRegistry, health: HealthState, config: CoreConfig) -> None:
+def _make_warehouse(config: CoreConfig, health: HealthState):
+    """Build the market-data warehouse when a DB is configured; else None.
+
+    Fail-safe: any DB init error leaves health.database=error and returns None, so
+    the appliance keeps working on the file/xtdata path (no DB required)."""
+    if not config.db_enabled:
+        health.database = "disabled"
+        return None
+    try:
+        from qmt_mcp_db.engine import DbEngine
+        from qmt_mcp_db.migrations import apply_migrations
+        from qmt_mcp_db.warehouse import Warehouse
+
+        engine = DbEngine(config.db_url, max_size=config.db_pool_max)
+        engine.connect()
+        apply_migrations(engine)
+        health.database = "connected"
+        if config.db_marketdata:
+            health.db_domains = ["marketdata"]
+            return Warehouse(engine, config.broker_id)
+        health.db_domains = []
+        return None
+    except Exception as exc:
+        health.database = "error"
+        health.last_error = f"db init failed: {type(exc).__name__}"  # never include the DSN
+        return None
+
+
+def register_optional_xtdata(
+    mcp: FastMCP, registry: ToolRegistry, health: HealthState, config: CoreConfig, warehouse=None
+) -> None:
     if not config.enable_xtdata:
         health.xtdata = "disabled"
         health.set_family("xtdata", "disabled", "xtdata tools disabled by config", [])
@@ -154,7 +184,7 @@ def register_optional_xtdata(mcp: FastMCP, registry: ToolRegistry, health: Healt
     try:
         from qmt_mcp_xtdata.tools import register_xtdata_tools
 
-        register_xtdata_tools(mcp, registry, health)
+        register_xtdata_tools(mcp, registry, health, warehouse=warehouse)
     except Exception as exc:
         health.xtdata = "error"
         health.set_family("xtdata", "error", f"failed to register xtdata tools: {type(exc).__name__}", [])
@@ -211,7 +241,8 @@ def create_app(config: CoreConfig | None = None):
     workers = WorkerPool(config.worker_limit)
     registry = ToolRegistry(health, audit, workers)
     register_core_tools(mcp, registry, health)
-    register_optional_xtdata(mcp, registry, health, config)
+    warehouse = _make_warehouse(config, health)
+    register_optional_xtdata(mcp, registry, health, config, warehouse=warehouse)
     trader_session = register_optional_xttrade(mcp, registry, health, config)
     registry.assert_no_write_tools()
 

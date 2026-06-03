@@ -20,4 +20,5 @@ pythonpath = ["."]
 addopts = "-ra"
 markers = [
     "integration: requires fastmcp installed (uses a fake xtquant); skipped by default in the unit tier",
+    "db: requires a real PostgreSQL via QMT_TEST_DB_URL + asyncpg; skipped by default",
 ]

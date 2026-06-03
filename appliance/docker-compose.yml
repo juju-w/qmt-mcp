@@ -21,6 +21,9 @@ services:
       QMT_MCP_TOKEN: "${QMT_MCP_TOKEN:?set QMT_MCP_TOKEN in appliance/.env}"
       MCP_HOST: "0.0.0.0"
       MCP_PORT: "8765"
+      # optional PostgreSQL persistence (012); empty = off. For the bundled `db`
+      # service below use e.g. postgresql://qmt:qmt@db:5432/qmt
+      QMT_DB_URL: "${QMT_DB_URL:-}"
     volumes:
       # The broker pack: extracted QMT terminal + matching xtquant + broker.yaml.
       # Mounted READ-WRITE (the terminal persists userdata/logs/config in-tree).
@@ -36,6 +39,30 @@ services:
       timeout: 10s
       start_period: 60s
       retries: 3
+
+  # Optional bundled PostgreSQL (012) for market-data warehousing. Behind a profile
+  # so plain `docker compose up` starts NO database. To use it:
+  #   docker compose --profile db up -d
+  # and set in .env:  QMT_DB_URL=postgresql://qmt:qmt@db:5432/qmt
+  db:
+    image: postgres:16
+    container_name: "qmt-${INSTANCE:-default}-db"
+    profiles: ["db"]
+    environment:
+      POSTGRES_USER: "${QMT_DB_USER:-qmt}"
+      POSTGRES_PASSWORD: "${QMT_DB_PASSWORD:-qmt}"
+      POSTGRES_DB: "${QMT_DB_NAME:-qmt}"
+    volumes:
+      - "qmt-pgdata:/var/lib/postgresql/data"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${QMT_DB_USER:-qmt} -d ${QMT_DB_NAME:-qmt}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  qmt-pgdata:
 
 # Multiple brokers on one host: copy appliance/.env per instance (distinct
 # INSTANCE / RDP_PORT / MCP_PORT / QMT_MCP_TOKEN / BROKER_PACK) and run with

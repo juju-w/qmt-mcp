@@ -119,7 +119,7 @@ RUN set -eux; \
     test -d "$SITE"; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip config set \
         global.index-url https://pypi.tuna.tsinghua.edu.cn/simple; \
-    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip install -q fastmcp uvicorn numpy pandas; \
+    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip install -q fastmcp uvicorn numpy pandas asyncpg; \
     mkdir -p "$WINEPREFIX/drive_c/windows/Fonts"; \
     cp /usr/share/fonts/opentype/noto/*CJK*.ttc "$WINEPREFIX/drive_c/windows/Fonts/" 2>/dev/null || true; \
     cp /usr/share/fonts/truetype/wqy/*.ttc      "$WINEPREFIX/drive_c/windows/Fonts/" 2>/dev/null || true; \

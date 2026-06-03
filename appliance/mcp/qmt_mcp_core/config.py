@@ -65,6 +65,14 @@ class CoreConfig:
     enable_xttrade_query: bool = False
     trade_accounts: str = ""
     trade_account_type: str = "STOCK"
+    # 012 optional PostgreSQL persistence (off unless QMT_DB_URL is set).
+    db_url: str = ""
+    db_marketdata: bool = True
+    db_pool_max: int = 5
+
+    @property
+    def db_enabled(self) -> bool:
+        return bool(self.db_url.strip())
 
     @property
     def auth_required(self) -> bool:
@@ -110,6 +118,9 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         enable_xttrade_query=env.get("QMT_ENABLE_XTTRADE_QUERY", "0") == "1",
         trade_accounts=env.get("QMT_TRADE_ACCOUNTS", ""),
         trade_account_type=env.get("QMT_TRADE_ACCOUNT_TYPE", "STOCK") or "STOCK",
+        db_url=env.get("QMT_DB_URL", ""),
+        db_marketdata=env.get("QMT_DB_MARKETDATA", "1") != "0",
+        db_pool_max=max(1, int(env.get("QMT_DB_POOL_MAX", "5"))),
     )
     cfg.validate_security()
     return cfg

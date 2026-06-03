@@ -41,9 +41,13 @@ gates).
   readiness-gated, audited. Success paths need a broker-permissioned account
   (community PR); boundary/gating host-tested.
 
+- **012 — Database persistence (PostgreSQL, optional)**: native-async (`asyncpg`)
+  layer behind a sync facade; opt-in via `QMT_DB_URL` (external) or a compose
+  `db` profile; market-data warehouse with bars read-through/write-through;
+  graceful degradation; `health.database`. Tested for real against PostgreSQL 16.
+  Off by default (file/JSONL unchanged).
+
 ### Planned
-- **012 — Database persistence (PostgreSQL, optional)**: spec written — opt-in
-  external/compose PG to warehouse large market data + caches, file/JSONL default.
 - **007 — qmtctl CLI**: planned.
 - **011 — Release & versioning**: this scaffolding.
 

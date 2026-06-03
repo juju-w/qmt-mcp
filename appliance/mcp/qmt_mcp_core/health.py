@@ -40,6 +40,9 @@ class HealthState:
         self.qmt_login = "unknown"  # unknown | awaiting | logged_in
         self.last_probe_at = ""
         self.last_error = ""
+        # Optional DB persistence (feature 012). disabled | connected | degraded | error
+        self.database = "disabled"
+        self.db_domains: list[str] = []
         self.families: dict[str, ToolFamilyCapability] = {}
         self.set_family("core", "enabled", "core tools available", [])
         self.set_family("xttrade_query", "not_authorized", "broker/account permission not available", [])
@@ -77,6 +80,8 @@ class HealthState:
             "xtdata": self.xtdata,
             "xttrade": self.xttrade,
             "audit": self.audit,
+            "database": self.database,
+            "db_domains": list(self.db_domains),
             "readiness": self.readiness(),
             "tool_families": [cap.to_dict() for cap in self.families.values()],
         }

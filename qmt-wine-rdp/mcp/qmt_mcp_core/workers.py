@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from concurrent.futures import TimeoutError
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from functools import partial
-from typing import Any, Callable
+from typing import Any
 
 from .errors import McpCoreError
 

@@ -10,6 +10,8 @@ from qmt_mcp_core.errors import McpCoreError, ok_envelope
 from qmt_mcp_core.health import HealthState
 from qmt_mcp_core.registry import ToolRegistry
 
+from .search_cache import cache_state, refresh_cache, usable_cache_or_seed
+from .search_index import resolve_from_results, search_records, search_sectors, validate_filters, validate_query
 from .serializers import bars_rows, date_strings, json_clean, snapshot_records
 from .validation import (
     MAX_DOWNLOAD_CODES,
@@ -21,6 +23,44 @@ from .validation import (
     validate_fields,
     validate_market,
     validate_period,
+)
+
+SEARCH_DESCRIPTION = (
+    "Search cached xtdata instruments by natural-language name, code, alias, sector, pinyin initials, or theme before "
+    "calling quote/history tools. Use this when the user says a phrase like 天岳, ZGWX, 恒生科技, 纳指, or a partial name "
+    "that may not be a valid QMT code. Do not use this to fetch prices; after selecting a high-confidence candidate, "
+    "call qmt_xtdata_snapshot, qmt_xtdata_bars, or qmt_xtdata_instrument_detail with the returned code. Default ranking "
+    "is combined relevance + quote support + type preference + cached liquidity. Set rank_by=liquidity for ETF/theme "
+    "searches where the most actively traded proxy is preferred. If confidence is low or results are ambiguous, ask "
+    "the user to clarify instead of inventing a code."
+)
+
+RESOLVE_DESCRIPTION = (
+    "Resolve a user phrase to the best instrument candidate plus bounded alternates and guidance. Use this when an AI "
+    "needs one code to pass to qmt_xtdata_snapshot, qmt_xtdata_bars, or qmt_xtdata_instrument_detail but the user did "
+    "not provide an exact QMT code. The tool reads the local instrument cache/seed list and returns resolved=false for "
+    "low-confidence or ambiguous matches; in that case inspect alternates or ask the user instead of guessing. Prefer "
+    "types can bias results toward ETF, index, or stock, and rank_by controls whether relevance, liquidity, or size is "
+    "emphasized."
+)
+
+SECTOR_SEARCH_DESCRIPTION = (
+    "Search cached xtdata sector names before narrowing instrument search. Use this when the user references a broad "
+    "universe such as ETF, 港股, 指数, 行业, or a sector name fragment. Do not use this to fetch constituents directly; "
+    "after selecting a sector, call qmt_xtdata_search_instruments with sectors=[...] or qmt_xtdata_sector_constituents "
+    "when raw codes are needed."
+)
+
+REFRESH_SEARCH_CACHE_DESCRIPTION = (
+    "Refresh the local instrument-search cache from xtdata sector and instrument-detail metadata. Use this after QMT/"
+    "MiniQMT xtdata is ready, when cache status is missing/stale, or after changing the sector universe. This is a "
+    "longer worker-backed maintenance tool; normal searches read the cache and should not refresh every time. Set "
+    "refresh_metrics=true to populate bounded cached liquidity metrics for ranking ETF/theme candidates."
+)
+
+CACHE_STATUS_DESCRIPTION = (
+    "Return instrument-search cache freshness, record count, sectors, and seed/stale status. Use this before expensive "
+    "refreshes or when search results look incomplete. This does not call xtdata and is safe even when QMT is not ready."
 )
 
 
@@ -59,15 +99,12 @@ def _call_first_available(names: list[str], *args: Any, **kwargs: Any) -> tuple[
 
 def _is_unsupported_function_error(exc: McpCoreError) -> bool:
     text = exc.message.lower()
-    return (
-        exc.error_type == "dependency"
-        and (
-            "unavailable" in text
-            or "function not realize" in text
-            or "未支持此功能" in exc.message
-            or "not supported" in text
-            or "not realize" in text
-        )
+    return exc.error_type == "dependency" and (
+        "unavailable" in text
+        or "function not realize" in text
+        or "未支持此功能" in exc.message
+        or "not supported" in text
+        or "not realize" in text
     )
 
 
@@ -102,7 +139,8 @@ def _call_market_data(
             except McpCoreError as exc:
                 last_error = exc
                 if _is_unsupported_function_error(exc) or (
-                    exc.error_type == "dependency" and (
+                    exc.error_type == "dependency"
+                    and (
                         "unavailable" in exc.message
                         or "TypeError" in exc.message
                         or "takes" in exc.message
@@ -112,6 +150,34 @@ def _call_market_data(
                     continue
                 raise
     raise last_error or McpCoreError("dependency", "no compatible xtdata market-data function is available")
+
+
+def _search_cache_for_call(
+    health: HealthState,
+    refresh: str,
+    sectors: list[str] | None = None,
+    include_external: bool = False,
+) -> dict[str, Any]:
+    if refresh == "force":
+        return refresh_cache(
+            _call_xtdata,
+            broker_id=health.config.broker_id,
+            sectors=sectors,
+            include_external=include_external,
+            force=True,
+        )
+    if refresh == "stale":
+        try:
+            return refresh_cache(
+                _call_xtdata,
+                broker_id=health.config.broker_id,
+                sectors=sectors,
+                include_external=include_external,
+                force=False,
+            )
+        except McpCoreError:
+            return usable_cache_or_seed(health.config.broker_id)
+    return usable_cache_or_seed(health.config.broker_id)
 
 
 def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthState) -> None:
@@ -306,7 +372,9 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
             weights = [{"code": str(code), "weight": weight} for code, weight in items]
         else:
             weights = []
-        return ok_envelope(index_code=clean_code, weights=weights, raw_fields=raw if not isinstance(raw, dict) else None)
+        return ok_envelope(
+            index_code=clean_code, weights=weights, raw_fields=raw if not isinstance(raw, dict) else None
+        )
 
     @registry.register(
         mcp,
@@ -317,7 +385,9 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         worker_backed=True,
         timeout=10,
     )
-    def qmt_xtdata_trading_dates(market: str, start_time: str = "", end_time: str = "", count: int = -1) -> dict[str, Any]:
+    def qmt_xtdata_trading_dates(
+        market: str, start_time: str = "", end_time: str = "", count: int = -1
+    ) -> dict[str, Any]:
         clean_market = validate_market(market)
         start = validate_date(start_time, "start_time")
         end = validate_date(end_time, "end_time")
@@ -360,5 +430,166 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         raw = _call_xtdata("get_holidays")
         return ok_envelope(dates=date_strings(raw))
 
+    @registry.register(
+        mcp,
+        name="qmt_xtdata_search_instruments",
+        family="xtdata",
+        description=SEARCH_DESCRIPTION,
+        audit_fields=["query", "limit", "rank_by"],
+        worker_backed=True,
+        timeout=30,
+    )
+    def qmt_xtdata_search_instruments(
+        query: str,
+        sectors: list[str] | None = None,
+        markets: list[str] | None = None,
+        types: list[str] | None = None,
+        include_external: bool = False,
+        limit: int = 20,
+        refresh: str = "stale",
+        rank_by: str = "combined",
+        include_metrics: bool = True,
+    ) -> dict[str, Any]:
+        clean_query = validate_query(query, limit, refresh, rank_by)
+        clean_sectors = validate_filters(sectors, "sectors")
+        cache = _search_cache_for_call(health, refresh, clean_sectors or None, include_external)
+        result = search_records(
+            cache,
+            clean_query,
+            sectors=clean_sectors,
+            markets=markets,
+            types=types,
+            include_external=include_external,
+            limit=limit,
+            rank_by=rank_by,
+            include_metrics=include_metrics,
+        )
+        return ok_envelope(
+            query=clean_query,
+            cache=cache_state(cache),
+            results=result["results"],
+            truncated=result["truncated"],
+        )
+
+    @registry.register(
+        mcp,
+        name="qmt_xtdata_resolve_instrument",
+        family="xtdata",
+        description=RESOLVE_DESCRIPTION,
+        audit_fields=["query", "limit", "rank_by"],
+        worker_backed=True,
+        timeout=30,
+    )
+    def qmt_xtdata_resolve_instrument(
+        query: str,
+        prefer_types: list[str] | None = None,
+        include_external: bool = False,
+        rank_by: str = "combined",
+        min_score: int = 70,
+        limit: int = 5,
+        refresh: str = "stale",
+    ) -> dict[str, Any]:
+        clean_query = validate_query(query, limit, refresh, rank_by)
+        if min_score < 1 or min_score > 100:
+            raise McpCoreError("validation", "min_score out of bounds", {"min": 1, "max": 100})
+        cache = _search_cache_for_call(health, refresh, None, include_external)
+        result = search_records(
+            cache,
+            clean_query,
+            include_external=include_external,
+            limit=limit,
+            rank_by=rank_by,
+            include_metrics=True,
+            prefer_types=prefer_types,
+            min_score=1,
+        )
+        resolved = resolve_from_results(result["results"], min_score)
+        return ok_envelope(
+            query=clean_query,
+            cache=cache_state(cache),
+            truncated=result["truncated"],
+            **resolved,
+        )
+
+    @registry.register(
+        mcp,
+        name="qmt_xtdata_search_sectors",
+        family="xtdata",
+        description=SECTOR_SEARCH_DESCRIPTION,
+        audit_fields=["query", "limit"],
+        worker_backed=True,
+        timeout=20,
+    )
+    def qmt_xtdata_search_sectors(query: str, limit: int = 50, refresh: str = "stale") -> dict[str, Any]:
+        clean_query = validate_query(query, limit, refresh, "relevance")
+        cache = _search_cache_for_call(health, refresh, None, False)
+        result = search_sectors(cache, clean_query, limit=limit)
+        return ok_envelope(
+            query=clean_query, cache=cache_state(cache), sectors=result["sectors"], truncated=result["truncated"]
+        )
+
+    @registry.register(
+        mcp,
+        name="qmt_xtdata_refresh_instrument_cache",
+        family="xtdata",
+        description=REFRESH_SEARCH_CACHE_DESCRIPTION,
+        audit_fields=["sectors", "include_external", "force", "max_codes"],
+        worker_backed=True,
+        timeout=600,
+    )
+    def qmt_xtdata_refresh_instrument_cache(
+        sectors: list[str] | None = None,
+        include_external: bool = False,
+        force: bool = False,
+        max_codes: int = 20000,
+        refresh_metrics: bool = True,
+        metrics_count: int = 20,
+        max_metric_codes: int = 500,
+    ) -> dict[str, Any]:
+        clean_sectors = validate_filters(sectors, "sectors", max_items=50)
+        if metrics_count < 1 or metrics_count > 120:
+            raise McpCoreError("validation", "metrics_count out of bounds", {"min": 1, "max": 120})
+        if max_metric_codes < 0 or max_metric_codes > 5000:
+            raise McpCoreError("validation", "max_metric_codes out of bounds", {"min": 0, "max": 5000})
+        cache = refresh_cache(
+            _call_xtdata,
+            broker_id=health.config.broker_id,
+            sectors=clean_sectors or None,
+            include_external=include_external,
+            force=force,
+            max_codes=max_codes,
+            refresh_metrics=refresh_metrics,
+            metrics_count=metrics_count,
+            max_metric_codes=max_metric_codes,
+        )
+        state = cache_state(cache)
+        return ok_envelope(
+            cache_path=state.get("cache_path"),
+            record_count=state.get("record_count"),
+            sector_count=state.get("sector_count"),
+            source_sectors=state.get("source_sectors", []),
+            partial=state.get("partial", False),
+            updated_at=state.get("updated_at"),
+            errors=cache.get("errors", [])[:20],
+        )
+
+    @registry.register(
+        mcp,
+        name="qmt_xtdata_instrument_cache_status",
+        family="xtdata",
+        description=CACHE_STATUS_DESCRIPTION,
+        audit_fields=[],
+        worker_backed=False,
+        timeout=5,
+    )
+    def qmt_xtdata_instrument_cache_status() -> dict[str, Any]:
+        cache = usable_cache_or_seed(health.config.broker_id)
+        return ok_envelope(**cache_state(cache))
+
     health.xtdata = "not_ready"
-    health.set_family("xtdata", "not_ready", "xtdata tools registered; QMT login/readiness is checked per call", registry.tool_names("xtdata"))
+    health.set_family(
+        "xtdata",
+        "not_ready",
+        "xtdata tools registered; QMT login/readiness is checked per call",
+        registry.tool_names("xtdata"),
+    )

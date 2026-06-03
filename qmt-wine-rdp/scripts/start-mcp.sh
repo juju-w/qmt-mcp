@@ -13,6 +13,7 @@ export WINEARCH="${WINEARCH:-wow64}"
 export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}"
 export MCP_HOST="${MCP_HOST:-0.0.0.0}"
 export MCP_PORT="${MCP_PORT:-8765}"
+export QMT_MCP_TRANSPORT="${QMT_MCP_TRANSPORT:-streamable-http}"
 
 # Resolved by detect-broker (Wine paths). The launcher consumes these.
 export QMT_XTQUANT_DIR_WIN="${QMT_XTQUANT_DIR_WIN:-}"
@@ -27,7 +28,7 @@ LAUNCHER="${QMT_MCP_LAUNCHER:-/opt/qmt-mcp/qmt_mcp.py}"
 PY='C:\Python312\python.exe'
 LAUNCHER_WIN="$(winepath -w "$LAUNCHER" 2>/dev/null || echo "$LAUNCHER")"
 
-echo "[start-mcp] broker=${QMT_BROKER_ID:-?} mode=${QMT_MCP_MODE} on ${MCP_HOST}:${MCP_PORT}"
+echo "[start-mcp] broker=${QMT_BROKER_ID:-?} mode=${QMT_MCP_MODE} transport=${QMT_MCP_TRANSPORT} on ${MCP_HOST}:${MCP_PORT}"
 echo "[start-mcp] xtquant=${QMT_XTQUANT_DIR_WIN:-<unset>} userdata=${QMT_USERDATA_WIN:-<unset>}"
 echo "[start-mcp] audit=${QMT_MCP_AUDIT_PATH}"
 

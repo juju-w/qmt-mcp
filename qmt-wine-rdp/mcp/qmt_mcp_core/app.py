@@ -29,11 +29,13 @@ def _add_xtquant_path(config: CoreConfig) -> None:
 
 async def _json_response(send, status: int, payload: dict[str, Any]) -> None:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    await send({
-        "type": "http.response.start",
-        "status": status,
-        "headers": [(b"content-type", b"application/json; charset=utf-8")],
-    })
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [(b"content-type", b"application/json; charset=utf-8")],
+        }
+    )
     await send({"type": "http.response.body", "body": body})
 
 
@@ -116,7 +118,7 @@ def create_app(config: CoreConfig | None = None):
     register_optional_xtdata(mcp, registry, health, config)
     registry.assert_no_write_tools()
 
-    app = mcp.http_app(transport="sse")
+    app = mcp.http_app(transport=config.transport)
     return CoreASGI(app, config, health), config, health, registry
 
 
@@ -124,7 +126,7 @@ def main() -> None:
     app, config, health, registry = create_app()
     log(
         f"broker={config.broker_id} mode={config.mcp_mode} host={config.host}:{config.port} "
-        f"auth={'on' if config.auth_required else 'loopback-dev'} audit={config.audit_path} "
+        f"transport={config.transport} auth={'on' if config.auth_required else 'loopback-dev'} audit={config.audit_path} "
         f"tools={registry.tool_names()}"
     )
     import uvicorn

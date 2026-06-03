@@ -5,13 +5,13 @@ from __future__ import annotations
 import functools
 import inspect
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from .audit import JsonlAuditSink, request_id
 from .errors import McpCoreError, error_envelope, from_exception
 from .health import HealthState
 from .workers import WorkerPool
-
 
 WRITE_TOOL_KEYWORDS = (
     "order",
@@ -41,10 +41,7 @@ class ToolRegistry:
         return sorted(names)
 
     def assert_no_write_tools(self) -> None:
-        leaked = [
-            name for name in self._tools
-            if any(keyword in name.lower() for keyword in WRITE_TOOL_KEYWORDS)
-        ]
+        leaked = [name for name in self._tools if any(keyword in name.lower() for keyword in WRITE_TOOL_KEYWORDS)]
         if leaked:
             raise McpCoreError("internal", "write-capable tool names are not allowed", {"tools": leaked})
 

@@ -54,6 +54,7 @@ class HealthState:
         return {
             "ok": ok,
             "server": self.server,
+            "transport": self.config.transport,
             "broker_config": self.broker_config,
             "xtquant_import": self.xtquant_import,
             "xtdata": self.xtdata,
@@ -65,5 +66,6 @@ class HealthState:
     def capabilities(self) -> dict[str, Any]:
         return {
             "ok": True,
+            "transport": self.config.transport,
             "tool_families": [cap.to_dict() for cap in self.families.values()],
         }

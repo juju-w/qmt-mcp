@@ -27,6 +27,7 @@ if [ -d /opt/qmt-mcp ]; then
     echo "QMT_MCP_TOKEN='${QMT_MCP_TOKEN:-}'"
     echo "MCP_HOST='${MCP_HOST:-0.0.0.0}'"
     echo "MCP_PORT='${MCP_PORT:-8765}'"
+    echo "QMT_MCP_TRANSPORT='${QMT_MCP_TRANSPORT:-streamable-http}'"
     echo "QMT_CONNECT_RETRY='${QMT_CONNECT_RETRY:-8}'"
     echo "QMT_BROKER_ID='${QMT_BROKER_ID:-}'"
     echo "QMT_CLIENT='${QMT_CLIENT:-}'"

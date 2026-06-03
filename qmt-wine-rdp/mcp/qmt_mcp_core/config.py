@@ -9,7 +9,6 @@ from pathlib import Path
 
 from .errors import McpCoreError
 
-
 DEFAULT_MCP_ENV = Path("/opt/qmt-mcp/mcp.env")
 
 
@@ -51,6 +50,7 @@ class CoreConfig:
     token: str
     host: str
     port: int
+    transport: str
     audit_path: str
     worker_limit: int
     allow_unauth_loopback: bool
@@ -62,6 +62,12 @@ class CoreConfig:
         return bool(self.token)
 
     def validate_security(self) -> None:
+        if self.transport not in {"streamable-http", "http", "sse"}:
+            raise McpCoreError(
+                "config",
+                "invalid QMT_MCP_TRANSPORT",
+                {"transport": self.transport, "allowed": ["streamable-http", "http", "sse"]},
+            )
         if not self.token and not (_is_loopback(self.host) and self.allow_unauth_loopback):
             raise McpCoreError(
                 "auth",
@@ -82,6 +88,7 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         token=env.get("QMT_MCP_TOKEN", "").strip(),
         host=host,
         port=int(env.get("MCP_PORT", "8765")),
+        transport=env.get("QMT_MCP_TRANSPORT", "streamable-http") or "streamable-http",
         audit_path=env.get("QMT_MCP_AUDIT_PATH", "/broker/logs/mcp-audit.jsonl"),
         worker_limit=max(1, int(env.get("QMT_MCP_WORKERS", "4"))),
         allow_unauth_loopback=env.get("QMT_MCP_ALLOW_UNAUTH_LOOPBACK", "0") == "1",

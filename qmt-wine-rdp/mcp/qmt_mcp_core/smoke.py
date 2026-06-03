@@ -8,8 +8,8 @@ import tempfile
 import time
 from pathlib import Path
 
-from .config import CoreConfig
 from .app import create_app
+from .config import CoreConfig
 
 
 def make_smoke_config() -> CoreConfig:
@@ -23,6 +23,7 @@ def make_smoke_config() -> CoreConfig:
         token="smoke-token",
         host="127.0.0.1",
         port=8765,
+        transport="streamable-http",
         audit_path=audit_path,
         worker_limit=2,
         allow_unauth_loopback=False,

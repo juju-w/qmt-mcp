@@ -6,10 +6,10 @@ import traceback
 from dataclasses import dataclass
 from typing import Any
 
-
 ERROR_TYPES = {
     "validation",
     "auth",
+    "config",  # startup-only: invalid runtime config (e.g. bad transport)
     "not_ready",
     "not_authorized",
     "disabled",

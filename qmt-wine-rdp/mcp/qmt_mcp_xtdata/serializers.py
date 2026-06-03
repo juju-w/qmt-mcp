@@ -40,22 +40,24 @@ def snapshot_records(raw: Any, codes: list[str]) -> list[dict[str, Any]]:
         item = data.get(code, {}) if isinstance(data, dict) else {}
         if not isinstance(item, dict):
             item = {"value": item}
-        records.append({
-            "code": code,
-            "time": item.get("time") or item.get("stime") or item.get("datetime") or "",
-            "last_price": item.get("lastPrice", item.get("last_price", item.get("price"))),
-            "open": item.get("open"),
-            "high": item.get("high"),
-            "low": item.get("low"),
-            "pre_close": item.get("preClose", item.get("pre_close", item.get("lastClose"))),
-            "volume": item.get("volume"),
-            "amount": item.get("amount"),
-            "bid_price": item.get("bidPrice", item.get("bid_price", [])),
-            "bid_volume": item.get("bidVol", item.get("bid_volume", [])),
-            "ask_price": item.get("askPrice", item.get("ask_price", [])),
-            "ask_volume": item.get("askVol", item.get("ask_volume", [])),
-            "raw_fields": item,
-        })
+        records.append(
+            {
+                "code": code,
+                "time": item.get("time") or item.get("stime") or item.get("datetime") or "",
+                "last_price": item.get("lastPrice", item.get("last_price", item.get("price"))),
+                "open": item.get("open"),
+                "high": item.get("high"),
+                "low": item.get("low"),
+                "pre_close": item.get("preClose", item.get("pre_close", item.get("lastClose"))),
+                "volume": item.get("volume"),
+                "amount": item.get("amount"),
+                "bid_price": item.get("bidPrice", item.get("bid_price", [])),
+                "bid_volume": item.get("bidVol", item.get("bid_volume", [])),
+                "ask_price": item.get("askPrice", item.get("ask_price", [])),
+                "ask_volume": item.get("askVol", item.get("ask_volume", [])),
+                "raw_fields": item,
+            }
+        )
     return records
 
 
@@ -63,7 +65,9 @@ def _is_field_name(value: str, fields: set[str]) -> bool:
     return value in fields or value.lower() in fields
 
 
-def _set_row(rows_by_key: dict[tuple[str, str], dict[str, Any]], code: str, time_value: Any, field: str, value: Any) -> None:
+def _set_row(
+    rows_by_key: dict[tuple[str, str], dict[str, Any]], code: str, time_value: Any, field: str, value: Any
+) -> None:
     key = (code, str(time_value))
     row = rows_by_key.setdefault(key, {"code": code, "time": str(time_value)})
     row[field] = value

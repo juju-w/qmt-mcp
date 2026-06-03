@@ -78,9 +78,10 @@
 
 ```bash
 cd appliance
+cp .env.example .env                       # 填入 QMT_MCP_TOKEN / BROKER_PACK 等
 docker compose build                       # 构建券商中立基础镜像
 scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
-docker compose up -d                       # .env 内含 token / 端口 / pack 路径
+docker compose up -d
 ```
 
 连接（登录 RDP 后在 QMT 里登录资金账号，交易需勾选**独立交易/极简模式**）：

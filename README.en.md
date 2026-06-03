@@ -86,9 +86,10 @@ All tools are **read-only**, authenticated, audited, and return structured JSON
 
 ```bash
 cd appliance
+cp .env.example .env                       # fill in QMT_MCP_TOKEN / BROKER_PACK / ...
 docker compose build                       # build the broker-neutral base image
 scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
-docker compose up -d                       # .env holds token / ports / pack path
+docker compose up -d
 ```
 
 Connect (after RDP login, log into your account in QMT; trading needs the

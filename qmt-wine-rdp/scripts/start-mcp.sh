@@ -18,6 +18,10 @@ export MCP_PORT="${MCP_PORT:-8765}"
 export QMT_XTQUANT_DIR_WIN="${QMT_XTQUANT_DIR_WIN:-}"
 export QMT_USERDATA_WIN="${QMT_USERDATA_WIN:-}"
 export QMT_MCP_MODE="${QMT_MCP_MODE:-readonly}"
+if [ -z "${QMT_MCP_AUDIT_PATH:-}" ]; then
+  mkdir -p /broker/logs 2>/dev/null || true
+  export QMT_MCP_AUDIT_PATH="$(winepath -w /broker/logs/mcp-audit.jsonl 2>/dev/null || echo 'Z:\broker\logs\mcp-audit.jsonl')"
+fi
 
 LAUNCHER="${QMT_MCP_LAUNCHER:-/opt/qmt-mcp/qmt_mcp.py}"
 PY='C:\Python312\python.exe'
@@ -25,6 +29,7 @@ LAUNCHER_WIN="$(winepath -w "$LAUNCHER" 2>/dev/null || echo "$LAUNCHER")"
 
 echo "[start-mcp] broker=${QMT_BROKER_ID:-?} mode=${QMT_MCP_MODE} on ${MCP_HOST}:${MCP_PORT}"
 echo "[start-mcp] xtquant=${QMT_XTQUANT_DIR_WIN:-<unset>} userdata=${QMT_USERDATA_WIN:-<unset>}"
+echo "[start-mcp] audit=${QMT_MCP_AUDIT_PATH}"
 
 if [ -n "${DISPLAY:-}" ]; then
   exec wine "$PY" "$LAUNCHER_WIN"

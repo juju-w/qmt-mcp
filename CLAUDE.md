@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
-Active feature: 001-broker-pack-base
-Plan: specs/001-broker-pack-base/plan.md
-Spec: specs/001-broker-pack-base/spec.md
+Active feature: 002-mcp-server-core
+Plan: specs/002-mcp-server-core/plan.md
+Spec: specs/002-mcp-server-core/spec.md
 Constitution: .specify/memory/constitution.md
 
 Project: broker-agnostic QMT-MCP appliance. Base image (Wine wow64 + Windows

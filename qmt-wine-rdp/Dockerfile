@@ -4,7 +4,7 @@
 #   - Wine new-WoW64 on native linux/amd64
 #   - Windows Python 3.12 installed into the Wine prefix
 #   - CJK fonts (Linux desktop + inside the Wine prefix)
-#   - fastmcp + uvicorn (MCP server deps)
+#   - fastmcp + uvicorn + numpy/pandas (MCP + xtdata deps)
 #   - the read-only QMT MCP launcher + scripts + XFCE autostart
 #   - xrdp desktop
 #   - detect-broker tooling (python3 + python3-yaml)
@@ -99,14 +99,16 @@ RUN set -eux; \
     test -d "$SITE"; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip config set \
         global.index-url https://pypi.tuna.tsinghua.edu.cn/simple; \
-    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip install -q fastmcp uvicorn; \
+    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip install -q fastmcp uvicorn numpy pandas; \
     mkdir -p "$WINEPREFIX/drive_c/windows/Fonts"; \
     cp /usr/share/fonts/opentype/noto/*CJK*.ttc "$WINEPREFIX/drive_c/windows/Fonts/" 2>/dev/null || true; \
     cp /usr/share/fonts/truetype/wqy/*.ttc      "$WINEPREFIX/drive_c/windows/Fonts/" 2>/dev/null || true; \
-    # build-time smoke: Python + fastmcp + MCP filter (NO xtquant — comes from pack)
+    # build-time smoke: Python + MCP core (NO xtquant — comes from pack)
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" --version; \
-    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import fastmcp, uvicorn; print('fastmcp', fastmcp.__version__)"; \
-    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import sys; sys.path.insert(0, r'Z:\\opt\\qmt-mcp'); import qmt_mcp; qmt_mcp.filter_trade_tools(); print('mcp filter OK')"; \
+    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import fastmcp, uvicorn, numpy, pandas; print('fastmcp', fastmcp.__version__)"; \
+    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import sys; sys.path.insert(0, r'Z:\\opt\\qmt-mcp'); import qmt_mcp; assert qmt_mcp.filter_trade_tools() == []; print('mcp core import OK')"; \
+    QMT_MCP_TOKEN=smoke QMT_MCP_ENABLE_XTDATA=0 QMT_MCP_AUDIT_PATH='C:\users\wineuser\Temp\qmt-mcp-audit-smoke.jsonl' \
+      xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import sys; sys.path.insert(0, r'Z:\\opt\\qmt-mcp'); import qmt_mcp_core.smoke as smoke; smoke.main()"; \
     wineserver -w
 
 USER root

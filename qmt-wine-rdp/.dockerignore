@@ -1,8 +1,9 @@
 .git
 .gitignore
 .DS_Store
+._*
 .env
-mcp/vendor/**/__pycache__
+mcp/**/__pycache__
 # broker packs are mounted at runtime, never part of the image build context
 brokers/*/pack/
 workspace/**

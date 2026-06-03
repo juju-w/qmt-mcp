@@ -40,7 +40,7 @@ gates).
 - **011 — Release & versioning**: this scaffolding.
 
 ### Known gaps
-- In-image pip deps are declared in `qmt-wine-rdp/mcp/requirements.in`; the locked
+- In-image pip deps are declared in `appliance/mcp/requirements.in`; the locked
   `requirements.txt` must be generated from an amd64 Wine build (constitution III).
 
 <!-- Set this to <repo-url>/commits/main once a GitHub remote is configured. -->

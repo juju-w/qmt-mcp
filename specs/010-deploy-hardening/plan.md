@@ -28,7 +28,7 @@ base image untouched (override-only).
 ## Project Structure
 
 ```text
-qmt-wine-rdp/
+appliance/
 ├── docs/DEPLOY.md                 # NEW: threat model + topology + checklist
 ├── deploy/Caddyfile.example       # NEW: TLS termination -> MCP
 ├── docker-compose.tls.yml         # NEW: proxy override, MCP port internal

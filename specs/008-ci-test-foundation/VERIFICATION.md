@@ -27,9 +27,9 @@ xtdata `validation` + `serializers`.
   without `fastmcp`.
 - `qmt_mcp_core/errors.py` → registered the `config` startup error type (was
   silently degrading to `internal`; found by `test_config`).
-- `qmt-wine-rdp/mcp/pyproject.toml` → ruff + pytest config (E501 owned by
+- `appliance/mcp/pyproject.toml` → ruff + pytest config (E501 owned by
   formatter).
-- `qmt-wine-rdp/mcp/tests/` → conftest (fake xtquant, env isolation) + 8 unit
+- `appliance/mcp/tests/` → conftest (fake xtquant, env isolation) + 8 unit
   modules + 1 gated integration module + README.
 - `.github/workflows/ci.yml` → lint+format+unit, gitleaks secret scan,
   conditional Go build for qmtctl (007).

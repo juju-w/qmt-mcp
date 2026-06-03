@@ -8,7 +8,7 @@ covers the pure-logic modules (`config`, `errors`, `audit`, `health`, `workers`,
 ## Run
 
 ```bash
-cd qmt-wine-rdp/mcp
+cd appliance/mcp
 python3 -m pip install pytest ruff          # only these two for the unit tier
 python3 -m ruff check .
 python3 -m pytest -m 'not integration'

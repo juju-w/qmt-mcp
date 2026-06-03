@@ -7,7 +7,7 @@
 - [x] T003 `.github/workflows/release.yml` — on `v*` tag: build amd64 base image,
   push to GHCR (`version`+`latest`), create GitHub Release; conditional qmtctl
   cross-build when a Go module exists.
-- [x] T004 `qmt-wine-rdp/mcp/requirements.in` declaring fastmcp/uvicorn/numpy/
+- [x] T004 `appliance/mcp/requirements.in` declaring fastmcp/uvicorn/numpy/
   pandas; document lockfile generation + Dockerfile wiring (verify on amd64).
 - [x] T005 Document SemVer policy in CHANGELOG/CONTRIBUTING (breaking = pack
   contract or tool surface change).

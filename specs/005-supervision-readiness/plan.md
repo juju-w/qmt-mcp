@@ -41,7 +41,7 @@ fully testable today.
 
 **Target Platform**: Native linux/amd64 Wine appliance container. Apple Silicon emulation-only, not a validation target.
 
-**Project Type**: Containerized local service inside `qmt-wine-rdp/` — additive hardening of 001/002, no new top-level project.
+**Project Type**: Containerized local service inside `appliance/` — additive hardening of 001/002, no new top-level project.
 
 **Performance Goals**: `/healthz` and `/livez` stay responsive (sub-second) regardless of probe/connector activity; readiness is observable within one poll interval of QMT login; MCP restart by the supervisor within a few seconds of crash.
 
@@ -82,7 +82,7 @@ specs/005-supervision-readiness/
 ### Source Code (repository root)
 
 ```text
-qmt-wine-rdp/
+appliance/
 ├── mcp/
 │   └── qmt_mcp_core/
 │       ├── health.py        # add live xtdata/trader/accounts + readiness fields
@@ -99,7 +99,7 @@ qmt-wine-rdp/
 └── docker-compose.yml       # add healthcheck:; document tmpfs/real-disk requirement
 ```
 
-**Structure Decision**: Keep everything inside `qmt-wine-rdp/`, additive to
+**Structure Decision**: Keep everything inside `appliance/`, additive to
 001/002. The supervisor is a small Bash loop launched by the existing XFCE
 autostart (not a container-level init), because MCP/QMT require the X session.
 Readiness and connector logic live as background threads in `qmt_mcp_core` so a

@@ -5,7 +5,7 @@ Goal: validate the MCP core without needing QMT login or xttrade permission.
 ## 1. Build / run the appliance
 
 ```bash
-cd qmt-wine-rdp
+cd appliance
 docker compose up -d --build
 ```
 

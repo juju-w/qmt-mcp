@@ -1,4 +1,7 @@
-# qmt-wine-rdp
+# appliance
+
+> Component-level build & ops reference. For the project overview, broker-pack
+> model, and MCP usage, see the [root README](../README.md).
 
 Self-contained QMT/MiniQMT image on Wine, based on
 [`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine), served over RDP.
@@ -12,7 +15,7 @@ time** on a native `linux/amd64` host:
 - Windows Python 3.12 installed into the Wine prefix
 - xtquant (`xtquant_250807`) placed into `site-packages`
 - 金阳光/QMT (`setup_qmt.exe`, NSIS) extracted to `/workspace/QMT/extracted`
-- reserved `8765` port for a future read-only QMT gateway
+- `8765` serves the read-only QMT **MCP** server (bearer-token; see root README)
 
 All three artifacts are **downloaded at build time** from their upstream URLs
 (`--build-arg` to override), so the build context stays a few KB.
@@ -32,7 +35,7 @@ Ports (host → container):
 
 ```text
 13389 → 3389   RDP
-18765 → 8765   reserved gateway
+18765 → 8765   MCP (bearer-token)
 ```
 
 ## Connect

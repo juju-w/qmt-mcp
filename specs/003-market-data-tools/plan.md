@@ -24,7 +24,7 @@ errors. No Postgres and no streaming subscriptions in this feature.
 
 **Target Platform**: Native linux/amd64 QMT appliance container.
 
-**Project Type**: MCP tool family plugin/package under `qmt-wine-rdp/mcp/`.
+**Project Type**: MCP tool family plugin/package under `appliance/mcp/`.
 
 **Performance Goals**: Bounded outputs; history download and data reads run via 002 worker executor; health remains responsive.
 
@@ -62,7 +62,7 @@ specs/003-market-data-tools/
 ### Source Code (repository root)
 
 ```text
-qmt-wine-rdp/
+appliance/
 └── mcp/
     └── qmt_mcp_xtdata/
         ├── __init__.py

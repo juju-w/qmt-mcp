@@ -5,7 +5,7 @@ Goal: validate the first real MCP tool family with the current permission state.
 ## 1. Start appliance and log into QMT
 
 ```bash
-cd qmt-wine-rdp
+cd appliance
 docker compose up -d
 ```
 

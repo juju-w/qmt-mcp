@@ -38,14 +38,14 @@ The MCP runtime targets **Windows Python 3.12 under Wine**, but the test suite i
 designed to run on a plain host Python 3.12 with no Wine and no broker pack:
 
 ```bash
-cd qmt-wine-rdp/mcp
+cd appliance/mcp
 python3 -m pip install ruff pytest
 python3 -m ruff check .
 python3 -m ruff format --check .
 python3 -m pytest -m 'not integration'
 ```
 
-See `qmt-wine-rdp/mcp/tests/README.md` for the unit vs. integration tiers and
+See `appliance/mcp/tests/README.md` for the unit vs. integration tiers and
 what is intentionally out of host scope (live xtdata/xttrader, the Wine/amd64
 image build). Add unit tests for new pure-logic code; keep them dependency-light.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Pre-flight security check before exposing the QMT-MCP appliance beyond loopback.
 # Flags weak/default config. Hard failures -> non-zero exit (gate a deploy with it).
-# Never prints secret values. Reads an env file (arg 1, default ./qmt-wine-rdp/.env)
+# Never prints secret values. Reads an env file (arg 1, default ./appliance/.env)
 # if present, falling back to the current environment.
 #
 # Usage:
@@ -9,7 +9,7 @@
 #   QMT_MCP_TOKEN=... QMT_RDP_PASSWORD=... scripts/harden-check.sh
 set -euo pipefail
 
-ENV_FILE="${1:-qmt-wine-rdp/.env}"
+ENV_FILE="${1:-appliance/.env}"
 if [ -f "$ENV_FILE" ]; then
   # shellcheck disable=SC1090
   set -a; . "$ENV_FILE"; set +a

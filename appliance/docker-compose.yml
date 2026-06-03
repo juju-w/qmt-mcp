@@ -18,17 +18,17 @@ services:
       WINEPREFIX: "/home/wineuser/.wine"
       BROKER_MOUNT: "/broker"
       # read-only QMT MCP (bearer token required; set in .env)
-      QMT_MCP_TOKEN: "${QMT_MCP_TOKEN:?set QMT_MCP_TOKEN in qmt-wine-rdp/.env}"
+      QMT_MCP_TOKEN: "${QMT_MCP_TOKEN:?set QMT_MCP_TOKEN in appliance/.env}"
       MCP_HOST: "0.0.0.0"
       MCP_PORT: "8765"
     volumes:
       # The broker pack: extracted QMT terminal + matching xtquant + broker.yaml.
       # Mounted READ-WRITE (the terminal persists userdata/logs/config in-tree).
       # Switch brokers by pointing BROKER_PACK at another pack — no rebuild.
-      - "${BROKER_PACK:?set BROKER_PACK in qmt-wine-rdp/.env to a broker pack dir}:/broker"
+      - "${BROKER_PACK:?set BROKER_PACK in appliance/.env to a broker pack dir}:/broker"
     shm_size: "1g"
     restart: unless-stopped
 
-# Multiple brokers on one host: copy qmt-wine-rdp/.env per instance (distinct
+# Multiple brokers on one host: copy appliance/.env per instance (distinct
 # INSTANCE / RDP_PORT / MCP_PORT / QMT_MCP_TOKEN / BROKER_PACK) and run with
 # `docker compose --env-file <file> -p <project> up -d`.

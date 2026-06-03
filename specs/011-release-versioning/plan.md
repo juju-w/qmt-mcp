@@ -30,7 +30,7 @@ binary build require GitHub + amd64 (out of local scope).
 VERSION                          # NEW: single version source of truth
 CHANGELOG.md                     # NEW: Keep-a-Changelog
 .github/workflows/release.yml    # NEW: tag -> GHCR image + Release (+ optional CLI)
-qmt-wine-rdp/mcp/requirements.in # NEW: declared MCP runtime deps (lock generated on build)
+appliance/mcp/requirements.in # NEW: declared MCP runtime deps (lock generated on build)
 ```
 
 **Structure Decision**: Root `VERSION`/`CHANGELOG` (discoverable); release workflow

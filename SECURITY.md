@@ -26,9 +26,9 @@ fix discussion thereafter. This is a community project, not a vendor SLA.
 
 **In scope** (this repository):
 
-- The MCP core (`qmt-wine-rdp/mcp/qmt_mcp_core`) — auth, token handling, audit,
+- The MCP core (`appliance/mcp/qmt_mcp_core`) — auth, token handling, audit,
   error envelopes, tool allow-listing.
-- The xtdata/search tool layer (`qmt-wine-rdp/mcp/qmt_mcp_xtdata`).
+- The xtdata/search tool layer (`appliance/mcp/qmt_mcp_xtdata`).
 - Launch/entrypoint scripts, Dockerfile, and compose (network exposure, secrets
   handling, RDP defaults, tmpfs guard).
 

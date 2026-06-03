@@ -26,7 +26,7 @@ JSONL audit is the default sink and database persistence is deferred.
 
 **Target Platform**: Native linux/amd64 host running the Wine-based QMT appliance container. Apple Silicon remains emulation-only and not a validation target.
 
-**Project Type**: Containerized local MCP service inside `qmt-wine-rdp/`.
+**Project Type**: Containerized local MCP service inside `appliance/`.
 
 **Performance Goals**: Health/capability checks remain responsive while at least one blocking worker call is running; concurrency limit prevents unbounded QMT/xtquant calls.
 
@@ -70,7 +70,7 @@ specs/002-mcp-server-core/
 ### Source Code (repository root)
 
 ```text
-qmt-wine-rdp/
+appliance/
 ├── mcp/
 │   ├── qmt_mcp.py              # replace pass-through launcher with core app
 │   └── qmt_mcp_core/           # new internal package for auth/registry/health/audit
@@ -79,7 +79,7 @@ qmt-wine-rdp/
 └── Dockerfile                  # build-time smoke for core import/tool filtering
 ```
 
-**Structure Decision**: Keep the MCP core under `qmt-wine-rdp/mcp/` so it remains
+**Structure Decision**: Keep the MCP core under `appliance/mcp/` so it remains
 packaged with the appliance. Add an internal package rather than growing the
 single launcher file; keep `qmt_mcp.py` as the executable entrypoint for Wine.
 

@@ -7,7 +7,7 @@ native linux/amd64 host with a mounted broker pack. Steps that need broker
 
 ## 0. Prerequisites
 
-- `qmt-wine-rdp/.env` set (`QMT_MCP_TOKEN`, `BROKER_PACK`, ports).
+- `appliance/.env` set (`QMT_MCP_TOKEN`, `BROKER_PACK`, ports).
 - Broker pack on **real disk** (not tmpfs).
 
 ## 1. tmpfs guard fails closed (FR-007 / SC: safety)

@@ -72,7 +72,7 @@ specs/001-broker-pack-base/
 ### Source Code (repository root)
 
 ```text
-qmt-wine-rdp/
+appliance/
 ├── Dockerfile                  # REFACTOR: broker-neutral base (no setup_qmt, no xtquant)
 ├── docker-compose.yml          # REFACTOR: mount /broker rw; per-instance port/token
 ├── .env                        # per-instance token (gitignored)
@@ -92,9 +92,9 @@ qmt-wine-rdp/
     └── BROKER-PACK.md           # NEW: pack layout + broker.yaml + switching guide
 ```
 
-**Structure Decision**: Keep everything under the existing `qmt-wine-rdp/` app
+**Structure Decision**: Keep everything under the existing `appliance/` app
 directory (single deployable appliance). The broker pack lives OUTSIDE the image
-(a host dir, e.g. `qmt-wine-rdp/brokers/<id>/pack/`, gitignored) and is mounted
+(a host dir, e.g. `appliance/brokers/<id>/pack/`, gitignored) and is mounted
 at `/broker`. `brokers/<id>/broker.yaml` examples are tracked; the heavy pack
 contents are not.
 

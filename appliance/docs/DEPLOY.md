@@ -36,7 +36,7 @@ operator ──VPN/tunnel──> 127.0.0.1:3389 (RDP, loopback only)
 ## Bearer token
 
 - Generate a strong random token: `openssl rand -hex 32`.
-- Put it in `qmt-wine-rdp/.env` as `QMT_MCP_TOKEN=...` (git-ignored). Never bake
+- Put it in `appliance/.env` as `QMT_MCP_TOKEN=...` (git-ignored). Never bake
   it into an image or commit it.
 - **Rotation**: change `QMT_MCP_TOKEN` and recreate the MCP (e.g.
   `docker compose up -d`). Rotation invalidates existing agent sessions — update

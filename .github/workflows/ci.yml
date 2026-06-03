@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: qmt-wine-rdp/mcp
+        working-directory: appliance/mcp
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

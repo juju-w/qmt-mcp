@@ -18,11 +18,11 @@ import without `fastmcp`.
 
 **Storage**: tmp dirs for audit-sink tests; no persistent storage.
 
-**Testing**: `pytest` under `qmt-wine-rdp/mcp/tests/`, unit + integration markers.
+**Testing**: `pytest` under `appliance/mcp/tests/`, unit + integration markers.
 
 **Target Platform**: `ubuntu-latest` GitHub Actions runner for lint/unit/secret; the Wine/amd64 image build is explicitly out of scope here.
 
-**Project Type**: Repo tooling additive to `qmt-wine-rdp/`.
+**Project Type**: Repo tooling additive to `appliance/`.
 
 **Constraints**: Unit tier must need no third-party runtime deps; CI must need no secrets/broker pack; never weaken the no-write-tools or fail-closed invariants while testing them.
 
@@ -41,7 +41,7 @@ import without `fastmcp`.
 ## Project Structure
 
 ```text
-qmt-wine-rdp/mcp/
+appliance/mcp/
 ├── qmt_mcp_core/__init__.py     # MODIFY: lazy re-exports (no fastmcp at import)
 ├── pyproject.toml               # NEW: ruff + pytest config, markers
 └── tests/
@@ -63,7 +63,7 @@ qmt-wine-rdp/mcp/
 ```
 
 **Structure Decision**: Tests live beside the package they cover
-(`qmt-wine-rdp/mcp/tests/`) with a local `pyproject.toml` so `ruff`/`pytest`
+(`appliance/mcp/tests/`) with a local `pyproject.toml` so `ruff`/`pytest`
 resolve config from there and from repo root. The integration tier is isolated
 behind a `@pytest.mark.integration` marker and an `importorskip("fastmcp")`.
 

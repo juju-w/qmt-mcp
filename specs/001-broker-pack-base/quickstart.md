@@ -5,7 +5,7 @@ pack — no rebuild to switch.
 
 ## 1. Build the base image (native amd64 host)
 ```bash
-cd qmt-wine-rdp
+cd appliance
 docker compose build          # base only: Wine + Python3.12 + fonts + MCP deps
                               # NO setup_qmt, NO xtquant baked in
 ```

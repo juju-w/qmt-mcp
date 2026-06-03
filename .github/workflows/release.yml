@@ -48,8 +48,8 @@ jobs:
       - name: Build & push (linux/amd64)
         uses: docker/build-push-action@v6
         with:
-          context: qmt-wine-rdp
-          file: qmt-wine-rdp/Dockerfile
+          context: appliance
+          file: appliance/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

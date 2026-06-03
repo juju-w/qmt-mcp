@@ -42,7 +42,7 @@ on any plain Python 3.12 with zero third-party installs.
 
 ## Functional Requirements
 
-- **FR-001**: A `tests/` suite for `qmt-wine-rdp/mcp` that runs on host Python 3.12
+- **FR-001**: A `tests/` suite for `appliance/mcp` that runs on host Python 3.12
   with **no** `fastmcp`/`uvicorn`/`xtquant`/broker pack — only `pytest`.
 - **FR-002**: `qmt_mcp_core/__init__.py` MUST NOT import `fastmcp` at package-import
   time (lazy re-exports), so pure modules import standalone. Public API

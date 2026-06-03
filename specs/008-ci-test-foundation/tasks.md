@@ -9,7 +9,7 @@ Legend: `[ ]` todo · `[x]` done. [P] = parallelizable.
   (`config,errors,audit,health,workers,registry,validation,serializers`).
 
 ## Phase B — Test tooling config
-- [x] T003 Add `qmt-wine-rdp/mcp/pyproject.toml` with `[tool.ruff]` (line length,
+- [x] T003 Add `appliance/mcp/pyproject.toml` with `[tool.ruff]` (line length,
   target py312, sensible rule set) and `[tool.pytest.ini_options]` (testpaths,
   markers: `integration`).
 - [x] T004 Add `tests/conftest.py`: fake-`xtquant` injector fixture (sys.modules),

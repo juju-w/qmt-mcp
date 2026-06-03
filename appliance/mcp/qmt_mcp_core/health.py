@@ -36,6 +36,10 @@ class HealthState:
         self.xtdata = "disabled"
         self.xttrade = "not_authorized"
         self.audit = "unknown"
+        # Live readiness (feature 005). Updated by the background probe/connector.
+        self.qmt_login = "unknown"  # unknown | awaiting | logged_in
+        self.last_probe_at = ""
+        self.last_error = ""
         self.families: dict[str, ToolFamilyCapability] = {}
         self.set_family("core", "enabled", "core tools available", [])
         self.set_family("xttrade_query", "not_authorized", "broker/account permission not available", [])
@@ -49,7 +53,20 @@ class HealthState:
         if cap:
             cap.tools = list(tools)
 
+    def readiness(self) -> dict[str, Any]:
+        """Structured readiness snapshot (005). Reported, never flips `ok`."""
+        return {
+            "qmt_login": self.qmt_login,
+            "xtdata_state": self.xtdata,
+            "trader_state": self.xttrade,
+            "last_probe_at": self.last_probe_at,
+            "last_error": self.last_error,
+        }
+
     def to_dict(self) -> dict[str, Any]:
+        # `ok` reflects server/audit health only; readiness states (awaiting_login,
+        # not_authorized, ...) are reported but do not flip `ok` to false — the MCP
+        # serves before QMT login (constitution V).
         ok = self.server != "error" and self.audit != "error"
         return {
             "ok": ok,
@@ -60,8 +77,13 @@ class HealthState:
             "xtdata": self.xtdata,
             "xttrade": self.xttrade,
             "audit": self.audit,
+            "readiness": self.readiness(),
             "tool_families": [cap.to_dict() for cap in self.families.values()],
         }
+
+    def livez(self) -> dict[str, Any]:
+        """Unauthenticated liveness — no account/broker/secret detail (005)."""
+        return {"ok": self.server != "error", "server": self.server}
 
     def capabilities(self) -> dict[str, Any]:
         return {

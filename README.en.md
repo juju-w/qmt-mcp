@@ -150,8 +150,8 @@ too! 🙏
 ## Acknowledgements / License
 
 - Released under the **MIT License** ([`LICENSE`](LICENSE)).
-- Development was greatly accelerated by the AI coding assistants **OpenAI GPT** and
-  **Anthropic Claude (Claude Code)** — thank you 🤖.
+- Development was greatly accelerated by the AI coding assistants **OpenAI GPT /
+  Codex** and **Anthropic Claude (Claude Code)** — thank you 🤖.
 - The MCP server is an independent implementation in this repo
   (`appliance/mcp/qmt_mcp_core` + `qmt_mcp_xtdata`).
 - Base image built on [`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine).

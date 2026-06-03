@@ -28,6 +28,14 @@ services:
       - "${BROKER_PACK:?set BROKER_PACK in appliance/.env to a broker pack dir}:/broker"
     shm_size: "1g"
     restart: unless-stopped
+    # Reflects MCP liveness via /livez. Reports unhealthy until an operator logs in
+    # over RDP (the MCP autostarts with the desktop session); healthy once serving.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
 
 # Multiple brokers on one host: copy appliance/.env per instance (distinct
 # INSTANCE / RDP_PORT / MCP_PORT / QMT_MCP_TOKEN / BROKER_PACK) and run with

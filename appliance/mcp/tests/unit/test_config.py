@@ -67,3 +67,21 @@ def test_process_env_overrides_file(monkeypatch, tmp_path):
     monkeypatch.setenv("QMT_MCP_TOKEN", "from-process")
     cfg = load_config(env_file)
     assert cfg.token == "from-process"
+
+
+def test_readiness_connector_knob_defaults(monkeypatch, tmp_path):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.readiness_poll_s == 5.0
+    assert cfg.enable_connector is False  # fail-closed: connector off by default
+    assert cfg.connect_retry == 8
+    assert cfg.connect_backoff_max_s == 60.0
+
+
+def test_connector_knobs_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv("QMT_ENABLE_CONNECTOR", "1")
+    monkeypatch.setenv("QMT_READINESS_POLL_S", "2")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.enable_connector is True
+    assert cfg.readiness_poll_s == 2.0

@@ -56,6 +56,11 @@ class CoreConfig:
     allow_unauth_loopback: bool
     enable_xtdata: bool
     test_mode: bool
+    # 005 readiness/connector knobs (defaults so direct construction stays easy).
+    readiness_poll_s: float = 5.0
+    enable_connector: bool = False
+    connect_retry: int = 8
+    connect_backoff_max_s: float = 60.0
 
     @property
     def auth_required(self) -> bool:
@@ -94,6 +99,10 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         allow_unauth_loopback=env.get("QMT_MCP_ALLOW_UNAUTH_LOOPBACK", "0") == "1",
         enable_xtdata=env.get("QMT_MCP_ENABLE_XTDATA", "1") != "0",
         test_mode=env.get("QMT_MCP_TEST_MODE", "0") == "1",
+        readiness_poll_s=max(1.0, float(env.get("QMT_READINESS_POLL_S", "5"))),
+        enable_connector=env.get("QMT_ENABLE_CONNECTOR", "0") == "1",
+        connect_retry=max(1, int(env.get("QMT_CONNECT_RETRY", "8"))),
+        connect_backoff_max_s=max(1.0, float(env.get("QMT_CONNECT_BACKOFF_MAX_S", "60"))),
     )
     cfg.validate_security()
     return cfg

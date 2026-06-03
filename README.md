@@ -132,7 +132,7 @@ PR** —— 见 [`specs/004`](specs/004-account-query-tools/spec.md)。
 ## 致谢 / 许可
 
 - 本仓库以 **MIT 许可证**发布（[`LICENSE`](LICENSE)）。
-- 本项目的开发大量借助 AI 编程助手 **OpenAI GPT** 与 **Anthropic Claude（Claude Code）**
+- 本项目的开发大量借助 AI 编程助手 **OpenAI GPT / Codex** 与 **Anthropic Claude（Claude Code）**
   加速完成 —— 在此致谢 🤖。
 - MCP 服务为本仓库独立实现（`appliance/mcp/qmt_mcp_core` + `qmt_mcp_xtdata`）。
 - 基础镜像基于 [`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine)。

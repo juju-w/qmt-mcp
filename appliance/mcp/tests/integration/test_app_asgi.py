@@ -79,3 +79,17 @@ def test_healthz_with_token_returns_health(fake_xtquant, tmp_path):
 def test_no_write_tools_registered(fake_xtquant, tmp_path):
     _app, _cfg, _health, registry = create_app(_config(tmp_path, "s3cret"))
     registry.assert_no_write_tools()  # must not raise
+
+
+def test_livez_unauthenticated_and_minimal(fake_xtquant, tmp_path):
+    app, _cfg, _health, _reg = create_app(_config(tmp_path, "s3cret"))
+    # No token, yet /livez must answer 200 with only {ok, server}.
+    status, body = _drive(app, _scope("/livez"))
+    assert status == 200
+    assert json.loads(body) == {"ok": True, "server": "live"}
+
+
+def test_healthz_has_readiness_object(fake_xtquant, tmp_path):
+    app, _cfg, _health, _reg = create_app(_config(tmp_path, "s3cret"))
+    _status, body = _drive(app, _scope("/healthz", token="s3cret"))
+    assert "readiness" in json.loads(body)

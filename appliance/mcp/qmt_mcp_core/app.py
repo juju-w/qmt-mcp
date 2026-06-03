@@ -11,8 +11,10 @@ from fastmcp import FastMCP
 
 from .audit import JsonlAuditSink
 from .config import CoreConfig, load_config
+from .connector import TraderConnector
 from .errors import McpCoreError, error_envelope
 from .health import HealthState
+from .readiness import ReadinessProbe
 from .registry import ToolRegistry
 from .workers import WorkerPool
 
@@ -39,11 +41,57 @@ async def _json_response(send, status: int, payload: dict[str, Any]) -> None:
     await send({"type": "http.response.body", "body": body})
 
 
+def _win_to_unix(win_path: str) -> str:
+    """Heuristic Wine-path -> unix-path (Z:\\broker\\x -> /broker/x). Z: maps to /."""
+    p = win_path.strip().replace("\\", "/")
+    if len(p) >= 2 and p[1] == ":":
+        p = p[2:]  # drop the drive letter; Z: is the wine root (/)
+    return p or "/"
+
+
+def _make_readiness_probe(config: CoreConfig, health: HealthState) -> ReadinessProbe:
+    """Real signals: userdata_mini present (fs) + a cheap xtdata call (sdk)."""
+
+    def fs_ready() -> bool:
+        ud = config.userdata_win.strip()
+        if not ud:
+            return False
+        return os.path.isdir(_win_to_unix(ud))
+
+    def sdk_ready() -> bool:
+        from xtquant import xtdata  # type: ignore
+
+        dates = xtdata.get_trading_dates("SH")
+        return bool(dates)
+
+    return ReadinessProbe(health, fs_ready=fs_ready, sdk_ready=sdk_ready, poll_s=config.readiness_poll_s)
+
+
+def _make_connector(config: CoreConfig, health: HealthState) -> TraderConnector:
+    """Connector scaffold for 005. A real connect_fn is supplied by feature 004;
+    until then it reports not_authorized (no broker programmatic permission)."""
+
+    def connect_fn() -> str:
+        # Feature 004 will inject a real xttrader handshake here. Without it / without
+        # broker permission, the honest state is not_authorized.
+        return "not_authorized"
+
+    return TraderConnector(
+        health,
+        connect_fn=connect_fn,
+        is_logged_in=lambda: health.qmt_login == "logged_in",
+        max_retry=config.connect_retry,
+        backoff_max=config.connect_backoff_max_s,
+    )
+
+
 class CoreASGI:
     def __init__(self, app, config: CoreConfig, health: HealthState):
         self.app = app
         self.config = config
         self.health = health
+        self.readiness_probe: ReadinessProbe | None = None
+        self.connector: TraderConnector | None = None
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") != "http":
@@ -51,6 +99,14 @@ class CoreASGI:
             return
 
         path = scope.get("path") or ""
+
+        # /livez is unauthenticated and detail-free (orchestration has no token).
+        # It MUST be handled before the auth gate. It discloses only liveness.
+        if path == "/livez":
+            doc = self.health.livez()
+            await _json_response(send, 200 if doc.get("ok") else 503, doc)
+            return
+
         headers = dict(scope.get("headers") or [])
         auth = headers.get(b"authorization", b"").decode()
         if self.config.auth_required and auth != f"Bearer {self.config.token}":
@@ -119,7 +175,13 @@ def create_app(config: CoreConfig | None = None):
     registry.assert_no_write_tools()
 
     app = mcp.http_app(transport=config.transport)
-    return CoreASGI(app, config, health), config, health, registry
+    core = CoreASGI(app, config, health)
+    # Build (do not start) the background readiness probe / trader connector.
+    # main() starts them; tests can drive .step()/.attempt() directly.
+    if config.enable_xtdata:
+        core.readiness_probe = _make_readiness_probe(config, health)
+    core.connector = _make_connector(config, health)
+    return core, config, health, registry
 
 
 def main() -> None:
@@ -129,6 +191,18 @@ def main() -> None:
         f"transport={config.transport} auth={'on' if config.auth_required else 'loopback-dev'} audit={config.audit_path} "
         f"tools={registry.tool_names()}"
     )
+    # Start background readiness probe (always when xtdata is enabled) and the
+    # trader connector (only when explicitly enabled). Both are daemon threads and
+    # never block serving.
+    if app.readiness_probe is not None:
+        app.readiness_probe.start()
+        log("readiness probe started")
+    if config.enable_connector and app.connector is not None:
+        app.connector.start()
+        log("trader connector started")
+    else:
+        log("trader connector disabled (QMT_ENABLE_CONNECTOR=0)")
+
     import uvicorn
 
     uvicorn.run(app, host=config.host, port=config.port, log_level=os.environ.get("QMT_MCP_LOG_LEVEL", "info"))

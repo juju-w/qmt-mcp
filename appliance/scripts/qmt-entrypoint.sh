@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 0) Storage guard (005): the broker pack / userdata should live on real disk; a
+#    RAM-backed mount (tmpfs/ramfs) can exhaust memory. Warn by default; set
+#    QMT_ENFORCE_REALDISK=1 to fail closed.
+BROKER_MOUNT="${BROKER_MOUNT:-/broker}"
+if fstype="$(stat -f -c %T "$BROKER_MOUNT" 2>/dev/null)"; then
+  case "$fstype" in
+    tmpfs | ramfs)
+      msg="[qmt-entrypoint] WARNING: ${BROKER_MOUNT} is on ${fstype} (RAM-backed); the broker pack/userdata should be on real disk."
+      if [ "${QMT_ENFORCE_REALDISK:-0}" = "1" ]; then
+        echo "${msg} refusing to start (QMT_ENFORCE_REALDISK=1)." >&2
+        exit 20
+      fi
+      echo "${msg} set QMT_ENFORCE_REALDISK=1 to enforce." >&2
+      ;;
+  esac
+fi
+
 # 1) Resolve the mounted broker pack (fail fast before starting any service).
 #    Writes /run/qmt/broker.env (Wine paths, no secrets).
 /usr/local/bin/detect-broker.py
@@ -29,6 +46,9 @@ if [ -d /opt/qmt-mcp ]; then
     echo "MCP_PORT='${MCP_PORT:-8765}'"
     echo "QMT_MCP_TRANSPORT='${QMT_MCP_TRANSPORT:-streamable-http}'"
     echo "QMT_CONNECT_RETRY='${QMT_CONNECT_RETRY:-8}'"
+    echo "QMT_READINESS_POLL_S='${QMT_READINESS_POLL_S:-5}'"
+    echo "QMT_ENABLE_CONNECTOR='${QMT_ENABLE_CONNECTOR:-0}'"
+    echo "QMT_CONNECT_BACKOFF_MAX_S='${QMT_CONNECT_BACKOFF_MAX_S:-60}'"
     echo "QMT_BROKER_ID='${QMT_BROKER_ID:-}'"
     echo "QMT_CLIENT='${QMT_CLIENT:-}'"
     echo "QMT_CLIENT_WIN='${QMT_CLIENT_WIN:-}'"

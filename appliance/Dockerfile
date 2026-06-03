@@ -89,8 +89,8 @@ RUN install -d -o wineuser -g wineuser /home/wineuser/.config/autostart \
       '[Desktop Entry]' \
       'Type=Application' \
       'Name=QMT MCP' \
-      'Comment=Read-only QMT MCP (streamable-http) on login' \
-      'Exec=/usr/local/bin/start-mcp.sh' \
+      'Comment=Read-only QMT MCP (streamable-http), supervised, on login' \
+      'Exec=/usr/local/bin/qmt-supervisor.sh' \
       'Terminal=false' \
       'X-GNOME-Autostart-enabled=true' \
       > /home/wineuser/.config/autostart/qmt-mcp.desktop \
@@ -137,4 +137,12 @@ RUN set -eux; \
 USER root
 WORKDIR /
 EXPOSE 3389 8765
+
+# Healthcheck (005): probe the unauthenticated /livez. NOTE: the MCP is started by
+# the XFCE autostart on RDP login, so the container reports unhealthy until an
+# operator logs in over RDP and the session/MCP come up — this accurately reflects
+# "MCP serving". The supervisor then keeps it up; a crash flips unhealthy briefly.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD /usr/local/bin/healthcheck.sh
+
 ENTRYPOINT ["/usr/local/bin/qmt-entrypoint.sh"]

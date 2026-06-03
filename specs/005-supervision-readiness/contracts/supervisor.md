@@ -45,12 +45,12 @@ Invariants:
   - Determine the fs type backing `BROKER_MOUNT` (default `/broker`) via
     `stat -f -c %T` / `/proc/mounts`.
   - If `tmpfs`/`ramfs`:
-    - default (`QMT_ALLOW_TMPFS_BROKER` unset/`0`): **exit non-zero** with a
-      clear message ("`/broker` is on tmpfs — the broker pack/userdata must live
-      on real disk; set QMT_ALLOW_TMPFS_BROKER=1 to override").
-    - `QMT_ALLOW_TMPFS_BROKER=1`: emit a loud warning and continue.
-- Fail closed (constitution Security & Safety) — prevents the 001 RAM-exhaustion
-  crash before any heavy Wine startup.
+    - default: emit a **loud warning** and continue (the maintainer considers a
+      RAM-backed `/broker` a niche/operator concern, not a hard gate for everyone).
+    - `QMT_ENFORCE_REALDISK=1`: **fail closed** (exit non-zero) with a clear message.
+- Implemented as **warn-by-default** (revised from the original fail-closed default):
+  surfaces the 001 RAM-exhaustion lesson without imposing it as a startup gate on
+  all users; operators who want enforcement opt in via `QMT_ENFORCE_REALDISK=1`.
 
 ## Docker healthcheck wiring (FR-005)
 
@@ -68,5 +68,5 @@ Invariants:
 | SC-001 clean recreate → both running, zero manual steps | autostart+supervisor baked, detect-broker first |
 | SC-003 kill MCP → auto-restart in N s | supervisor restart loop + backoff |
 | SC-004 healthcheck reflects up/down | `HEALTHCHECK`→`/livez` |
-| FR-007 tmpfs guard | entrypoint fails closed on tmpfs `/broker` |
+| FR-007 tmpfs guard | entrypoint warns on tmpfs `/broker` (fail-closed under `QMT_ENFORCE_REALDISK=1`) |
 | FR-006 RDP churn safe | session-scoped processes survive reconnect |

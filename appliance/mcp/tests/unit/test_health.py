@@ -79,3 +79,30 @@ def test_capabilities_shape():
     assert cap["ok"] is True
     assert "tool_families" in cap
     assert "transport" in cap
+
+
+def test_readiness_object_in_health():
+    health = HealthState(make_config())
+    health.qmt_login = "logged_in"
+    health.xtdata = "ready"
+    doc = health.to_dict()
+    assert doc["readiness"]["qmt_login"] == "logged_in"
+    assert doc["readiness"]["xtdata_state"] == "ready"
+    assert doc["readiness"]["trader_state"] == health.xttrade
+
+
+def test_readiness_states_do_not_flip_ok():
+    health = HealthState(make_config())
+    health.xtdata = "awaiting_login"
+    health.xttrade = "not_authorized"
+    assert health.to_dict()["ok"] is True  # readiness is reported, not fatal
+
+
+def test_livez_is_minimal_and_secret_free():
+    assert HealthState(make_config()).livez() == {"ok": True, "server": "live"}
+
+
+def test_livez_unhealthy_when_server_error():
+    health = HealthState(make_config())
+    health.server = "error"
+    assert health.livez()["ok"] is False

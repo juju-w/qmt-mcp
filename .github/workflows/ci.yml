@@ -1,0 +1,76 @@
+name: CI
+
+# Lint + unit tests + secret scan run on stock ubuntu with no Wine, no broker
+# pack, and no secrets. The Wine/amd64 image build is intentionally out of scope
+# here (deferred to the release pipeline, feature 011).
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: Lint & unit tests (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: qmt-wine-rdp/mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test tooling
+        run: python -m pip install --upgrade pip ruff pytest
+      - name: Ruff lint
+        run: ruff check .
+      - name: Ruff format check
+        run: ruff format --check .
+      - name: Unit tests
+        run: pytest -m 'not integration'
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  go-cli:
+    name: Build qmtctl (if present)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Go module
+        id: detect
+        run: |
+          mod="$(find . -name go.mod -not -path './*/vendor/*' -print -quit)"
+          if [ -n "$mod" ]; then
+            echo "dir=$(dirname "$mod")" >> "$GITHUB_OUTPUT"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No go.mod yet (qmtctl/007 not built) — skipping Go build."
+          fi
+      - uses: actions/setup-go@v5
+        if: steps.detect.outputs.found == 'true'
+        with:
+          go-version: "1.22"
+      - name: go vet & build
+        if: steps.detect.outputs.found == 'true'
+        working-directory: ${{ steps.detect.outputs.dir }}
+        run: |
+          go vet ./...
+          go build ./...

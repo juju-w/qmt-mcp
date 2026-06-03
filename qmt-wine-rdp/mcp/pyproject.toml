@@ -1,0 +1,24 @@
+# Tooling config for the QMT MCP package: ruff (lint/format) + pytest.
+# The unit test tier runs on plain Python 3.12 with no third-party runtime deps
+# (no fastmcp / uvicorn / xtquant / broker pack). See tests/README.md.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["vendor"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "B008",  # FastMCP/Starlette-style call-in-default patterns are intentional.
+    "E501",  # line length is owned by `ruff format`, not the linter.
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+markers = [
+    "integration: requires fastmcp installed (uses a fake xtquant); skipped by default in the unit tier",
+]

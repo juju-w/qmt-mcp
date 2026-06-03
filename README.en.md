@@ -1,4 +1,4 @@
-# qmt-mcp · Dockerized, broker-agnostic QMT × MCP gateway
+# qmt-mcp · Run QMT in Docker, plug it into AI agents over MCP
 
 🌐 [简体中文](README.md) · **English**
 

@@ -1,4 +1,4 @@
-# qmt-mcp · Docker 部署的券商无关 QMT × MCP 网关
+# qmt-mcp · 在 Docker 里跑 QMT，用 MCP 接入 AI Agent
 
 🌐 **简体中文** · [English](README.en.md)
 

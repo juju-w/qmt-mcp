@@ -22,8 +22,6 @@ SOFTWARE.
 
 ---
 
-This repository vendors third-party components under their own licenses. See
-`appliance/mcp/NOTICE` and `appliance/mcp/vendor/LICENSE` for attribution
-of the vendored `qmt-trade-mcp` code (MIT, Copyright (c) 2026 田健伸). The QMT
-terminal and `xtquant` are proprietary to their respective brokers/迅投 and are
-NOT included in this repository.
+The QMT terminal and `xtquant` are proprietary to their respective brokers /
+迅投 and are NOT included in this repository. The base image is built on
+`scottyhardy/docker-wine` (MIT).

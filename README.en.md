@@ -152,8 +152,8 @@ too! 🙏
 - Released under the **MIT License** ([`LICENSE`](LICENSE)).
 - Development was greatly accelerated by the AI coding assistants **OpenAI GPT** and
   **Anthropic Claude (Claude Code)** — thank you 🤖.
-- The MCP tooling vendors [`qmt-trade-mcp`](https://github.com/yywx55/qmt-trade-mcp)
-  (MIT; see `appliance/mcp/NOTICE`).
+- The MCP server is an independent implementation in this repo
+  (`appliance/mcp/qmt_mcp_core` + `qmt_mcp_xtdata`).
 - Base image built on [`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine).
 - The QMT terminal and `xtquant` belong to the respective brokers / Thinktrader and
   are **not included in this repo** — obtain them yourself.

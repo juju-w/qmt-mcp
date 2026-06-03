@@ -134,6 +134,6 @@ PR** —— 见 [`specs/004`](specs/004-account-query-tools/spec.md)。
 - 本仓库以 **MIT 许可证**发布（[`LICENSE`](LICENSE)）。
 - 本项目的开发大量借助 AI 编程助手 **OpenAI GPT** 与 **Anthropic Claude（Claude Code）**
   加速完成 —— 在此致谢 🤖。
-- MCP 工具部分 vendor 自 [`qmt-trade-mcp`](https://github.com/yywx55/qmt-trade-mcp)（MIT，见 `appliance/mcp/NOTICE`）。
+- MCP 服务为本仓库独立实现（`appliance/mcp/qmt_mcp_core` + `qmt_mcp_xtdata`）。
 - 基础镜像基于 [`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine)。
 - QMT 终端、xtquant 归各券商 / 迅投所有，**不含在本仓库**，由使用者自行获取。

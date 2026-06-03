@@ -3,7 +3,7 @@
 
 The executable entrypoint stays at this path for Wine/autostart compatibility.
 The implementation lives in qmt_mcp_core and registers explicit, capability-
-gated tool families. No vendored tool package is mounted wholesale.
+gated tool families.
 """
 
 from __future__ import annotations

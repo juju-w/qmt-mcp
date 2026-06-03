@@ -1,2 +1,0 @@
-"""XtData MCP service package."""
-

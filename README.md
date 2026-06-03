@@ -117,6 +117,23 @@ specs/                  # Spec-Driven Development：001~011 规格/计划/任务
 原则见 [`.specify/memory/constitution.md`](.specify/memory/constitution.md)，AI 协作见
 [`AGENT.md`](AGENT.md)。
 
+## 参与贡献 / Help wanted 🙋
+
+非常欢迎 PR！尤其是这两块——**我个人没有相应条件，急需社区协助**：
+
+- **04 账户查询工具（`xttrader` 只读）** —— 需要券商为账户开通「程序化交易 / 外部
+  Python 接口」权限（`m_nPythonConnectNet`）才能联调成功路径。**我自己的账户没有这个
+  权限**（达不到券商门槛），只能验证"未授权时优雅降级"的部分。如果你有已开通权限的
+  账户，非常欢迎来帮忙验证并提 PR —— 见 [`specs/004-account-query-tools`](specs/004-account-query-tools/spec.md)。
+- **05 监管 / 就绪 / 自启** —— 设计与契约已写好（[`specs/005-supervision-readiness`](specs/005-supervision-readiness/spec.md)），
+  欢迎认领实现。
+
+其它方向（CLI 007、部署示例、文档翻译等）同样欢迎。贡献流程见
+[`CONTRIBUTING.md`](CONTRIBUTING.md)，提交前请跑一遍测试与 `harden-check`。
+
+> 镜像（broker 中立基础镜像，**不含任何券商终端 / xtquant**，可安全公开分发）：
+> `ghcr.io/juju-w/qmt-mcp`。打 `vX.Y.Z` 标签会自动构建发布到 GHCR 并创建 Release。
+
 ## 赞助支持 ☕
 
 这个项目是我用业余时间开发和维护的，完全开源免费。开发过程里很依赖 AI 编程助手

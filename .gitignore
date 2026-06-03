@@ -27,3 +27,6 @@ venv/
 # tool caches
 .ruff_cache/
 .pytest_cache/
+
+# agent-local memory (never publish)
+.claude/projects/

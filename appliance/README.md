@@ -6,25 +6,26 @@
 Self-contained QMT/MiniQMT image on Wine, based on
 [`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine), served over RDP.
 
-Unlike the earlier PoC (which left Python/xtquant/QMT as manual steps inside a
-running container), this version **bakes the whole stack into the image at build
-time** on a native `linux/amd64` host:
+The image is a **broker-neutral base**: it contains **NO** QMT terminal, **NO**
+`xtquant`, and **NO** broker data. Those proprietary pieces are supplied at
+runtime as a mounted **broker pack** (`/broker`). The image bakes only the
+generic runtime, on a native `linux/amd64` host:
 
 - `linux/amd64` runtime; new WoW64 Wine prefix via `WINEARCH=wow64`
 - CJK fonts on the Linux desktop **and** inside the Wine prefix
-- Windows Python 3.12 installed into the Wine prefix
-- xtquant (`xtquant_250807`) placed into `site-packages`
-- 金阳光/QMT (`setup_qmt.exe`, NSIS) extracted to `/workspace/QMT/extracted`
+- Windows Python 3.12 installed into the Wine prefix (downloaded at build time)
+- `fastmcp` / `uvicorn` for the MCP server; `detect-broker` to resolve the pack
 - `8765` serves the read-only QMT **MCP** server (bearer-token; see root README)
 
-All three artifacts are **downloaded at build time** from their upstream URLs
-(`--build-arg` to override), so the build context stays a few KB.
+Because nothing broker-specific is baked in, the build context stays tiny and the
+**published image is safe to distribute** (`ghcr.io/<owner>/qmt-mcp`). Swap brokers
+by pointing the mounted pack at another broker — no rebuild.
 
 ## Build (must run on a native amd64 host)
 
 ```bash
-docker compose build          # downloads ~450 MB, installs Python+xtquant under Wine
-docker compose up -d
+docker compose build          # downloads Windows Python, installs it + MCP under Wine
+docker compose up -d          # mount a broker pack at /broker (see root README)
 ```
 
 > Apple Silicon: build/run only under emulation, where QMT's native quote/model
@@ -46,49 +47,50 @@ Use a real RDP client (macOS: **Windows App** / Microsoft Remote Desktop —
 ```text
 host: <nas-ip>:13389
 user: wineuser
-pass: qmt
+pass: <QMT_RDP_PASSWORD from .env>   # the compose default `qmt` is dev-only
 ```
 
-## Verify the baked stack
+## Verify the base stack
 
 Inside the RDP desktop terminal (or `docker exec -u wineuser`):
 
 ```bash
-verify-xtquant.sh        # prints Python version + confirms xtquant imports
+verify-xtquant.sh        # prints Python version; xtquant is provided by the pack
 ```
 
-## Launch QMT
+## Provide a broker pack, then launch QMT
+
+The terminal + matching `xtquant` come from the mounted broker pack at `/broker`
+(build one with `scripts/make-broker-pack.sh`; see the root README and
+`docs/BROKER-PACK.md`). `detect-broker` resolves the client path from the pack.
 
 ```bash
-start-qmt.sh             # runs /workspace/QMT/extracted/bin.x64/XtItClient.exe
+start-qmt.sh             # launches the broker's QMT client resolved from /broker
 ```
 
 1. Log into MiniQMT in minimal mode.
-2. Confirm `userdata_mini` is generated.
-3. xtquant lives in the same Wine prefix, so `xtdata` reads and
-   `XtQuantTrader(path, session_id).connect()` work against it.
+2. Confirm `userdata_mini` is generated under the pack.
+3. The pack's `xtquant` lives in the same Wine prefix, so `xtdata` reads (and,
+   with broker permission, `xttrader`) work against it.
 
-MiniQMT and xtquant must stay in the **same Wine prefix**. Do not share a macOS
-Wine prefix with the Linux container.
+The QMT terminal and `xtquant` must stay in the **same Wine prefix**. Do not share
+a macOS Wine prefix with the Linux container.
 
 ## Persistence
 
-The image is fully baked, so it starts with no volume. To persist the QMT login
-/ `userdata_mini` and the Wine prefix across container recreation, uncomment the
-`wine-home` volume in `docker-compose.yml`. Seed it from an **empty** volume so
-the image content propagates; reusing an old volume masks the baked prefix.
+The broker pack is mounted read-write at `/broker`, so the QMT login /
+`userdata_mini` persist in the pack across container recreation. Keep the pack on
+**real disk** (never tmpfs) — see the root README.
 
 ## Customising versions
 
 ```bash
-docker compose build \
-  --build-arg PY_VERSION=3.12.10 \
-  --build-arg XTQUANT_URL=https://dict.thinktrader.net/packages/xtquant_250807.rar \
-  --build-arg QMT_SETUP_URL=https://downloadspeed.ebscn.com/zyrj/qmt/setup_qmt.exe
+docker compose build --build-arg PY_VERSION=3.12.10
 ```
 
 If you bump Python off 3.12, also update `PY_WIN_DIR` (`C:\PythonXY`) in the
-`Dockerfile` to match.
+`Dockerfile` to match. (There are no broker/xtquant build args — those live in the
+broker pack, not the image.)
 
 ## Non-goals
 

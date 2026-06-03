@@ -3,6 +3,12 @@
 Thanks for your interest! This is a broker-agnostic QMT-MCP appliance. Please read
 `README.md` (overview) and `AGENT.md` (project map + hard-won gotchas) first.
 
+**Help especially wanted**: feature 004 (read-only account-query tools) needs an
+account with broker *programmatic-trading permission* (`m_nPythonConnectNet`) to
+validate the success paths — the maintainer does not have it. If you do, PRs that
+verify 004 are very welcome. Feature 005 (supervision/readiness) is designed and
+open for implementation. See `specs/004-*` and `specs/005-*`.
+
 ## Ground rules (read before pushing)
 
 This repo is **spec-driven** and **security-sensitive**. Two non-negotiables:

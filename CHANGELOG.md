@@ -43,5 +43,4 @@ gates).
 - In-image pip deps are declared in `appliance/mcp/requirements.in`; the locked
   `requirements.txt` must be generated from an amd64 Wine build (constitution III).
 
-<!-- Set this to <repo-url>/commits/main once a GitHub remote is configured. -->
-[Unreleased]: ./commits/main
+[Unreleased]: https://github.com/juju-w/qmt-mcp/commits/main

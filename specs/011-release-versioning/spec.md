@@ -15,11 +15,11 @@ in-image Python deps for a generated lockfile.
 
 ### US1 — Cut a release (P2)
 **Acceptance**: Bumping `VERSION`, updating `CHANGELOG.md`, and pushing a `vX.Y.Z`
-tag triggers a workflow that builds + pushes `ghcr.io/<owner>/qmt-appliance-base`
+tag triggers a workflow that builds + pushes `ghcr.io/<owner>/qmt-mcp`
 tagged with the version and `latest`, and creates a GitHub Release.
 
 ### US2 — Pull a pinned image (P2)
-**Acceptance**: A user can `docker pull ghcr.io/<owner>/qmt-appliance-base:X.Y.Z`
+**Acceptance**: A user can `docker pull ghcr.io/<owner>/qmt-mcp:X.Y.Z`
 and get a reproducible base image.
 
 ### US3 — Reproducible Python deps (P2 / constitution III)

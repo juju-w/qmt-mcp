@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "Turn the vendored read-only MCP prototype into a production-grade MCP server core. It should expose one guarded MCP SSE service, load the resolved broker-pack runtime config from 001, enforce bearer-token auth, provide a stable health contract, register tools through explicit structured contracts, run blocking QMT/xtquant operations without stalling the server, and emit structured/audit logs. Market-data tools, account-query tools, and readiness supervision are separate follow-on features."
+**Input**: User description: "Turn the vendored read-only MCP prototype into a production-grade MCP server core. It should expose one guarded MCP streamable-http service, load the resolved broker-pack runtime config from 001, enforce bearer-token auth, provide a stable health contract, register tools through explicit structured contracts, run blocking QMT/xtquant operations without stalling the server, and emit structured/audit logs. Market-data tools, account-query tools, and readiness supervision are separate follow-on features."
 
 ## Clarifications
 
@@ -109,7 +109,7 @@ discovery calls and confirm they respond within the expected latency budget.
 
 ### Functional Requirements
 
-- **FR-001**: The MCP server MUST expose a single authenticated MCP SSE endpoint for agent connections.
+- **FR-001**: The MCP server MUST expose a single authenticated MCP streamable-http endpoint for agent connections. The default path is `/mcp`; SSE MAY remain available only as an explicit compatibility fallback via `QMT_MCP_TRANSPORT=sse`.
 - **FR-002**: The server MUST require bearer-token authentication on all externally reachable MCP and HTTP surfaces.
 - **FR-003**: The server MUST load the resolved broker runtime configuration produced by feature 001, including broker identity, xtquant path, userdata path, and MCP mode.
 - **FR-004**: The server MUST default to read-only behavior. It MUST NOT expose order, cancel, transfer, borrow, export, or other write-capable tools in this feature.

@@ -30,6 +30,6 @@ invoke each registered tool's callable against the running QMT (xtdata live).
 - Tools degrade gracefully (`not_ready`/`dependency`) instead of crashing the server.
 
 ## Not covered here (separate)
-- SSE transport + bearer-token end-to-end via an external MCP client (002 US1).
+- Streamable HTTP transport (`/mcp`) + bearer-token end-to-end via an external MCP client (002 US1). SSE is now a compatibility fallback only.
 - Account/trade tools (004) — blocked on broker `m_nPythonConnectNet` permission.
 - Real-time subscription/streaming — deferred by design.

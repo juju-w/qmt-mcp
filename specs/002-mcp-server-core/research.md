@@ -55,10 +55,10 @@ snapshot, local/historical bars, data download, instrument detail, sectors,
 calendars, finance, IPO/CB/ETF metadata.
 
 **Rationale**: Official xtdata subscription APIs use callbacks and `run()` blocks
-the current thread to keep callbacks alive. MCP SSE can carry server events, but
-turning market subscriptions into a durable stream requires session ownership,
-backpressure, unsubscribe semantics, and resource limits. That is a separate
-feature.
+the current thread to keep callbacks alive. MCP transports can carry server
+events, but turning market subscriptions into a durable stream requires session
+ownership, backpressure, unsubscribe semantics, and resource limits. That is a
+separate feature.
 
 **Alternatives considered**:
 - Expose `subscribe_quote` immediately: deferred because long-running callbacks

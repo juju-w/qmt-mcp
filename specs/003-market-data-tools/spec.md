@@ -118,6 +118,12 @@ not-supported/dependency error.
 - `qmt_xtdata_trading_dates`: trading dates for market/date range.
 - `qmt_xtdata_trading_calendar`: normalized trading calendar dates with compatible fallback.
 - `qmt_xtdata_holidays`: holiday dates.
+- Discovery/search extensions are implemented in 006:
+  `qmt_xtdata_search_instruments`, `qmt_xtdata_resolve_instrument`,
+  `qmt_xtdata_search_sectors`, `qmt_xtdata_refresh_instrument_cache`, and
+  `qmt_xtdata_instrument_cache_status`. Agents should call those tools before
+  guessing codes from natural-language names, ETF themes, aliases, or pinyin
+  initials.
 - Optional later in this feature if stable: `qmt_xtdata_financial_data`, `qmt_xtdata_dividend_factors`, `qmt_xtdata_ipo_info`, `qmt_xtdata_cb_info`, `qmt_xtdata_etf_info`.
 
 ### Key Entities *(include if feature involves data)*

@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
-Active feature: 002-mcp-server-core
-Plan: specs/002-mcp-server-core/plan.md
-Spec: specs/002-mcp-server-core/spec.md
+Active feature: 005-supervision-readiness
+Plan: specs/005-supervision-readiness/plan.md
+Spec: specs/005-supervision-readiness/spec.md
 Constitution: .specify/memory/constitution.md
 
 Project: broker-agnostic QMT-MCP appliance. Base image (Wine wow64 + Windows

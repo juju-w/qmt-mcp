@@ -28,7 +28,8 @@ Expected:
 
 ## 3. Verify capabilities
 
-Use an MCP client or a core tool call to inspect capabilities:
+Use an MCP streamable-http client pointed at `http://<host>:<mcp_port>/mcp`,
+or a core tool call, to inspect capabilities:
 
 ```text
 qmt_capabilities

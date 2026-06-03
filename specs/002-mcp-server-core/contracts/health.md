@@ -16,6 +16,7 @@ Response shape:
 {
   "ok": true,
   "server": "live",
+  "transport": "streamable-http",
   "broker_config": "loaded",
   "xtquant_import": "ok",
   "xtdata": "not_ready",
@@ -55,8 +56,8 @@ Returns the same health payload as `/healthz`.
 
 ### `qmt_capabilities`
 
-Returns only `tool_families`, useful when an agent wants to understand why a
-family such as `xttrade_query` is disabled.
+Returns `transport` and `tool_families`, useful when an agent wants to
+understand why a family such as `xttrade_query` is disabled.
 
 ## State Semantics
 

@@ -3,6 +3,16 @@
 All tools use the 002 error envelope and audit policy. All blocking xtdata calls
 run through the 002 worker executor.
 
+## Tool Docstring Standard
+
+Every registered MCP tool description/docstring must be written for an AI agent.
+It should explain the tool's purpose, when to use it, when not to use it, key
+arguments/defaults, readiness/cache requirements, output interpretation, and
+recommended next calls. For example, `qmt_xtdata_bars` should explicitly say
+that missing history usually requires `qmt_xtdata_download_history` first, while
+`qmt_xtdata_snapshot` is for current quotes only. Avoid generic one-line
+descriptions that do not guide tool choice.
+
 ## Shared Types
 
 ### Code

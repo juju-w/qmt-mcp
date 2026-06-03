@@ -26,7 +26,7 @@ Paths are relative to repo root. Implementation lives in `qmt-wine-rdp/`.
 
 **Goal**: authenticated agents can connect/discover; unauthenticated clients are rejected.
 
-**Independent test**: start MCP with no QMT login; unauthenticated `/healthz` and `/sse` fail; authenticated health/discovery succeeds; no write tools appear.
+**Independent test**: start MCP with no QMT login; unauthenticated `/healthz` and `/mcp` fail; authenticated health/discovery succeeds; no write tools appear. SSE is tested only when `QMT_MCP_TRANSPORT=sse` is explicitly set.
 
 - [x] T011 [US1] Implement bearer-token ASGI middleware in `qmt-wine-rdp/mcp/qmt_mcp_core/app.py`.
 - [x] T012 [US1] Enforce fail-closed behavior when `QMT_MCP_TOKEN` is empty on non-loopback bind in `qmt-wine-rdp/mcp/qmt_mcp_core/config.py`.

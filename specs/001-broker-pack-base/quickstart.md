@@ -3,7 +3,7 @@
 Goal: build the broker-neutral base image once, then run any broker by mounting a
 pack — no rebuild to switch.
 
-## 1. Build the base image (native amd64 host / x86 NAS)
+## 1. Build the base image (native amd64 host)
 ```bash
 cd qmt-wine-rdp
 docker compose build          # base only: Wine + Python3.12 + fonts + MCP deps

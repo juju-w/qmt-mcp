@@ -27,7 +27,7 @@ pack; the same image runs multiple broker instances.
 
 **Testing**: Build-time smoke (fastmcp import + `qmt_mcp.filter_trade_tools()`, no xtquant needed); runtime contract checks (detect-broker fail-fast matrix; resolved-config correctness; RDP reachable; MCP `/sse` + token; xtquant imports from pack at runtime).
 
-**Target Platform**: Native linux/amd64 host (x86 NAS). Apple Silicon only under emulation (documented Rosetta AVX limitation).
+**Target Platform**: Native linux/amd64 host. Apple Silicon only under emulation (documented Rosetta AVX limitation).
 
 **Project Type**: Containerized appliance (image + mounted data pack + scripts).
 

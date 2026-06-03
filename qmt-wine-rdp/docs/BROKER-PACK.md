@@ -71,4 +71,4 @@ session; its trader tools come live after login (read-only by default).
 
 ## Apple Silicon
 Build/run only under emulation; QMT native services may hit the Rosetta AVX
-assertion. Use a native amd64 host (the x86 NAS).
+assertion. Use a native amd64 host.

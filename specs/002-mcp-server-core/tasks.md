@@ -64,7 +64,7 @@ Paths are relative to repo root. Implementation lives in `qmt-wine-rdp/`.
 - [x] T025 Update `qmt-wine-rdp/scripts/start-mcp.sh` to log core config summary and audit path without secrets.
 - [ ] T026 Update `qmt-wine-rdp/README.md` with MCP core auth/health/audit usage.
 - [ ] T027 Update `qmt-wine-rdp/docs/BROKER-PACK.md` to mention JSONL audit location and xttrade disabled/not_authorized semantics.
-- [ ] T028 Run `specs/002-mcp-server-core/quickstart.md` on the NAS and record results.
+- [ ] T028 Run `specs/002-mcp-server-core/quickstart.md` on a native amd64 host and record results.
 - [ ] T029 Verify success criteria SC-001..SC-006 from `specs/002-mcp-server-core/spec.md`.
 
 ## Dependencies & Order

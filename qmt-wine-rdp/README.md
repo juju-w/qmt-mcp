@@ -17,7 +17,7 @@ time** on a native `linux/amd64` host:
 All three artifacts are **downloaded at build time** from their upstream URLs
 (`--build-arg` to override), so the build context stays a few KB.
 
-## Build (must run on a native amd64 host — the x86 NAS)
+## Build (must run on a native amd64 host)
 
 ```bash
 docker compose build          # downloads ~450 MB, installs Python+xtquant under Wine
@@ -26,7 +26,7 @@ docker compose up -d
 
 > Apple Silicon: build/run only under emulation, where QMT's native quote/model
 > services can hit the Rosetta AVX assertion
-> (`ThreadContextSignals.cpp:414 rt_sigreturn`). Use the x86 NAS instead.
+> (`ThreadContextSignals.cpp:414 rt_sigreturn`). Use a native amd64 host instead.
 
 Ports (host → container):
 

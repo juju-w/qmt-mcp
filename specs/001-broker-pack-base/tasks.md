@@ -19,7 +19,7 @@ Tests are lightweight contract/smoke checks (no unit-test framework requested).
 - [x] T007 Edit `qmt-wine-rdp/scripts/start-qmt.sh` to launch the client from `QMT_CLIENT_WIN`/`QMT_BIN_DIR_WIN` (resolved env) instead of the hardcoded baked path.
 - [x] T008 Edit `qmt-wine-rdp/scripts/start-mcp.sh` and `qmt-wine-rdp/mcp/qmt_mcp.py` to read `QMT_XTQUANT_DIR_WIN` (prepend to `sys.path`) and `QMT_USERDATA_WIN` (trader path) from the resolved env; remove assumptions about baked `C:\workspace\...`.
 - [x] T009 Edit `qmt-wine-rdp/scripts/verify-xtquant.sh` to import xtquant from the pack via `QMT_XTQUANT_DIR_WIN`.
-- [x] T010 Build the base image on the native amd64 NAS; confirm it builds with NO xtquant/terminal and the build-time smoke (`fastmcp` + filter) passes.
+- [x] T010 Build the base image on a native amd64 host; confirm it builds with NO xtquant/terminal and the build-time smoke (`fastmcp` + filter) passes.
 
 **Checkpoint**: base image exists and builds; resolved-env plumbing wired (not yet auto-detecting).
 
@@ -32,7 +32,7 @@ Tests are lightweight contract/smoke checks (no unit-test framework requested).
 - [x] T011 [US1] Rewrite `qmt-wine-rdp/docker-compose.yml`: mount `${BROKER_PACK}:/broker` read-write; parameterize `container_name`, RDP/MCP host ports, and `QMT_MCP_TOKEN` from `.env`; drop baked-workspace assumptions.
 - [x] T012 [P] [US1] Create `qmt-wine-rdp/scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant.rar> <out-dir>`: 7z-extract the terminal + unrar xtquant into out-dir and drop a starter `broker.yaml`.
 - [x] T013 [US1] Create `qmt-wine-rdp/brokers/guangda-jinyangguang/broker.yaml` example (光大金阳光) with explicit paths.
-- [x] T014 [US1] On the NAS, build a 金阳光 pack with `make-broker-pack.sh` (reuse the already-downloaded setup_qmt.exe + xtquant rar), mount it, `docker compose up -d`, verify resolution + RDP reachable.
+- [x] T014 [US1] On a native amd64 host, build a 金阳光 pack with `make-broker-pack.sh` (reuse the already-downloaded setup_qmt.exe + xtquant rar), mount it, `docker compose up -d`, verify resolution + RDP reachable.
 - [ ] T015 [US1] Verify switch: bring down, point `BROKER_PACK` at a second pack dir, `up -d` with the same image tag (no build), confirm it drives the second pack.
 - [ ] T016 [US1] Verify two instances concurrently (distinct ports/tokens/packs) run without interference.
 
@@ -46,7 +46,7 @@ Tests are lightweight contract/smoke checks (no unit-test framework requested).
 
 - [x] T017 [US2] Implement auto-detection in `detect-broker.py`: client by known names (`XtItClient.exe`,`XtMiniQmt.exe`), `userdata_mini` dir, `xtquant/__init__.py` dir; explicit value still wins.
 - [x] T018 [P] [US2] Create `qmt-wine-rdp/brokers/template/broker.yaml` (documented, all-optional template).
-- [x] T019 [US2] On the NAS, verify a pack with NO `broker.yaml` resolves and starts via auto-detection; verify an explicit `terminal.client` override is honored.
+- [x] T019 [US2] On a native amd64 host, verify a pack with NO `broker.yaml` resolves and starts via auto-detection; verify an explicit `terminal.client` override is honored.
 
 **Checkpoint**: low-friction onboarding via auto-detection.
 
@@ -57,7 +57,7 @@ Tests are lightweight contract/smoke checks (no unit-test framework requested).
 **Independent test**: empty mount, missing xtquant, ambiguous client each exit with a distinct message and no RDP/MCP up.
 
 - [x] T020 [US3] Implement the fail-fast matrix + exit codes (10–14) in `detect-broker.py` per contracts/detect-broker.md (empty/unwritable mount, malformed yaml, missing explicit path, client 0/>1, xtquant 0/>1) with specific messages.
-- [x] T021 [US3] On the NAS, run the fail-fast scenarios; confirm distinct messages, correct non-zero exit codes, and that no RDP/MCP port is left listening.
+- [x] T021 [US3] On a native amd64 host, run the fail-fast scenarios; confirm distinct messages, correct non-zero exit codes, and that no RDP/MCP port is left listening.
 
 **Checkpoint**: fail-closed behavior verified.
 
@@ -65,7 +65,7 @@ Tests are lightweight contract/smoke checks (no unit-test framework requested).
 
 - [x] T022 [P] Write `qmt-wine-rdp/docs/BROKER-PACK.md`: pack layout, `broker.yaml` schema, make-pack, switching, multi-instance, fail-fast reference.
 - [ ] T023 [P] Update `qmt-wine-rdp/README.md` to the base-image + broker-pack model (replace the baked-image narrative).
-- [ ] T024 Run `specs/001-broker-pack-base/quickstart.md` end-to-end on the NAS as the acceptance pass; record results.
+- [ ] T024 Run `specs/001-broker-pack-base/quickstart.md` end-to-end on a native amd64 host as the acceptance pass; record results.
 - [ ] T025 Verify Success Criteria SC-001..SC-005 (swap < 10 min no build; ≤5-line broker.yaml; all fail-fast distinct; 2 instances concurrent; zero tracked-file changes on switch).
 
 ## Dependencies & Order

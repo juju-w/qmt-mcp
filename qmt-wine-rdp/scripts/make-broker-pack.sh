@@ -9,7 +9,7 @@
 #   <out-dir>/broker.yaml             (starter config; auto-detection-friendly)
 #
 # Requires 7z (p7zip-full) for the NSIS installer and unrar (RARLAB) for RAR5
-# xtquant. Run on the NAS or any Linux host with those tools.
+# xtquant. Run on any linux/amd64 host with those tools.
 set -euo pipefail
 
 SETUP="${1:?usage: make-broker-pack.sh <setup_qmt.exe> <xtquant.rar|zip> <out-dir> [broker-id]}"

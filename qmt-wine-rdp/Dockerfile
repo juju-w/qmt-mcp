@@ -15,11 +15,17 @@
 #
 # Build MUST run on linux/amd64. Apple Silicon only works under emulation, where
 # QMT native services can hit the Rosetta AVX assertion; build/run on the x86 NAS.
-FROM docker.1ms.run/scottyhardy/docker-wine:stable
+#
+# Base image PINNED by digest: `:stable` is a moving tag, and pulling a different
+# base has produced Wine prefixes that fail to load a display driver
+# (nodrv_CreateWindow). Re-pin deliberately when upgrading the base.
+FROM docker.1ms.run/scottyhardy/docker-wine@sha256:2a4243f5f49cde7a6e63e6b963d95d90d96ba3cc9f84f58575ca0ae54c7eceb0
 
 # ---- pinned versions / sources (override with --build-arg) ----
 ARG PY_VERSION=3.12.10
-ARG PY_URL=https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe
+# npmmirror (taobao) mirror of python.org/ftp — fast & reliable from CN; falls
+# back to python.org via --build-arg if needed.
+ARG PY_URL=https://registry.npmmirror.com/-/binary/python/3.12.10/python-3.12.10-amd64.exe
 
 ENV WINEARCH=wow64 \
     WINEPREFIX=/home/wineuser/.wine \
@@ -45,9 +51,20 @@ RUN set -eux; \
         curl wget git unzip ca-certificates \
         p7zip-full unrar \
         python3 python3-yaml \
+        locales \
         fonts-noto-cjk fonts-wqy-microhei fonts-wqy-zenhei; \
+    grep -qxF 'zh_CN.GBK GBK' /etc/locale.gen || echo 'zh_CN.GBK GBK' >> /etc/locale.gen; \
+    locale-gen zh_CN.GBK; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
+
+# QMT is a Chinese (GBK/cp936) application. Build the Wine prefix and run it under
+# zh_CN.GBK so Wine's ANSI codepage is 936 and xtquant's Chinese data paths (e.g.
+# get_sector_list, which reads GBK-encoded files) decode correctly instead of
+# failing with UnicodeDecodeError/charmap. detect-broker reads broker.yaml as
+# explicit UTF-8, so it is unaffected; MCP JSON over HTTP is UTF-8 regardless.
+ENV LANG=zh_CN.GBK \
+    LC_ALL=zh_CN.GBK
 
 # ---- helper scripts + MCP launcher ----
 COPY scripts/ /usr/local/bin/
@@ -107,9 +124,12 @@ RUN set -eux; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" --version; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import fastmcp, uvicorn, numpy, pandas; print('fastmcp', fastmcp.__version__)"; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import sys; sys.path.insert(0, r'Z:\\opt\\qmt-mcp'); import qmt_mcp; assert qmt_mcp.filter_trade_tools() == []; print('mcp core import OK')"; \
+    # NOTE: os._exit(0) after main() — the WorkerPool's ThreadPoolExecutor uses
+    # non-daemon threads, so a normal return makes the interpreter hang on thread
+    # join under Wine. timeout is a hard backstop so the build can never wedge.
     QMT_MCP_TOKEN=smoke QMT_MCP_ENABLE_XTDATA=0 QMT_MCP_AUDIT_PATH='C:\users\wineuser\Temp\qmt-mcp-audit-smoke.jsonl' \
-      xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import sys; sys.path.insert(0, r'Z:\\opt\\qmt-mcp'); import qmt_mcp_core.smoke as smoke; smoke.main()"; \
-    wineserver -w
+      timeout 180 xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import sys; sys.path.insert(0, r'Z:\\opt\\qmt-mcp'); import qmt_mcp_core.smoke as smoke; smoke.main(); import os; os._exit(0)"; \
+    wineserver -k || true
 
 USER root
 WORKDIR /

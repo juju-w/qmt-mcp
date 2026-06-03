@@ -193,7 +193,12 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_snapshot",
         family="xtdata",
-        description="Return current full-tick/snapshot quote records for a bounded list of instrument codes.",
+        description=(
+            "Return the current quote snapshot (last/open/high/low/pre-close, bid/ask ladder, volume, amount) for up "
+            "to 50 instruments. `codes` are full QMT codes like 600000.SH / 000001.SZ — if you only have a name or "
+            "phrase, call qmt_xtdata_resolve_instrument first. Optional `fields` narrows the returned raw fields. "
+            "Live data; requires QMT logged in (else trader/data not-ready)."
+        ),
         audit_fields=["codes"],
         worker_backed=True,
         timeout=10,
@@ -207,7 +212,12 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_download_history",
         family="xtdata",
-        description="Download/cache historical data for one instrument, period, and bounded date range.",
+        description=(
+            "Download/cache historical data for ONE instrument into the local store so later qmt_xtdata_bars reads "
+            "are complete. Args: `code` (one QMT code), `period` (tick/1m/5m/15m/30m/1h/1d/1w/1mon/...), optional "
+            "`start_time`/`end_time` (YYYYMMDD or YYYYMMDDHHmmSS; empty = full range), `incremental`. Returns a status, "
+            "NOT the bars — read them with qmt_xtdata_bars afterwards."
+        ),
         audit_fields=["code", "period", "start_time", "end_time"],
         worker_backed=True,
         timeout=120,
@@ -237,7 +247,11 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_download_history_batch",
         family="xtdata",
-        description="Download/cache historical data for a bounded list of instruments using xtdata.download_history_data2.",
+        description=(
+            "Like qmt_xtdata_download_history but for up to 200 codes in one call (xtdata.download_history_data2). "
+            "Args: `codes`, `period`, optional `start_time`/`end_time` (YYYYMMDD[HHmmSS]), `incremental`. Returns a "
+            "status; read the bars with qmt_xtdata_bars."
+        ),
         audit_fields=["codes", "period", "start_time", "end_time"],
         worker_backed=True,
         timeout=300,
@@ -267,7 +281,13 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_bars",
         family="xtdata",
-        description="Read cached/historical bar rows for bounded codes, period, fields, range, and dividend type.",
+        description=(
+            "Read OHLC bar rows for up to 50 codes. Args: `period` (default 1d; tick/1m/5m/15m/30m/1h/1d/1w/1mon/...), "
+            "`fields` (default open/high/low/close/volume/amount), `start_time`/`end_time` (YYYYMMDD[HHmmSS], empty = "
+            "all), `count` (-1 = all, else last N, max 10000), `dividend_type` (none/front/back/front_ratio/back_ratio). "
+            "Reads cached/historical data — if a range is missing, call qmt_xtdata_download_history(_batch) first. Use "
+            "qmt_xtdata_resolve_instrument / qmt_xtdata_search_instruments to get codes."
+        ),
         audit_fields=["codes", "period", "start_time", "end_time", "count"],
         worker_backed=True,
         timeout=30,
@@ -308,7 +328,11 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_instrument_detail",
         family="xtdata",
-        description="Return instrument metadata for one QMT instrument code.",
+        description=(
+            "Return metadata (name, type, exchange, listing/expiry, lot size, price limits, ...) for ONE QMT code. "
+            "Set `complete=true` for the full field set. Use qmt_xtdata_resolve_instrument first if you only have a "
+            "name or phrase rather than a code."
+        ),
         audit_fields=["code"],
         worker_backed=True,
         timeout=10,
@@ -323,7 +347,11 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_sector_list",
         family="xtdata",
-        description="List available xtdata sector/category names with an optional substring filter.",
+        description=(
+            "List xtdata sector/category names (e.g. 沪深A股, 沪深ETF, 行业/概念板块), with an optional `filter` "
+            "substring. For fuzzy/natural-language sector lookup use qmt_xtdata_search_sectors; use this to enumerate "
+            "exact names, then pass one to qmt_xtdata_sector_constituents."
+        ),
         audit_fields=["filter"],
         worker_backed=True,
         timeout=10,
@@ -339,7 +367,11 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_sector_constituents",
         family="xtdata",
-        description="List bounded instrument codes in one xtdata sector/category.",
+        description=(
+            "List the instrument codes in one sector/category. Args: `sector` (an EXACT name from "
+            "qmt_xtdata_sector_list / qmt_xtdata_search_sectors), `limit` (default 5000, max 10000). Returns codes "
+            "only — fetch quotes/bars via qmt_xtdata_snapshot / qmt_xtdata_bars."
+        ),
         audit_fields=["sector", "limit"],
         worker_backed=True,
         timeout=15,
@@ -357,7 +389,10 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_index_weight",
         family="xtdata",
-        description="Return index constituent weights for one index code when local xtdata index weight cache is available.",
+        description=(
+            "Return constituent weights for ONE index code (e.g. 000300.SH) when the local xtdata index-weight cache "
+            "is available. Args: `index_code` (QMT code), `limit`. Returns [{code, weight}]."
+        ),
         audit_fields=["index_code", "limit"],
         worker_backed=True,
         timeout=15,
@@ -380,7 +415,11 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_trading_dates",
         family="xtdata",
-        description="Return trading dates for a market and bounded date range.",
+        description=(
+            "Return trading dates for a market. Args: `market` (SH/SZ/BJ/IF/SF/DF/INE/GF/ZF), optional "
+            "`start_time`/`end_time` (YYYYMMDD), `count` (-1 = all, else last N, max 10000). Returns normalized "
+            "YYYYMMDD strings."
+        ),
         audit_fields=["market", "start_time", "end_time"],
         worker_backed=True,
         timeout=10,
@@ -400,7 +439,11 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_trading_calendar",
         family="xtdata",
-        description="Return normalized trading calendar date strings for one market and date range.",
+        description=(
+            "Return the trading calendar (normalized YYYYMMDD strings) for one `market` and optional "
+            "`start_time`/`end_time` range; transparently falls back to trading-dates if the SDK lacks a calendar "
+            "function."
+        ),
         audit_fields=["market", "start_time", "end_time"],
         worker_backed=True,
         timeout=10,
@@ -421,7 +464,7 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         mcp,
         name="qmt_xtdata_holidays",
         family="xtdata",
-        description="Return holiday dates known to xtdata.",
+        description="Return the market holiday dates known to xtdata (normalized YYYYMMDD strings). No arguments.",
         audit_fields=[],
         worker_backed=True,
         timeout=10,

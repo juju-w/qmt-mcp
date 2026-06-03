@@ -66,7 +66,7 @@ container exits, nothing left listening) when:
 
 ## Login & MCP
 Log into the QMT terminal manually over RDP (`<host>:RDP_PORT`, user `wineuser`).
-The MCP (`<host>:MCP_PORT/sse`, bearer `QMT_MCP_TOKEN`) starts with the desktop
+The MCP (`<host>:MCP_PORT/mcp`, bearer `QMT_MCP_TOKEN`) starts with the desktop
 session; its trader tools come live after login (read-only by default).
 
 ## Apple Silicon

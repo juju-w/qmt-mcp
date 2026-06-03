@@ -6,7 +6,7 @@ services:
     platform: linux/amd64
     ports:
       - "${RDP_PORT:-13389}:3389"     # RDP
-      - "${MCP_PORT:-18765}:8765"     # MCP (SSE, bearer-token)
+      - "${MCP_PORT:-18765}:8765"     # MCP (streamable-http, bearer-token)
     environment:
       RDP_SERVER: "yes"
       USER_NAME: "wineuser"

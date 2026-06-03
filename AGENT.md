@@ -5,20 +5,27 @@
 ## 项目本质
 
 券商无关的 **QMT-MCP appliance**：Wine(new wow64) 在原生 amd64 上跑 Windows QMT 终端，
-`xtquant` 能力经 MCP(SSE+token) 暴露给 Agent。基础镜像 broker 中立，券商相关的终端/xtquant/
+`xtquant` 能力经 MCP(streamable-http+token) 暴露给 Agent。基础镜像 broker 中立，券商相关的终端/xtquant/
 配置作为运行时挂载的 **broker pack**（`/broker`）。详见 `README.md`。
 
 ## 当前状态（feature 进度）
 
-| Feature | 分支 | 状态 |
-|---|---|---|
-| 001 基础镜像 + broker pack | `001-broker-pack-base` | ✅ 完成（含 exe 自愈、路径转义、client 优先级、密码、autostart 等修复）|
-| 002 MCP server core | `002-mcp-server-core` | ✅ 实现+验证（`qmt_mcp_core`：鉴权/健康/审计/注册表/线程池/无写工具断言）|
-| 003 行情工具 xtdata | `003-market-data-tools` | ✅ 完成——11/11 工具真机验证（含中文板块，经 zh_CN.GBK 修复）；见 specs/003/VERIFICATION.md |
-| 004 账户只读查询 xttrade | spec | ⏸ 被券商权限硬卡（`m_nPythonConnectNet`），优雅降级 |
-| 005 进程守护/就绪/autostart | spec | ⏳ 部分已落地（autostart、自愈），待系统化 |
+| Feature | 状态 |
+|---|---|
+| 001 基础镜像 + broker pack | ✅ 完成（路径转义、client 优先级、密码、autostart 等修复）|
+| 002 MCP server core | ✅ 实现+验证（`qmt_mcp_core`：鉴权/健康/审计/注册表/线程池/无写工具断言）|
+| 003 行情工具 xtdata | ✅ 完成——11/11 工具真机验证（含中文板块，经 zh_CN.GBK 修复）；见 specs/003/VERIFICATION.md |
+| 006 合约模糊搜索 | ✅ 完成——中文名/代码/别名/拼音首字母/板块/主题 模糊匹配 + 排序；见 specs/006/VERIFICATION.md |
+| 008 CI + 测试基座 | ✅ 完成——宿主可跑 pytest（52 passed）+ ruff + GitHub Actions（lint/test/gitleaks）|
+| 009 开源就绪 | ✅ 完成——LICENSE(MIT)/SECURITY/CONTRIBUTING |
+| 010 部署与安全加固 | ✅ 完成——DEPLOY.md/Caddy TLS 示例/compose.tls/harden-check.sh |
+| 011 发布与版本 | ✅ 完成——VERSION/CHANGELOG/release.yml（tag→GHCR `ghcr.io/juju-w/qmt-mcp`）|
+| 004 账户只读查询 xttrade | ⏸ 被券商权限硬卡（`m_nPythonConnectNet`），优雅降级；**欢迎有权限者 PR** |
+| 005 进程守护/就绪/autostart | ⏳ 已出 plan+contracts；autostart 已落地，待系统化（supervisor/readiness/healthcheck）|
+| 007 qmtctl CLI | 📋 已出 spec/plan/tasks，待实现 |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
+发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。
 
 ## 工作环境（关键）
 
@@ -37,7 +44,7 @@ docker compose --env-file inst-<id>.env -p qmt-<id> up -d --force-recreate
 ```
 
 **测 MCP 行情工具（in-process，最可靠）**：用真实 config 构建 core，直接调注册表里的 callable，
-绕开 SSE/鉴权，对 live xtdata 验证结构化输出：
+绕开 HTTP/鉴权，对 live xtdata 验证结构化输出：
 
 ```python
 import sys, os; sys.path.insert(0, r'Z:\opt\qmt-mcp'); sys.path.insert(0, os.environ['QMT_XTQUANT_DIR_WIN'])
@@ -55,8 +62,9 @@ registry._tools['qmt_xtdata_snapshot']['callable'](codes=['000001.SZ'])
 
 1. **base 镜像必须钉 digest**。`scottyhardy/docker-wine:stable` 是浮动 tag，拉到不同 base 会
    产出**加载不出显示驱动**的 wine prefix（`nodrv_CreateWindow`）。升级 base 要显式重新钉。
-2. **wine prefix 自愈**：start-qmt.sh 每个容器启动跑一次 `wineboot -u`（marker 防重复），
-   否则烤进去的 prefix 可能没显示驱动、任何 wine GUI 都起不来。
+2. **wine prefix 显示驱动**：base 钉了 digest 后，烤进镜像的 prefix 开机即健康，start-qmt.sh
+   **不再做** `wineboot -u` 运行时自愈（旧自愈会卡在 `wineserver -w`，已于 771cbc7 移除）。
+   万一某次 prefix 坏了（`nodrv_CreateWindow`），手动 `wineboot -u` 修复，**切勿**再加 `wineserver -w`。
 3. **resolved env 值必须单引号**。Wine 路径含反斜杠（`Z:\broker\...`），`detect-broker` 写
    `/run/qmt/broker.env`、entrypoint 折叠进 `/opt/qmt-mcp/mcp.env` 时若不加单引号，bash
    `source` 会把反斜杠吃掉 → wine 打不开文件。启动客户端用 **unix 路径**（wine 接受）最稳。

@@ -86,7 +86,7 @@ RUN install -d -o wineuser -g wineuser /home/wineuser/.config/autostart \
       '[Desktop Entry]' \
       'Type=Application' \
       'Name=QMT MCP' \
-      'Comment=Read-only QMT MCP (SSE) on login' \
+      'Comment=Read-only QMT MCP (streamable-http) on login' \
       'Exec=/usr/local/bin/start-mcp.sh' \
       'Terminal=false' \
       'X-GNOME-Autostart-enabled=true' \

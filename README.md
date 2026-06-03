@@ -20,17 +20,47 @@ Context Protocol）** 把行情与账户能力安全地暴露给 AI Agent。
 —— 券商中立，不含任何终端/xtquant/账户数据         (券商 QMT 终端 + xtquant + broker.yaml)
 ```
 
+## 截图 / Screenshots
+
+> 📸 征集中（欢迎 PR）。建议展示：① AI Agent 用**模糊搜索**（中文名/拼音 → 代码 → 行情）的对话；
+> ② client（Claude / GPT 等）里的 MCP 工具列表；③ 结构化行情返回。拍摄清单见
+> [`docs/screenshots/`](docs/screenshots/)，图片放进该目录后会接入此处。
+
 ## 能力现状
 
 | 能力 | 状态 | 说明 |
 |---|---|---|
 | 启动 QMT 终端 + RDP 登录 | ✅ | 登录后自动拉起终端 + MCP |
 | 行情 `xtdata`（快照/K线/合约/板块/日历） | ✅ 可用 | MCP 工具返回结构化 JSON（11/11 实测通过） |
+| **合约模糊搜索**（中文名/拼音/别名/板块/主题） | ✅ 可用 | Agent 不必知道 QMT 代码即可定位合约 |
 | 账户查询 / 交易 `xttrader` | ⚠️ 需券商权限 | 未开通时报 `not_authorized` 优雅降级，不崩溃 |
 
 > **交易/账户权限**：外部 `xtquant` 连交易接口（下单**和**账户查询）需券商开通「程序化交易 /
 > 外部 Python 接口」权限（`m_nPythonConnectNet`）。未开通时只有行情可用。开通通常需满足
 > 资产门槛并签协议，请联系你的券商。
+
+## MCP 工具
+
+✨ **亮点：合约模糊搜索** —— Agent 不必预先知道 QMT 代码，直接用中文名 / 拼音首字母 / 别名 /
+板块 / 主题（如 `天岳`、`ZGWX`、`恒生科技`、`纳指`）即可搜到并解析出代码，再去取行情。
+
+| 工具 | 说明 |
+|---|---|
+| `qmt_health` · `qmt_capabilities` | 健康 / 能力状态（鉴权、依赖、工具族） |
+| `qmt_xtdata_search_instruments` ✨ | 按名称/代码/别名/拼音/板块/主题**模糊搜索**合约，带相关性 + 流动性排序 |
+| `qmt_xtdata_resolve_instrument` ✨ | 把一句话**解析**成最佳合约代码 + 备选（低置信度返回 `resolved=false`） |
+| `qmt_xtdata_search_sectors` | 模糊搜索板块名 |
+| `qmt_xtdata_instrument_detail` | 单合约元数据 |
+| `qmt_xtdata_snapshot` | 实时快照（最新价 / 买卖盘等） |
+| `qmt_xtdata_bars` | K线（tick / 分钟 / 日 / 周 / 月…） |
+| `qmt_xtdata_sector_list` · `qmt_xtdata_sector_constituents` | 板块列表 / 成分股 |
+| `qmt_xtdata_index_weight` | 指数权重 |
+| `qmt_xtdata_trading_dates` · `qmt_xtdata_trading_calendar` · `qmt_xtdata_holidays` | 交易日历 |
+| `qmt_xtdata_download_history` · `_batch` | 下载历史数据到本地 |
+| `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | 搜索缓存状态 / 刷新 |
+| 账户 / 交易 `xttrader`（feature 04） | ⏸ 需券商权限，未开通时 `not_authorized` |
+
+所有工具均为**只读**、带鉴权与审计、返回结构化 JSON（无写/下单工具）。
 
 ## 快速开始
 

@@ -6,5 +6,5 @@
 - [x] Implement `health`, `tools`, `search`, `resolve`, `snapshot`, `bars`,
   `cache status`, `cache refresh`, and `smoke`.
 - [x] Add `--json` output for every command.
-- [ ] Add integration smoke against a local appliance.
+- [x] Add integration smoke against a local appliance.
 - [x] Add goreleaser or equivalent cross-platform release config.

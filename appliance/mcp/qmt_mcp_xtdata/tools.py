@@ -12,6 +12,7 @@ from qmt_mcp_core.errors import McpCoreError, ok_envelope
 from qmt_mcp_core.health import HealthState
 from qmt_mcp_core.registry import ToolRegistry
 
+from .option_tools import register_option_tools
 from .quote_cache import QuoteHotCache
 from .quote_subscriptions import QuoteSubscription, QuoteSubscriptionRuntime, QuoteSubscriptionStore
 from .search_cache import cache_state, refresh_cache, usable_cache_or_seed
@@ -346,6 +347,8 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
     def qmt_xtdata_quote_subscription_status() -> dict[str, Any]:
         quote_runtime.refresh_fallback_due()
         return ok_envelope(**quote_runtime.status())
+
+    register_option_tools(mcp, registry, health, _call_xtdata)
 
     @registry.register(
         mcp,

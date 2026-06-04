@@ -73,6 +73,8 @@ func dispatch(ctx context.Context, client *Client, opts globalOptions, args []st
 		return runAccount(ctx, client, opts, args[1:], stdout)
 	case "portfolio":
 		return runPortfolio(ctx, client, opts, args[1:], stdout)
+	case "option":
+		return runOption(ctx, client, opts, args[1:], stdout)
 	case "smoke":
 		return runSmoke(ctx, client, opts, args[1:], stdout)
 	case "help", "-h", "--help":
@@ -455,6 +457,91 @@ func runPortfolioTool(
 	return writePayload(stdout, payload, opts, err)
 }
 
+func runOption(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("option subcommand is required: underlyings, chain, detail, quotes, iv, or vix-inputs")
+	}
+	switch args[0] {
+	case "underlyings":
+		fs := newFlagSet("option underlyings", &opts)
+		market := fs.String("market", "", "market")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_option_underlyings", map[string]any{"market": *market})
+		return writePayload(stdout, payload, opts, err)
+	case "chain":
+		fs := newFlagSet("option chain", &opts)
+		underlying := fs.String("underlying", "", "underlying code")
+		family := fs.String("family", "", "family alias")
+		expiry := fs.String("expiry", "", "expiry YYYYMMDD")
+		optionType := fs.String("type", "", "CALL or PUT")
+		limit := fs.Int("limit", 200, "contract limit")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		if *underlying == "" && *family == "" && len(fs.Args()) > 0 {
+			*family = fs.Args()[0]
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_option_chain", map[string]any{
+			"underlying_code": *underlying,
+			"family":          *family,
+			"expiry":          *expiry,
+			"option_type":     *optionType,
+			"limit":           *limit,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "detail":
+		return runOptionCodesTool(ctx, client, opts, args[1:], stdout, "option detail", "qmt_xtdata_option_detail")
+	case "quotes":
+		return runOptionCodesTool(ctx, client, opts, args[1:], stdout, "option quotes", "qmt_xtdata_option_quotes")
+	case "iv":
+		return runOptionCodesTool(ctx, client, opts, args[1:], stdout, "option iv", "qmt_xtdata_option_iv")
+	case "vix-inputs":
+		fs := newFlagSet("option vix-inputs", &opts)
+		underlying := fs.String("underlying", "", "underlying code")
+		family := fs.String("family", "", "family alias")
+		expiry := fs.String("expiry", "", "expiry YYYYMMDD")
+		limit := fs.Int("limit", 200, "contract limit")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		if *underlying == "" && *family == "" && len(fs.Args()) > 0 {
+			*family = fs.Args()[0]
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_volatility_index_inputs", map[string]any{
+			"underlying_code": *underlying,
+			"family":          *family,
+			"expiry":          *expiry,
+			"limit":           *limit,
+		})
+		return writePayload(stdout, payload, opts, err)
+	default:
+		return fmt.Errorf("unknown option subcommand %q", args[0])
+	}
+}
+
+func runOptionCodesTool(
+	ctx context.Context,
+	client *Client,
+	opts globalOptions,
+	args []string,
+	stdout io.Writer,
+	flagName string,
+	toolName string,
+) error {
+	fs := newFlagSet(flagName, &opts)
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	codes := splitPositionals(fs.Args())
+	if len(codes) == 0 {
+		return fmt.Errorf("%s requires at least one option code", flagName)
+	}
+	payload, err := client.CallTool(ctx, toolName, map[string]any{"codes": codes})
+	return writePayload(stdout, payload, opts, err)
+}
+
 func runSmoke(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
 	fs := newFlagSet("smoke", &opts)
 	query := fs.String("query", "纳指", "search query used for smoke")
@@ -685,7 +772,7 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN] [--json] [--timeout 10s] <command>")
-	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, smoke")
+	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, smoke")
 }
 
 func getenvDefault(name, fallback string) string {

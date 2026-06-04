@@ -7,8 +7,8 @@ from collections.abc import Iterable
 
 from qmt_mcp_core.errors import McpCoreError
 
-CODE_RE = re.compile(r"^[0-9A-Za-z]+\.(SH|SZ|BJ|IF|SF|DF|INE|GF|ZF)$")
-MARKET_RE = re.compile(r"^(SH|SZ|BJ|IF|SF|DF|INE|GF|ZF)$")
+CODE_RE = re.compile(r"^[0-9A-Za-z]+\.(SH|SZ|BJ|IF|SF|DF|INE|GF|ZF|SHO|SZO)$")
+MARKET_RE = re.compile(r"^(SH|SZ|BJ|IF|SF|DF|INE|GF|ZF|SHO|SZO)$")
 DATE_RE = re.compile(r"^$|^[0-9]{8}([0-9]{6})?$")
 
 PERIODS = {"tick", "1m", "5m", "15m", "30m", "1h", "1d", "1w", "1mon", "1q", "1hy", "1y"}

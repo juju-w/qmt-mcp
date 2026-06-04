@@ -284,6 +284,43 @@ func TestPortfolioRiskCallsExpectedMCPTool(t *testing.T) {
 	}
 }
 
+func TestOptionVixInputsCallsExpectedMCPTool(t *testing.T) {
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		switch req["method"] {
+		case "initialize", "notifications/initialized":
+			writeRPCResult(w, req["id"], map[string]any{})
+		case "tools/call":
+			params := req["params"].(map[string]any)
+			if params["name"] != "qmt_xtdata_volatility_index_inputs" {
+				t.Fatalf("tool name = %v", params["name"])
+			}
+			args := params["arguments"].(map[string]any)
+			if args["family"] != "300ETF" {
+				t.Fatalf("arguments = %#v", args)
+			}
+			called = true
+			writeRPCResult(w, req["id"], toolResult(map[string]any{"ok": true, "rows": []any{}}))
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL, "option", "vix-inputs", "--family", "300ETF"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !called {
+		t.Fatal("tools/call was not reached")
+	}
+}
+
 func writeRPCResult(w http.ResponseWriter, id any, result any) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 }

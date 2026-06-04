@@ -51,6 +51,9 @@ qmtctl portfolio summary --account 123456789
 qmtctl portfolio positions --account 123456789 --quote-policy live
 qmtctl portfolio exposure --account 123456789
 qmtctl portfolio risk --account 123456789 --max-single-weight 0.3
+qmtctl option chain --family 300ETF
+qmtctl option quotes 10000001.SHO,10000002.SHO
+qmtctl option vix-inputs --family 300ETF
 qmtctl smoke
 ```
 

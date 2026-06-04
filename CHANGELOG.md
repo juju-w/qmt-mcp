@@ -14,6 +14,10 @@ gates).
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+## [0.2.0] - 2026-06-04
+
 ### Added
 - **001 — Broker-agnostic base image + broker pack**: Wine (new WoW64) + Windows
   Python 3.12 + CJK fonts + xrdp; broker-neutral base with the QMT terminal /
@@ -40,19 +44,22 @@ gates).
   (`asset/positions/orders/trades/...`) behind an enable flag + account allowlist,
   readiness-gated, audited. Success paths need a broker-permissioned account
   (community PR); boundary/gating host-tested.
-
 - **012 — Database persistence (PostgreSQL, optional)**: native-async (`asyncpg`)
   layer behind a sync facade; opt-in via `QMT_DB_URL` (external) or a compose
   `db` profile; market-data warehouse with bars read-through/write-through;
   graceful degradation; `health.database`. Tested for real against PostgreSQL 16.
   Off by default (file/JSONL unchanged).
+- **007 — qmtctl CLI**: compiled Go CLI for streamable-http MCP with health,
+  tools, xtdata search/resolve/snapshot/bars/cache/smoke commands, read-only
+  xttrade account-query wrappers, NAS appliance smoke verification, and release
+  binaries for Linux/macOS/Windows on amd64+arm64.
 
 ### Planned
-- **007 — qmtctl CLI**: planned.
 - **011 — Release & versioning**: this scaffolding.
 
 ### Known gaps
 - In-image pip deps are declared in `appliance/mcp/requirements.in`; the locked
   `requirements.txt` must be generated from an amd64 Wine build (constitution III).
 
-[Unreleased]: https://github.com/juju-w/qmt-mcp/commits/main
+[Unreleased]: https://github.com/juju-w/qmt-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/juju-w/qmt-mcp/compare/v0.1.0...v0.2.0

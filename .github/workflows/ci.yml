@@ -50,28 +50,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   go-cli:
-    name: Build qmtctl (if present)
+    name: Test & build qmtctl
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli/qmtctl
     steps:
       - uses: actions/checkout@v4
-      - name: Detect Go module
-        id: detect
-        run: |
-          mod="$(find . -name go.mod -not -path './*/vendor/*' -print -quit)"
-          if [ -n "$mod" ]; then
-            echo "dir=$(dirname "$mod")" >> "$GITHUB_OUTPUT"
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No go.mod yet (qmtctl/007 not built) — skipping Go build."
-          fi
       - uses: actions/setup-go@v5
-        if: steps.detect.outputs.found == 'true'
         with:
           go-version: "1.22"
-      - name: go vet & build
-        if: steps.detect.outputs.found == 'true'
-        working-directory: ${{ steps.detect.outputs.dir }}
+          cache-dependency-path: cli/qmtctl/go.mod
+      - name: go test, vet & build
         run: |
+          go test ./...
           go vet ./...
           go build ./...

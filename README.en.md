@@ -76,6 +76,12 @@ front; it searches by Chinese name / pinyin initials / alias / sector / theme
 | `qmt_xtdata_trading_dates` · `qmt_xtdata_trading_calendar` · `qmt_xtdata_holidays` | trading calendar |
 | `qmt_xtdata_download_history` · `_batch` | download history to local cache |
 | `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | search-cache status / refresh |
+| `qmt_xtdata_quote_subscribe` · `qmt_xtdata_quote_unsubscribe` · `qmt_xtdata_quote_subscriptions` · `qmt_xtdata_quote_subscription_status` | quote subscription hot cache (`subscribe_quote` first, bounded polling fallback) |
+| `qmt_xtdata_option_chain` · `qmt_xtdata_option_quotes` · `qmt_xtdata_option_iv` · `qmt_xtdata_volatility_index_inputs` | option chains, call/put quotes, IV, and VIX input packages (read-only; no index publishing) |
+| `qmt_xtdata_financial_data` · `qmt_xtdata_ipo_info` · `qmt_xtdata_dividend_factors` · `qmt_xtdata_cb_info` · `qmt_xtdata_etf_info` | financial/IPO/dividend/CB/ETF reference data (read-only, capability-gated) |
+| `qmt_portfolio_summary` · `qmt_portfolio_positions` · `qmt_portfolio_exposure` · `qmt_portfolio_risk_checks` | portfolio holdings/exposure/risk metrics (read-only, xttrade allowlist required) |
+| `qmt_xtdata_sector_create` · `qmt_xtdata_sector_add_codes` · `qmt_xtdata_sector_remove_codes` · `qmt_xtdata_managed_sector_list` | custom sector management (off by default; managed prefixes only) |
+| `qmt_xtdata_formula_call` · `qmt_xtdata_formula_call_batch` · `qmt_xtdata_formula_generate_factor` · `qmt_xtdata_formula_subscribe` | formula/factor runtime (off by default; server allowlist + output sandbox) |
 | Account read-only `xttrade` (04, **opt-in**) | see table below, off by default |
 
 **xttrade account-query tools** (require `QMT_ENABLE_XTTRADE_QUERY=1` + account allowlist):
@@ -130,6 +136,10 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 ./qmtctl search 纳指                   # fuzzy instrument search
 ./qmtctl snapshot 510300.SH           # real-time quote snapshot
 ./qmtctl bars 510300.SH --period 1d   # OHLC bars
+./qmtctl subscription add --id s1 510300.SH,510500.SH  # quote subscription
+./qmtctl portfolio summary --account <id>              # portfolio summary
+./qmtctl option chain --family 300ETF                  # option chain
+./qmtctl ref financial 600000.SH --tables Income       # reference data
 ./qmtctl account asset --account <id> # account asset (requires xttrade enabled)
 ```
 
@@ -149,7 +159,7 @@ More: [broker pack guide](appliance/docs/BROKER-PACK.md) ·
 appliance/   # deployable appliance: Dockerfile · compose · scripts · mcp/ · brokers/ · docs/
 cli/         # qmtctl: compiled Go CLI client (streamable-http MCP)
 skills/      # AI agent ops knowledge base (deploy/MCP/CLI/troubleshooting)
-specs/       # Spec-Driven Development (spec-kit): 001~012 spec/plan/tasks
+specs/       # Spec-Driven Development (spec-kit): 001~018 spec/plan/tasks
 ```
 
 Managed with **Spec-Driven Development**, one feature at a time, spec before code.

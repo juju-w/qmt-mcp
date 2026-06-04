@@ -224,6 +224,29 @@ def register_optional_xttrade(mcp: FastMCP, registry: ToolRegistry, health: Heal
         return None
 
 
+def register_optional_portfolio(
+    mcp: FastMCP, registry: ToolRegistry, health: HealthState, config: CoreConfig, trader_session=None
+) -> None:
+    if not config.enable_portfolio_analysis:
+        health.set_family("portfolio", "disabled", "portfolio analysis disabled (QMT_ENABLE_PORTFOLIO_ANALYSIS=0)", [])
+        return
+    if trader_session is None:
+        health.set_family("portfolio", "not_authorized", "requires enabled xttrade query with account allowlist", [])
+        return
+    try:
+        from qmt_mcp_portfolio.tools import register_portfolio_tools
+
+        register_portfolio_tools(mcp, registry, health, trader_session)
+        health.set_family(
+            "portfolio",
+            "enabled",
+            "read-only portfolio analysis enabled",
+            registry.tool_names("portfolio"),
+        )
+    except Exception as exc:
+        health.set_family("portfolio", "error", f"failed to register portfolio tools: {type(exc).__name__}", [])
+
+
 def create_app(config: CoreConfig | None = None):
     config = config or load_config()
     _add_xtquant_path(config)
@@ -244,6 +267,7 @@ def create_app(config: CoreConfig | None = None):
     warehouse = _make_warehouse(config, health)
     register_optional_xtdata(mcp, registry, health, config, warehouse=warehouse)
     trader_session = register_optional_xttrade(mcp, registry, health, config)
+    register_optional_portfolio(mcp, registry, health, config, trader_session=trader_session)
     registry.assert_no_write_tools()
 
     app = mcp.http_app(transport=config.transport)

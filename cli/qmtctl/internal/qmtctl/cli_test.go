@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -156,6 +158,298 @@ func TestAccountPositionsCallsExpectedMCPTool(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "positions: 1 item") {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestSnapshotCachePolicyCallsExpectedMCPTool(t *testing.T) {
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		switch req["method"] {
+		case "initialize", "notifications/initialized":
+			writeRPCResult(w, req["id"], map[string]any{})
+		case "tools/call":
+			params := req["params"].(map[string]any)
+			if params["name"] != "qmt_xtdata_snapshot" {
+				t.Fatalf("tool name = %v", params["name"])
+			}
+			args := params["arguments"].(map[string]any)
+			if args["cache_policy"] != "cache_only" {
+				t.Fatalf("arguments = %#v", args)
+			}
+			called = true
+			writeRPCResult(w, req["id"], toolResult(map[string]any{"ok": true, "data": []any{}}))
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL, "snapshot", "510300.SH", "--cache-only"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !called {
+		t.Fatal("tools/call was not reached")
+	}
+}
+
+func TestSubscriptionAddCallsExpectedMCPTool(t *testing.T) {
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		switch req["method"] {
+		case "initialize", "notifications/initialized":
+			writeRPCResult(w, req["id"], map[string]any{})
+		case "tools/call":
+			params := req["params"].(map[string]any)
+			if params["name"] != "qmt_xtdata_quote_subscribe" {
+				t.Fatalf("tool name = %v", params["name"])
+			}
+			args := params["arguments"].(map[string]any)
+			if args["subscription_id"] != "strategy1" || args["backend_preference"] != "auto" {
+				t.Fatalf("arguments = %#v", args)
+			}
+			codes := args["codes"].([]any)
+			if len(codes) != 2 || codes[0] != "510300.SH" || codes[1] != "510500.SH" {
+				t.Fatalf("codes = %#v", codes)
+			}
+			called = true
+			writeRPCResult(w, req["id"], toolResult(map[string]any{"ok": true, "subscription": map[string]any{"id": "strategy1"}}))
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL, "subscription", "add", "--id", "strategy1", "510300.SH,510500.SH"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !called {
+		t.Fatal("tools/call was not reached")
+	}
+}
+
+func TestPortfolioRiskCallsExpectedMCPTool(t *testing.T) {
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		switch req["method"] {
+		case "initialize", "notifications/initialized":
+			writeRPCResult(w, req["id"], map[string]any{})
+		case "tools/call":
+			params := req["params"].(map[string]any)
+			if params["name"] != "qmt_portfolio_risk_checks" {
+				t.Fatalf("tool name = %v", params["name"])
+			}
+			args := params["arguments"].(map[string]any)
+			if args["account_id"] != "123456789" || args["quote_policy"] != "live" {
+				t.Fatalf("arguments = %#v", args)
+			}
+			thresholds := args["thresholds"].(map[string]any)
+			if thresholds["max_single_position_weight"] != 0.25 {
+				t.Fatalf("thresholds = %#v", thresholds)
+			}
+			called = true
+			writeRPCResult(w, req["id"], toolResult(map[string]any{"ok": true, "checks": []any{}}))
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{
+		"--url", server.URL,
+		"portfolio", "risk",
+		"--account", "123456789",
+		"--quote-policy", "live",
+		"--max-single-weight", "0.25",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !called {
+		t.Fatal("tools/call was not reached")
+	}
+}
+
+func TestOptionVixInputsCallsExpectedMCPTool(t *testing.T) {
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		switch req["method"] {
+		case "initialize", "notifications/initialized":
+			writeRPCResult(w, req["id"], map[string]any{})
+		case "tools/call":
+			params := req["params"].(map[string]any)
+			if params["name"] != "qmt_xtdata_volatility_index_inputs" {
+				t.Fatalf("tool name = %v", params["name"])
+			}
+			args := params["arguments"].(map[string]any)
+			if args["family"] != "300ETF" {
+				t.Fatalf("arguments = %#v", args)
+			}
+			called = true
+			writeRPCResult(w, req["id"], toolResult(map[string]any{"ok": true, "rows": []any{}}))
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL, "option", "vix-inputs", "--family", "300ETF"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !called {
+		t.Fatal("tools/call was not reached")
+	}
+}
+
+func TestRefIpoCallsExpectedMCPTool(t *testing.T) {
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		switch req["method"] {
+		case "initialize", "notifications/initialized":
+			writeRPCResult(w, req["id"], map[string]any{})
+		case "tools/call":
+			params := req["params"].(map[string]any)
+			if params["name"] != "qmt_xtdata_ipo_info" {
+				t.Fatalf("tool name = %v", params["name"])
+			}
+			args := params["arguments"].(map[string]any)
+			if args["start_time"] != "20250101" || args["end_time"] != "20250131" {
+				t.Fatalf("arguments = %#v", args)
+			}
+			called = true
+			writeRPCResult(w, req["id"], toolResult(map[string]any{"ok": true, "rows": []any{}}))
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL, "ref", "ipo", "--start", "20250101", "--end", "20250131"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !called {
+		t.Fatal("tools/call was not reached")
+	}
+}
+
+func TestSectorImportJSONCallsExpectedMCPTool(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "signal.json")
+	if err := os.WriteFile(path, []byte(`{"holdings":[{"thscode":"510300.SH"}],"top_candidates":[{"thscode":"510500.SH"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		switch req["method"] {
+		case "initialize", "notifications/initialized":
+			writeRPCResult(w, req["id"], map[string]any{})
+		case "tools/call":
+			params := req["params"].(map[string]any)
+			if params["name"] != "qmt_xtdata_sector_add_codes" {
+				t.Fatalf("tool name = %v", params["name"])
+			}
+			args := params["arguments"].(map[string]any)
+			if args["sector"] != "MCP/strategy1/latest-signal" {
+				t.Fatalf("arguments = %#v", args)
+			}
+			codes := args["codes"].([]any)
+			if len(codes) != 2 || codes[0] != "510300.SH" || codes[1] != "510500.SH" {
+				t.Fatalf("codes = %#v", codes)
+			}
+			called = true
+			writeRPCResult(w, req["id"], toolResult(map[string]any{"ok": true}))
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{
+		"--url", server.URL,
+		"sector", "import-json",
+		"--sector", "MCP/strategy1/latest-signal",
+		"--file", path,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !called {
+		t.Fatal("tools/call was not reached")
+	}
+}
+
+func TestFormulaCallCallsExpectedMCPTool(t *testing.T) {
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		switch req["method"] {
+		case "initialize", "notifications/initialized":
+			writeRPCResult(w, req["id"], map[string]any{})
+		case "tools/call":
+			params := req["params"].(map[string]any)
+			if params["name"] != "qmt_xtdata_formula_call" {
+				t.Fatalf("tool name = %v", params["name"])
+			}
+			args := params["arguments"].(map[string]any)
+			if args["formula_name"] != "VIX_HELPER" || args["code"] != "510300.SH" {
+				t.Fatalf("arguments = %#v", args)
+			}
+			called = true
+			writeRPCResult(w, req["id"], toolResult(map[string]any{"ok": true, "result": map[string]any{}}))
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{
+		"--url", server.URL,
+		"formula", "call",
+		"--formula", "VIX_HELPER",
+		"--code", "510300.SH",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !called {
+		t.Fatal("tools/call was not reached")
 	}
 }
 

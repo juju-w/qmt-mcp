@@ -69,6 +69,21 @@ class CoreConfig:
     db_url: str = ""
     db_marketdata: bool = True
     db_pool_max: int = 5
+    # 013 quote subscriptions/cache (read-only, disabled only with xtdata off).
+    quote_subscription_store: str = "/broker/cache/quote-subscriptions-v1.json"
+    quote_cache_max_age_ms: int = 10_000
+    quote_subscription_max_codes: int = 100
+    quote_subscription_max_official: int = 50
+    quote_subscription_min_fallback_interval_s: int = 5
+    # 014 derived portfolio analysis (registered only when xttrade query is enabled).
+    enable_portfolio_analysis: bool = True
+    # 017 local QMT custom-sector mutation. Disabled by default.
+    enable_xtdata_sector_write: bool = False
+    xtdata_sector_write_prefixes: str = "MCP/,AI/"
+    # 018 formula/model execution. Disabled by default; names are server allowlisted.
+    enable_formula_runtime: bool = False
+    formula_allowlist: str = ""
+    formula_output_sandbox: str = "/broker/formula-output"
 
     @property
     def db_enabled(self) -> bool:
@@ -121,6 +136,20 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         db_url=env.get("QMT_DB_URL", ""),
         db_marketdata=env.get("QMT_DB_MARKETDATA", "1") != "0",
         db_pool_max=max(1, int(env.get("QMT_DB_POOL_MAX", "5"))),
+        quote_subscription_store=env.get("QMT_QUOTE_SUBSCRIPTION_STORE", "/broker/cache/quote-subscriptions-v1.json"),
+        quote_cache_max_age_ms=max(1, int(env.get("QMT_QUOTE_CACHE_MAX_AGE_MS", "10000"))),
+        quote_subscription_max_codes=max(1, int(env.get("QMT_QUOTE_SUBSCRIPTION_MAX_CODES", "100"))),
+        quote_subscription_max_official=max(1, int(env.get("QMT_QUOTE_SUBSCRIPTION_MAX_OFFICIAL", "50"))),
+        quote_subscription_min_fallback_interval_s=max(
+            1, int(env.get("QMT_QUOTE_SUBSCRIPTION_MIN_FALLBACK_INTERVAL_S", "5"))
+        ),
+        enable_portfolio_analysis=env.get("QMT_ENABLE_PORTFOLIO_ANALYSIS", "1") != "0",
+        enable_xtdata_sector_write=env.get("QMT_ENABLE_XTDATA_SECTOR_WRITE", "0") == "1",
+        xtdata_sector_write_prefixes=env.get("QMT_XTDATA_SECTOR_WRITE_PREFIXES", "MCP/,AI/") or "MCP/,AI/",
+        enable_formula_runtime=env.get("QMT_ENABLE_FORMULA_RUNTIME", "0") == "1",
+        formula_allowlist=env.get("QMT_FORMULA_ALLOWLIST", ""),
+        formula_output_sandbox=env.get("QMT_FORMULA_OUTPUT_SANDBOX", "/broker/formula-output")
+        or "/broker/formula-output",
     )
     cfg.validate_security()
     return cfg

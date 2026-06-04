@@ -70,6 +70,12 @@
 | `qmt_xtdata_trading_dates` · `qmt_xtdata_trading_calendar` · `qmt_xtdata_holidays` | 交易日历 |
 | `qmt_xtdata_download_history` · `_batch` | 下载历史数据到本地 |
 | `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | 搜索缓存状态 / 刷新 |
+| `qmt_xtdata_quote_subscribe` · `qmt_xtdata_quote_unsubscribe` · `qmt_xtdata_quote_subscriptions` · `qmt_xtdata_quote_subscription_status` | 行情订阅热缓存（官方 `subscribe_quote` 优先，轮询兜底） |
+| `qmt_xtdata_option_chain` · `qmt_xtdata_option_quotes` · `qmt_xtdata_option_iv` · `qmt_xtdata_volatility_index_inputs` | 期权链/认购认沽报价/IV/VIX 输入包（只读，不发布指数值） |
+| `qmt_xtdata_financial_data` · `qmt_xtdata_ipo_info` · `qmt_xtdata_dividend_factors` · `qmt_xtdata_cb_info` · `qmt_xtdata_etf_info` | 财务/新股/分红/可转债/ETF 参考数据（只读，按运行时能力降级） |
+| `qmt_portfolio_summary` · `qmt_portfolio_positions` · `qmt_portfolio_exposure` · `qmt_portfolio_risk_checks` | 组合持仓/敞口/风控指标（只读，依赖 xttrade 白名单） |
+| `qmt_xtdata_sector_create` · `qmt_xtdata_sector_add_codes` · `qmt_xtdata_sector_remove_codes` · `qmt_xtdata_managed_sector_list` | 自定义板块管理（默认关闭，仅允许 `MCP/`、`AI/` 等受管前缀） |
+| `qmt_xtdata_formula_call` · `qmt_xtdata_formula_call_batch` · `qmt_xtdata_formula_generate_factor` · `qmt_xtdata_formula_subscribe` | 公式/因子运行（默认关闭，服务端公式白名单 + 输出目录沙箱） |
 | 账户只读查询 `xttrade`（04，**选配**） | 见下表，默认关闭 |
 
 **xttrade 账户查询工具族**（需 `QMT_ENABLE_XTTRADE_QUERY=1` + 账户白名单）：
@@ -120,6 +126,10 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 ./qmtctl search 纳指                   # 模糊搜索合约
 ./qmtctl snapshot 510300.SH           # 实时行情快照
 ./qmtctl bars 510300.SH --period 1d   # K线数据
+./qmtctl subscription add --id s1 510300.SH,510500.SH  # 行情订阅
+./qmtctl portfolio summary --account <id>              # 组合概览
+./qmtctl option chain --family 300ETF                  # 期权链
+./qmtctl ref financial 600000.SH --tables Income       # 参考数据
 ./qmtctl account asset --account <id> # 账户资产（需开启 xttrade）
 ```
 
@@ -137,7 +147,7 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 appliance/   # 可部署 appliance：Dockerfile · compose · scripts · mcp/ · brokers/ · docs/
 cli/         # qmtctl：Go 编译的命令行客户端（streamable-http MCP）
 skills/      # AI Agent 运维知识库（部署/MCP/CLI/排错）
-specs/       # Spec-Driven Development（spec-kit）：001~012 规格/计划/任务
+specs/       # Spec-Driven Development（spec-kit）：001~018 规格/计划/任务
 ```
 
 用 **Spec-Driven Development** 管理，一次一个 feature、先 spec 后实现；原则见

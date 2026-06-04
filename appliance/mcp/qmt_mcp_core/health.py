@@ -47,6 +47,7 @@ class HealthState:
         self.set_family("core", "enabled", "core tools available", [])
         self.set_family("xttrade_query", "not_authorized", "broker/account permission not available", [])
         self.set_family("xttrade_write", "disabled", "write tools are out of scope", [])
+        self.set_family("portfolio", "disabled", "portfolio analysis not registered", [])
 
     def set_family(self, family: str, state: str, reason: str, tools: list[str] | None = None) -> None:
         self.families[family] = ToolFamilyCapability(family, state, reason, tools or [])

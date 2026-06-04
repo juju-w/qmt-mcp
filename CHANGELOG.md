@@ -14,7 +14,26 @@ gates).
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+- **013 — Quote subscription cache**: `qmt_xtdata_quote_subscribe` /
+  `unsubscribe` / `subscriptions` / `subscription_status` tools + `qmtctl
+  subscription` subcommands. Official `subscribe_quote` preferred, bounded
+  polling fallback; in-memory hot cache (<1 ms lookup).
+- **014 — Portfolio risk analysis** (read-only): `qmt_portfolio_summary` /
+  `positions` / `exposure` / `risk_checks` tools + `qmtctl portfolio`
+  subcommands. Depends on xttrade account allowlist.
+- **015 — Option & volatility data** (read-only): `qmt_xtdata_option_chain` /
+  `option_quotes` / `option_iv` / `volatility_index_inputs` tools + `qmtctl
+  option` subcommands. No index value publishing.
+- **016 — xtdata reference data** (read-only, capability-gated):
+  `qmt_xtdata_financial_data` / `ipo_info` / `dividend_factors` / `cb_info` /
+  `etf_info` tools + `qmtctl ref` subcommands.
+- **017 — Custom sector management** (off by default): `qmt_xtdata_sector_create`
+  / `sector_add_codes` / `sector_remove_codes` / `managed_sector_list` tools +
+  `qmtctl sector` subcommands. Managed-prefix sandbox (`MCP/`, `AI/`, etc.).
+- **018 — Formula / factor runtime** (off by default): `qmt_xtdata_formula_call`
+  / `formula_call_batch` / `formula_generate_factor` / `formula_subscribe`
+  tools + `qmtctl formula` subcommands. Server-side allowlist + output sandbox.
 
 ## [0.2.0] - 2026-06-04
 

@@ -67,8 +67,20 @@ func dispatch(ctx context.Context, client *Client, opts globalOptions, args []st
 		return runBars(ctx, client, opts, args[1:], stdout)
 	case "cache":
 		return runCache(ctx, client, opts, args[1:], stdout)
+	case "subscription", "subscriptions", "quote":
+		return runSubscription(ctx, client, opts, args[1:], stdout)
 	case "account":
 		return runAccount(ctx, client, opts, args[1:], stdout)
+	case "portfolio":
+		return runPortfolio(ctx, client, opts, args[1:], stdout)
+	case "option":
+		return runOption(ctx, client, opts, args[1:], stdout)
+	case "ref":
+		return runRef(ctx, client, opts, args[1:], stdout)
+	case "sector":
+		return runSector(ctx, client, opts, args[1:], stdout)
+	case "formula":
+		return runFormula(ctx, client, opts, args[1:], stdout)
 	case "smoke":
 		return runSmoke(ctx, client, opts, args[1:], stdout)
 	case "help", "-h", "--help":
@@ -162,16 +174,26 @@ func runResolve(ctx context.Context, client *Client, opts globalOptions, args []
 func runSnapshot(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
 	fs := newFlagSet("snapshot", &opts)
 	fields := fs.String("fields", "", "comma-separated fields")
+	cachePolicy := fs.String("cache-policy", "prefer", "cache policy: prefer, cache_only, live")
+	live := fs.Bool("live", false, "bypass quote cache")
+	cacheOnly := fs.Bool("cache-only", false, "read quote cache only")
 	if err := parseFlagSet(fs, args); err != nil {
 		return err
+	}
+	if *live {
+		*cachePolicy = "live"
+	}
+	if *cacheOnly {
+		*cachePolicy = "cache_only"
 	}
 	codes := splitPositionals(fs.Args())
 	if len(codes) == 0 {
 		return fmt.Errorf("snapshot requires at least one code")
 	}
 	payload, err := client.CallTool(ctx, "qmt_xtdata_snapshot", map[string]any{
-		"codes":  codes,
-		"fields": splitCSV(*fields),
+		"codes":        codes,
+		"fields":       splitCSV(*fields),
+		"cache_policy": *cachePolicy,
 	})
 	return writePayload(stdout, payload, opts, err)
 }
@@ -233,6 +255,74 @@ func runCache(ctx context.Context, client *Client, opts globalOptions, args []st
 		return writePayload(stdout, payload, opts, err)
 	default:
 		return fmt.Errorf("unknown cache subcommand %q", args[0])
+	}
+}
+
+func runSubscription(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("subscription subcommand is required: add, remove, list, or status")
+	}
+	switch args[0] {
+	case "add", "update", "subscribe":
+		fs := newFlagSet("subscription add", &opts)
+		id := fs.String("id", "", "subscription id")
+		label := fs.String("label", "", "label")
+		group := fs.String("group", "", "group")
+		period := fs.String("period", "tick", "xtdata period")
+		backend := fs.String("backend", "auto", "backend preference")
+		fallbackInterval := fs.Int("fallback-interval", 5, "fallback polling interval seconds")
+		fallbackPolling := fs.Bool("fallback-polling", true, "allow polling fallback")
+		notes := fs.String("notes", "", "notes")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		codes := splitPositionals(fs.Args())
+		if len(codes) == 0 {
+			return fmt.Errorf("subscription add requires at least one code")
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_quote_subscribe", map[string]any{
+			"codes":                     codes,
+			"subscription_id":           *id,
+			"label":                     *label,
+			"group":                     *group,
+			"period":                    *period,
+			"backend_preference":        *backend,
+			"fallback_interval_seconds": *fallbackInterval,
+			"fallback_polling":          *fallbackPolling,
+			"notes":                     *notes,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "remove", "rm", "delete", "unsubscribe":
+		fs := newFlagSet("subscription remove", &opts)
+		id := fs.String("id", "", "subscription id")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		subID := strings.TrimSpace(*id)
+		if subID == "" && len(fs.Args()) > 0 {
+			subID = strings.TrimSpace(fs.Args()[0])
+		}
+		if subID == "" {
+			return fmt.Errorf("subscription remove requires --id")
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_quote_unsubscribe", map[string]any{"subscription_id": subID})
+		return writePayload(stdout, payload, opts, err)
+	case "list", "ls":
+		fs := newFlagSet("subscription list", &opts)
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_quote_subscriptions", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	case "status":
+		fs := newFlagSet("subscription status", &opts)
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_quote_subscription_status", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	default:
+		return fmt.Errorf("unknown subscription subcommand %q", args[0])
 	}
 }
 
@@ -306,6 +396,465 @@ func runAccountScopedTool(
 	}
 	payload, err := client.CallTool(ctx, toolName, payloadArgs)
 	return writePayload(stdout, payload, opts, err)
+}
+
+func runPortfolio(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("portfolio subcommand is required: summary, positions, exposure, or risk")
+	}
+	switch args[0] {
+	case "summary":
+		return runPortfolioTool(ctx, client, opts, args[1:], stdout, "portfolio summary", "qmt_portfolio_summary", false)
+	case "positions":
+		return runPortfolioTool(ctx, client, opts, args[1:], stdout, "portfolio positions", "qmt_portfolio_positions", false)
+	case "exposure":
+		return runPortfolioTool(ctx, client, opts, args[1:], stdout, "portfolio exposure", "qmt_portfolio_exposure", false)
+	case "risk", "risk-checks":
+		return runPortfolioTool(ctx, client, opts, args[1:], stdout, "portfolio risk", "qmt_portfolio_risk_checks", true)
+	default:
+		return fmt.Errorf("unknown portfolio subcommand %q", args[0])
+	}
+}
+
+func runPortfolioTool(
+	ctx context.Context,
+	client *Client,
+	opts globalOptions,
+	args []string,
+	stdout io.Writer,
+	flagName string,
+	toolName string,
+	withThresholds bool,
+) error {
+	fs := newFlagSet(flagName, &opts)
+	account := fs.String("account", "", "allow-listed account id")
+	quotePolicy := fs.String("quote-policy", "prefer_cache", "quote policy: prefer_cache, live, cache_only")
+	maxSingle := fs.Float64("max-single-weight", -1, "max single position weight")
+	maxTop5 := fs.Float64("max-top5-weight", -1, "max top-5 weight")
+	minCash := fs.Float64("min-cash-ratio", -1, "min cash ratio")
+	minQuoteCoverage := fs.Float64("min-quote-coverage", -1, "min quote coverage")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	aid := accountID(*account, fs.Args())
+	if aid == "" {
+		return fmt.Errorf("%s requires --account", flagName)
+	}
+	payloadArgs := map[string]any{"account_id": aid, "quote_policy": *quotePolicy}
+	if withThresholds {
+		thresholds := map[string]any{}
+		if *maxSingle >= 0 {
+			thresholds["max_single_position_weight"] = *maxSingle
+		}
+		if *maxTop5 >= 0 {
+			thresholds["max_top5_weight"] = *maxTop5
+		}
+		if *minCash >= 0 {
+			thresholds["min_cash_ratio"] = *minCash
+		}
+		if *minQuoteCoverage >= 0 {
+			thresholds["min_quote_coverage"] = *minQuoteCoverage
+		}
+		if len(thresholds) > 0 {
+			payloadArgs["thresholds"] = thresholds
+		}
+	}
+	payload, err := client.CallTool(ctx, toolName, payloadArgs)
+	return writePayload(stdout, payload, opts, err)
+}
+
+func runOption(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("option subcommand is required: underlyings, chain, detail, quotes, iv, or vix-inputs")
+	}
+	switch args[0] {
+	case "underlyings":
+		fs := newFlagSet("option underlyings", &opts)
+		market := fs.String("market", "", "market")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_option_underlyings", map[string]any{"market": *market})
+		return writePayload(stdout, payload, opts, err)
+	case "chain":
+		fs := newFlagSet("option chain", &opts)
+		underlying := fs.String("underlying", "", "underlying code")
+		family := fs.String("family", "", "family alias")
+		expiry := fs.String("expiry", "", "expiry YYYYMMDD")
+		optionType := fs.String("type", "", "CALL or PUT")
+		limit := fs.Int("limit", 200, "contract limit")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		if *underlying == "" && *family == "" && len(fs.Args()) > 0 {
+			*family = fs.Args()[0]
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_option_chain", map[string]any{
+			"underlying_code": *underlying,
+			"family":          *family,
+			"expiry":          *expiry,
+			"option_type":     *optionType,
+			"limit":           *limit,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "detail":
+		return runOptionCodesTool(ctx, client, opts, args[1:], stdout, "option detail", "qmt_xtdata_option_detail")
+	case "quotes":
+		return runOptionCodesTool(ctx, client, opts, args[1:], stdout, "option quotes", "qmt_xtdata_option_quotes")
+	case "iv":
+		return runOptionCodesTool(ctx, client, opts, args[1:], stdout, "option iv", "qmt_xtdata_option_iv")
+	case "vix-inputs":
+		fs := newFlagSet("option vix-inputs", &opts)
+		underlying := fs.String("underlying", "", "underlying code")
+		family := fs.String("family", "", "family alias")
+		expiry := fs.String("expiry", "", "expiry YYYYMMDD")
+		limit := fs.Int("limit", 200, "contract limit")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		if *underlying == "" && *family == "" && len(fs.Args()) > 0 {
+			*family = fs.Args()[0]
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_volatility_index_inputs", map[string]any{
+			"underlying_code": *underlying,
+			"family":          *family,
+			"expiry":          *expiry,
+			"limit":           *limit,
+		})
+		return writePayload(stdout, payload, opts, err)
+	default:
+		return fmt.Errorf("unknown option subcommand %q", args[0])
+	}
+}
+
+func runOptionCodesTool(
+	ctx context.Context,
+	client *Client,
+	opts globalOptions,
+	args []string,
+	stdout io.Writer,
+	flagName string,
+	toolName string,
+) error {
+	fs := newFlagSet(flagName, &opts)
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	codes := splitPositionals(fs.Args())
+	if len(codes) == 0 {
+		return fmt.Errorf("%s requires at least one option code", flagName)
+	}
+	payload, err := client.CallTool(ctx, toolName, map[string]any{"codes": codes})
+	return writePayload(stdout, payload, opts, err)
+}
+
+func runRef(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("ref subcommand is required: financial, download-financial, dividends, ipo, cb, etf, or periods")
+	}
+	switch args[0] {
+	case "financial":
+		fs := newFlagSet("ref financial", &opts)
+		tables := fs.String("tables", "", "comma-separated financial tables")
+		start := fs.String("start", "", "start YYYYMMDD")
+		end := fs.String("end", "", "end YYYYMMDD")
+		reportType := fs.String("report-type", "report_time", "report type")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		codes := splitPositionals(fs.Args())
+		if len(codes) == 0 {
+			return fmt.Errorf("ref financial requires at least one code")
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_financial_data", map[string]any{
+			"codes":       codes,
+			"tables":      splitCSV(*tables),
+			"start_time":  *start,
+			"end_time":    *end,
+			"report_type": *reportType,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "download-financial":
+		fs := newFlagSet("ref download-financial", &opts)
+		code := fs.String("code", "", "instrument code")
+		tables := fs.String("tables", "", "comma-separated financial tables")
+		start := fs.String("start", "", "start YYYYMMDD")
+		end := fs.String("end", "", "end YYYYMMDD")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		c := strings.TrimSpace(*code)
+		if c == "" && len(fs.Args()) > 0 {
+			c = fs.Args()[0]
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_download_financial_data", map[string]any{
+			"code":       c,
+			"tables":     splitCSV(*tables),
+			"start_time": *start,
+			"end_time":   *end,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "dividends":
+		return runRefCodeTool(ctx, client, opts, args[1:], stdout, "ref dividends", "qmt_xtdata_dividend_factors")
+	case "ipo":
+		fs := newFlagSet("ref ipo", &opts)
+		start := fs.String("start", "", "start YYYYMMDD")
+		end := fs.String("end", "", "end YYYYMMDD")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_ipo_info", map[string]any{"start_time": *start, "end_time": *end})
+		return writePayload(stdout, payload, opts, err)
+	case "cb":
+		return runRefCodeTool(ctx, client, opts, args[1:], stdout, "ref cb", "qmt_xtdata_cb_info")
+	case "etf":
+		return runRefCodeTool(ctx, client, opts, args[1:], stdout, "ref etf", "qmt_xtdata_etf_info")
+	case "periods":
+		fs := newFlagSet("ref periods", &opts)
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_period_list", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	default:
+		return fmt.Errorf("unknown ref subcommand %q", args[0])
+	}
+}
+
+func runRefCodeTool(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer, flagName string, toolName string) error {
+	fs := newFlagSet(flagName, &opts)
+	code := fs.String("code", "", "instrument code")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	c := strings.TrimSpace(*code)
+	if c == "" && len(fs.Args()) > 0 {
+		c = fs.Args()[0]
+	}
+	payloadArgs := map[string]any{}
+	if c != "" {
+		payloadArgs["code"] = c
+	}
+	payload, err := client.CallTool(ctx, toolName, payloadArgs)
+	return writePayload(stdout, payload, opts, err)
+}
+
+func runSector(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("sector subcommand is required: create, add, remove, delete, reset, list-managed, or import-json")
+	}
+	switch args[0] {
+	case "create":
+		return runSectorNameTool(ctx, client, opts, args[1:], stdout, "sector create", "qmt_xtdata_sector_create", false)
+	case "create-folder":
+		return runSectorNameTool(ctx, client, opts, args[1:], stdout, "sector create-folder", "qmt_xtdata_sector_create_folder", false)
+	case "add":
+		return runSectorCodesTool(ctx, client, opts, args[1:], stdout, "sector add", "qmt_xtdata_sector_add_codes", false)
+	case "remove":
+		return runSectorCodesTool(ctx, client, opts, args[1:], stdout, "sector remove", "qmt_xtdata_sector_remove_codes", false)
+	case "delete":
+		return runSectorNameTool(ctx, client, opts, args[1:], stdout, "sector delete", "qmt_xtdata_sector_delete", true)
+	case "reset":
+		return runSectorCodesTool(ctx, client, opts, args[1:], stdout, "sector reset", "qmt_xtdata_sector_reset", true)
+	case "list-managed":
+		fs := newFlagSet("sector list-managed", &opts)
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_managed_sector_list", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	case "import-json":
+		return runSectorImportJSON(ctx, client, opts, args[1:], stdout)
+	default:
+		return fmt.Errorf("unknown sector subcommand %q", args[0])
+	}
+}
+
+func runSectorNameTool(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer, flagName string, toolName string, destructive bool) error {
+	fs := newFlagSet(flagName, &opts)
+	sector := fs.String("sector", "", "managed sector name")
+	confirm := fs.Bool("confirm", false, "confirm destructive operation")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	name := strings.TrimSpace(*sector)
+	if name == "" && len(fs.Args()) > 0 {
+		name = fs.Args()[0]
+	}
+	payloadArgs := map[string]any{"sector": name}
+	if toolName == "qmt_xtdata_sector_create_folder" {
+		payloadArgs = map[string]any{"folder": name}
+	}
+	if destructive {
+		payloadArgs["confirm"] = *confirm
+	}
+	payload, err := client.CallTool(ctx, toolName, payloadArgs)
+	return writePayload(stdout, payload, opts, err)
+}
+
+func runSectorCodesTool(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer, flagName string, toolName string, destructive bool) error {
+	fs := newFlagSet(flagName, &opts)
+	sector := fs.String("sector", "", "managed sector name")
+	codesFlag := fs.String("codes", "", "comma-separated codes")
+	confirm := fs.Bool("confirm", false, "confirm destructive operation")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	name := strings.TrimSpace(*sector)
+	codes := splitCSV(*codesFlag)
+	if name == "" && len(fs.Args()) > 0 {
+		name = fs.Args()[0]
+		codes = append(codes, splitPositionals(fs.Args()[1:])...)
+	}
+	payloadArgs := map[string]any{"sector": name, "codes": codes}
+	if destructive {
+		payloadArgs["confirm"] = *confirm
+	}
+	payload, err := client.CallTool(ctx, toolName, payloadArgs)
+	return writePayload(stdout, payload, opts, err)
+}
+
+func runSectorImportJSON(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	fs := newFlagSet("sector import-json", &opts)
+	sector := fs.String("sector", "", "managed sector name")
+	path := fs.String("file", "", "JSON file path")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	if *path == "" && len(fs.Args()) > 0 {
+		*path = fs.Args()[0]
+	}
+	if *sector == "" {
+		return fmt.Errorf("sector import-json requires --sector")
+	}
+	raw, err := os.ReadFile(*path)
+	if err != nil {
+		return err
+	}
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return err
+	}
+	codes := extractCodes(doc)
+	if len(codes) == 0 {
+		return fmt.Errorf("no codes found in %s", *path)
+	}
+	payload, err := client.CallTool(ctx, "qmt_xtdata_sector_add_codes", map[string]any{"sector": *sector, "codes": codes})
+	return writePayload(stdout, payload, opts, err)
+}
+
+func extractCodes(value any) []string {
+	seen := map[string]bool{}
+	var out []string
+	var walk func(any)
+	walk = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			for _, key := range []string{"code", "thscode", "symbol"} {
+				if raw, ok := x[key].(string); ok && strings.Contains(raw, ".") && !seen[raw] {
+					seen[raw] = true
+					out = append(out, raw)
+				}
+			}
+			for _, child := range x {
+				walk(child)
+			}
+		case []any:
+			for _, child := range x {
+				walk(child)
+			}
+		}
+	}
+	walk(value)
+	return out
+}
+
+func runFormula(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("formula subcommand is required: call, batch, generate, subscribe, unsubscribe, subscriptions, or cache")
+	}
+	switch args[0] {
+	case "call":
+		fs := newFlagSet("formula call", &opts)
+		formula := fs.String("formula", "", "allowlisted formula name")
+		code := fs.String("code", "", "instrument code")
+		period := fs.String("period", "1d", "period")
+		start := fs.String("start", "", "start YYYYMMDD")
+		end := fs.String("end", "", "end YYYYMMDD")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_call", map[string]any{
+			"formula_name": *formula,
+			"code":         *code,
+			"period":       *period,
+			"start_time":   *start,
+			"end_time":     *end,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "batch":
+		fs := newFlagSet("formula batch", &opts)
+		formula := fs.String("formula", "", "allowlisted formula name")
+		codesFlag := fs.String("codes", "", "comma-separated codes")
+		period := fs.String("period", "1d", "period")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		codes := splitCSV(*codesFlag)
+		codes = append(codes, splitPositionals(fs.Args())...)
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_call_batch", map[string]any{
+			"formula_name": *formula,
+			"codes":        codes,
+			"period":       *period,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "generate":
+		fs := newFlagSet("formula generate", &opts)
+		formula := fs.String("formula", "", "allowlisted formula name")
+		resultPath := fs.String("result-path", "", "sandboxed result path")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_generate_factor", map[string]any{
+			"formula_name": *formula,
+			"result_path":  *resultPath,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "subscribe":
+		fs := newFlagSet("formula subscribe", &opts)
+		formula := fs.String("formula", "", "allowlisted formula name")
+		code := fs.String("code", "", "instrument code")
+		period := fs.String("period", "tick", "period")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_subscribe", map[string]any{
+			"formula_name": *formula,
+			"code":         *code,
+			"period":       *period,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "unsubscribe":
+		fs := newFlagSet("formula unsubscribe", &opts)
+		id := fs.String("id", "", "subscription id")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		subID := *id
+		if subID == "" && len(fs.Args()) > 0 {
+			subID = fs.Args()[0]
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_unsubscribe", map[string]any{"subscription_id": subID})
+		return writePayload(stdout, payload, opts, err)
+	case "subscriptions":
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_subscriptions", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	case "cache":
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_cache", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	default:
+		return fmt.Errorf("unknown formula subcommand %q", args[0])
+	}
 }
 
 func runSmoke(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
@@ -431,11 +980,15 @@ func parseFlagSet(fs *flag.FlagSet, args []string) error {
 
 func interspersedFlags(args []string) []string {
 	boolFlags := map[string]bool{
-		"--json":            true,
-		"--verbose":         true,
-		"--force":           true,
-		"--refresh-metrics": true,
-		"--cancelable-only": true,
+		"--json":             true,
+		"--verbose":          true,
+		"--force":            true,
+		"--refresh-metrics":  true,
+		"--cancelable-only":  true,
+		"--live":             true,
+		"--cache-only":       true,
+		"--fallback-polling": true,
+		"--confirm":          true,
 	}
 	var flags []string
 	var positionals []string
@@ -535,7 +1088,7 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN] [--json] [--timeout 10s] <command>")
-	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache status, cache refresh, account, smoke")
+	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, sector, formula, smoke")
 }
 
 func getenvDefault(name, fallback string) string {

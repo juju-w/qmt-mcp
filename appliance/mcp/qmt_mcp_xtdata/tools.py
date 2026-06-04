@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Any
+import hashlib
+from typing import TYPE_CHECKING, Any
 
-from fastmcp import FastMCP
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
 
 from qmt_mcp_core.errors import McpCoreError, ok_envelope
 from qmt_mcp_core.health import HealthState
 from qmt_mcp_core.registry import ToolRegistry
 
+from .formula_tools import register_formula_tools
+from .option_tools import register_option_tools
+from .quote_cache import QuoteHotCache
+from .quote_subscriptions import QuoteSubscription, QuoteSubscriptionRuntime, QuoteSubscriptionStore
+from .reference_tools import register_reference_tools
 from .search_cache import cache_state, refresh_cache, usable_cache_or_seed
 from .search_index import resolve_from_results, search_records, search_sectors, validate_filters, validate_query
+from .sector_write_tools import register_sector_write_tools
 from .serializers import bars_rows, date_strings, json_clean, snapshot_records
 from .validation import (
     MAX_DOWNLOAD_CODES,
@@ -23,6 +31,9 @@ from .validation import (
     validate_fields,
     validate_market,
     validate_period,
+    validate_positive_int,
+    validate_quote_backend,
+    validate_quote_cache_policy,
 )
 
 SEARCH_DESCRIPTION = (
@@ -188,6 +199,29 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
     except McpCoreError:
         health.xtquant_import = "error"
     health.set_family("xtdata", "not_ready", "xtdata tools registered; QMT login/readiness is checked per call", [])
+    quote_cache = QuoteHotCache(health.config.broker_id, health.config.quote_cache_max_age_ms)
+    quote_store = QuoteSubscriptionStore(health.config.quote_subscription_store)
+    quote_runtime = QuoteSubscriptionRuntime(
+        store=quote_store,
+        cache=quote_cache,
+        xtdata_call=_call_xtdata,
+        max_official=health.config.quote_subscription_max_official,
+    )
+    quote_runtime.start_fallback_worker()
+
+    def _subscription_id(codes: list[str], label: str, group: str) -> str:
+        if label:
+            base = label
+        elif group:
+            base = group
+        else:
+            digest = hashlib.sha1(",".join(codes).encode("utf-8")).hexdigest()[:10]
+            base = f"sub-{digest}"
+        clean = "".join(ch if ch.isalnum() or ch in "-_./" else "-" for ch in base).strip("-")
+        return clean[:80] or "quote-subscription"
+
+    def _subscribed_codes() -> set[str]:
+        return {code for sub in quote_store.list() if sub.enabled for code in sub.codes}
 
     @registry.register(
         mcp,
@@ -197,16 +231,132 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
             "Return the current quote snapshot (last/open/high/low/pre-close, bid/ask ladder, volume, amount) for up "
             "to 50 instruments. `codes` are full QMT codes like 600000.SH / 000001.SZ — if you only have a name or "
             "phrase, call qmt_xtdata_resolve_instrument first. Optional `fields` narrows the returned raw fields. "
-            "Live data; requires QMT logged in (else trader/data not-ready)."
+            "`cache_policy` supports prefer/cache_only/live for 013 quote subscriptions."
         ),
-        audit_fields=["codes"],
+        audit_fields=["codes", "cache_policy"],
         worker_backed=True,
         timeout=10,
     )
-    def qmt_xtdata_snapshot(codes: list[str], fields: list[str] | None = None) -> dict[str, Any]:
+    def qmt_xtdata_snapshot(
+        codes: list[str], fields: list[str] | None = None, cache_policy: str = "prefer"
+    ) -> dict[str, Any]:
         clean_codes = validate_codes(codes)
+        policy = validate_quote_cache_policy(cache_policy)
+        if policy != "live":
+            quote_runtime.refresh_fallback_due()
+            cached, missing, stale = quote_cache.fresh_records(clean_codes)
+            if not missing and not stale:
+                return ok_envelope(
+                    source="quote-cache",
+                    cache_policy=policy,
+                    records=cached,
+                    data=[record["snapshot"] for record in cached],
+                )
+            if policy == "cache_only":
+                raise McpCoreError("not_ready", "quote cache is missing or stale", {"missing": missing, "stale": stale})
         raw = _call_xtdata("get_full_tick", clean_codes)
-        return ok_envelope(data=snapshot_records(raw, clean_codes))
+        records = snapshot_records(raw, clean_codes)
+        subscribed = _subscribed_codes()
+        if subscribed:
+            for record in records:
+                if record["code"] in subscribed:
+                    quote_cache.put_snapshot(record["code"], record, source="live")
+        return ok_envelope(source="get_full_tick", cache_policy=policy, data=records)
+
+    @registry.register(
+        mcp,
+        name="qmt_xtdata_quote_subscribe",
+        family="xtdata",
+        description=(
+            "Create or update a read-only quote subscription. Uses official xtdata.subscribe_quote when available and "
+            "falls back to bounded snapshot polling when enabled. Args: codes, optional subscription_id/label/group, "
+            "period=tick, backend_preference=auto|official_subscription|polling_fallback, fallback_interval_seconds."
+        ),
+        audit_fields=["subscription_id", "codes", "period", "backend_preference"],
+        worker_backed=True,
+        timeout=20,
+    )
+    def qmt_xtdata_quote_subscribe(
+        codes: list[str],
+        subscription_id: str = "",
+        period: str = "tick",
+        backend_preference: str = "auto",
+        fallback_polling: bool = True,
+        fallback_interval_seconds: int = 5,
+        enabled: bool = True,
+        label: str = "",
+        group: str = "",
+        notes: str = "",
+    ) -> dict[str, Any]:
+        clean_codes = validate_codes(codes, max_codes=health.config.quote_subscription_max_codes)
+        clean_period = validate_period(period)
+        backend = validate_quote_backend(backend_preference)
+        interval = validate_positive_int(
+            fallback_interval_seconds,
+            "fallback_interval_seconds",
+            min_value=health.config.quote_subscription_min_fallback_interval_s,
+            max_value=3600,
+        )
+        sub = QuoteSubscription(
+            id=subscription_id or _subscription_id(clean_codes, label, group),
+            codes=clean_codes,
+            period=clean_period,
+            backend_preference=backend,
+            fallback_polling=bool(fallback_polling),
+            fallback_interval_seconds=interval,
+            enabled=bool(enabled),
+            label=label,
+            group=group,
+            notes=notes,
+        )
+        saved = quote_runtime.subscribe(sub)
+        return ok_envelope(subscription=saved.to_dict())
+
+    @registry.register(
+        mcp,
+        name="qmt_xtdata_quote_unsubscribe",
+        family="xtdata",
+        description="Remove a quote subscription and call xtdata.unsubscribe_quote for active official subscriptions.",
+        audit_fields=["subscription_id"],
+        worker_backed=True,
+        timeout=10,
+    )
+    def qmt_xtdata_quote_unsubscribe(subscription_id: str) -> dict[str, Any]:
+        if not subscription_id:
+            raise McpCoreError("validation", "subscription_id must not be empty")
+        sub = quote_runtime.unsubscribe(subscription_id)
+        return ok_envelope(subscription=sub.to_dict())
+
+    @registry.register(
+        mcp,
+        name="qmt_xtdata_quote_subscriptions",
+        family="xtdata",
+        description="List configured quote subscriptions. Does not call xtdata.",
+        audit_fields=[],
+        worker_backed=False,
+    )
+    def qmt_xtdata_quote_subscriptions() -> dict[str, Any]:
+        return ok_envelope(subscriptions=[sub.to_dict() for sub in quote_store.list()])
+
+    @registry.register(
+        mcp,
+        name="qmt_xtdata_quote_subscription_status",
+        family="xtdata",
+        description="Return quote subscription backend, cache, and freshness status.",
+        audit_fields=[],
+        worker_backed=True,
+        timeout=10,
+    )
+    def qmt_xtdata_quote_subscription_status() -> dict[str, Any]:
+        quote_runtime.refresh_fallback_due()
+        return ok_envelope(**quote_runtime.status())
+
+    register_option_tools(mcp, registry, health, _call_xtdata)
+    register_reference_tools(mcp, registry, _call_xtdata)
+    if health.config.enable_xtdata_sector_write:
+        register_sector_write_tools(mcp, registry, health.config, _call_xtdata)
+    if health.config.enable_formula_runtime:
+        register_formula_tools(mcp, registry, health.config, _call_xtdata)
 
     @registry.register(
         mcp,

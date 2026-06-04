@@ -31,9 +31,14 @@ qmtctl tools
 qmtctl search 天岳
 qmtctl resolve 纳指 --rank liquidity --json
 qmtctl snapshot 510300.SH
+qmtctl snapshot --cache-only 510300.SH
 qmtctl bars 510300.SH --period 1d --start 20250101 --end 20250110
 qmtctl cache status
 qmtctl cache refresh
+qmtctl subscription add --id strategy1 510300.SH,510500.SH
+qmtctl subscription status
+qmtctl subscription list
+qmtctl subscription remove --id strategy1
 qmtctl account asset --account 123456789
 qmtctl account positions --account 123456789
 qmtctl account orders --account 123456789 --cancelable-only
@@ -42,6 +47,20 @@ qmtctl account status --account 123456789
 qmtctl account statistics --account 123456789
 qmtctl account purchase-limit --account 123456789
 qmtctl account ipo
+qmtctl portfolio summary --account 123456789
+qmtctl portfolio positions --account 123456789 --quote-policy live
+qmtctl portfolio exposure --account 123456789
+qmtctl portfolio risk --account 123456789 --max-single-weight 0.3
+qmtctl option chain --family 300ETF
+qmtctl option quotes 10000001.SHO,10000002.SHO
+qmtctl option vix-inputs --family 300ETF
+qmtctl ref financial 600000.SH --tables Income,CashFlow --start 20250101
+qmtctl ref ipo --start 20250101 --end 20250131
+qmtctl ref dividends 510300.SH
+qmtctl sector create MCP/strategy1/latest-signal
+qmtctl sector import-json --sector MCP/strategy1/latest-signal --file /Users/wangkuiju/project/etf_select/results/strategy_1_main_signal_latest.json
+qmtctl formula call --formula VIX_HELPER --code 510300.SH
+qmtctl formula generate --formula VIX_HELPER --result-path vix.feather
 qmtctl smoke
 ```
 

@@ -60,3 +60,20 @@ Run `quickstart.md` on a native amd64 host with a broker pack to validate:
 - tmpfs guard warning (+ `QMT_ENFORCE_REALDISK=1` refusal)
 - RDP disconnect/reconnect does not wedge the MCP
 - with broker permission: connector reaches `connected` (otherwise `not_authorized`)
+
+## amd64 live validation
+
+Date: 2026-06-04 · Host: linux/amd64 (192.168.99.10) · Broker: guangda-jinyangguang
+· Container: qmt-guangda (Up 44 min, healthy) · Image: qmt-appliance-base:local
+
+| # | Check | Result |
+|---|---|---|
+| SC-001 | Container running + QMT autostart + MCP serving after RDP login | ✅ `docker ps` shows Up (healthy); `/livez` → `{"ok":true,"server":"live"}` |
+| FR-005 | `/livez` no-auth, `/healthz` 401 without token | ✅ `/livez` returns 200; `/healthz` returns 401 |
+| US1.2 | Readiness flips after QMT login | ✅ `readiness.qmt_login: "logged_in"`, `xtdata_state: "ready"`, `xtquant_import: "ok"`, `database: "connected"` |
+| SC-003 | Supervisor restarts killed MCP | ✅ `pkill -f qmt_mcp.py` → `/livez` back within 8s |
+| SC-004 | Docker healthcheck reflects state | ✅ `docker inspect` → `healthy` (survived MCP kill+restart) |
+| FR-006 | MCP serves across RDP disconnect | ✅ `/livez` stable; MCP runs under supervisor, not RDP session |
+| 004 | xttrade `not_authorized` (no broker permission) | ✅ `xttrade: "not_authorized"`, server stays `ok: true` |
+
+**Conclusion**: all 005 acceptance criteria verified on live amd64. Feature complete.

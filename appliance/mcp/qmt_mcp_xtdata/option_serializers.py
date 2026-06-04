@@ -15,6 +15,10 @@ def _first(data: dict[str, Any], *names: str) -> Any:
 
 
 def _option_type(raw: Any) -> str:
+    if raw == 0:
+        return "CALL"
+    if raw == 1:
+        return "PUT"
     text = str(raw or "").upper()
     if text in {"C", "CALL", "认购", "购"}:
         return "CALL"
@@ -34,15 +38,20 @@ def option_detail_record(code: str, raw: Any) -> dict[str, Any]:
     raw_code = _first(data, "code", "opt_code", "option_code", "instrument_id") or code
     return {
         "code": str(raw_code),
-        "name": _first(data, "name", "opt_name", "instrument_name"),
-        "underlying_code": _first(data, "underlying_code", "undl_code", "underlying", "target_code"),
-        "option_type": _option_type(_first(data, "option_type", "opt_type", "call_or_put", "cp_flag")),
-        "expiry_date": str(_first(data, "expiry_date", "expire_date", "exercise_date", "maturity_date") or ""),
-        "exercise_price": _first(data, "exercise_price", "strike", "strike_price", "行权价"),
-        "contract_unit": _first(data, "contract_unit", "unit", "volume_multiple"),
-        "risk_free_rate": _first(data, "risk_free_rate", "rfr"),
-        "historical_volatility": _first(data, "historical_volatility", "hist_volatility", "hv"),
-        "is_trading": _first(data, "is_trading", "trading", "status"),
+        "name": _first(data, "name", "opt_name", "instrument_name", "InstrumentName"),
+        "underlying_code": _first(
+            data, "underlying_code", "undl_code", "underlying", "target_code", "OptUndlCodeFull", "OptUndlCode"
+        ),
+        "option_type": _option_type(_first(data, "option_type", "opt_type", "call_or_put", "cp_flag", "OptionType")),
+        "expiry_date": str(
+            _first(data, "expiry_date", "expire_date", "exercise_date", "maturity_date", "ExpireDate", "EndDelivDate")
+            or ""
+        ),
+        "exercise_price": _first(data, "exercise_price", "strike", "strike_price", "行权价", "OptExercisePrice"),
+        "contract_unit": _first(data, "contract_unit", "unit", "volume_multiple", "VolumeMultiple", "OptUnit"),
+        "risk_free_rate": _first(data, "risk_free_rate", "rfr", "OptUndlRiskFreeRate"),
+        "historical_volatility": _first(data, "historical_volatility", "hist_volatility", "hv", "OptUndlHistoryRate"),
+        "is_trading": _first(data, "is_trading", "trading", "status", "IsTrading"),
         "raw_fields": data,
     }
 

@@ -43,6 +43,21 @@ def registry_with_options(tmp_path: Path):
             return ["510300.SH"]
         if name == "get_option_list":
             return ["10000001.SHO", "10000002.SHO"]
+        if name == "get_instrument_detail":
+            return {
+                "ExchangeID": "SHO",
+                "InstrumentID": args[0].split(".")[0],
+                "InstrumentName": "300ETF购" if args[0].endswith("1.SHO") else "300ETF沽",
+                "ProductID": "300ETF(510300)",
+                "ExpireDate": "20260624",
+                "OpenDate": "20250101",
+                "CreateDate": "20250101",
+                "OptUndlCode": "510300",
+                "OptUndlMarket": "SH",
+                "OptExercisePrice": 4.0,
+                "OptionType": 0 if args[0].endswith("1.SHO") else 1,
+                "VolumeMultiple": 10000,
+            }
         if name == "get_option_detail_data":
             return {
                 "code": args[0],

@@ -77,6 +77,9 @@ class CoreConfig:
     quote_subscription_min_fallback_interval_s: int = 5
     # 014 derived portfolio analysis (registered only when xttrade query is enabled).
     enable_portfolio_analysis: bool = True
+    # 017 local QMT custom-sector mutation. Disabled by default.
+    enable_xtdata_sector_write: bool = False
+    xtdata_sector_write_prefixes: str = "MCP/,AI/"
 
     @property
     def db_enabled(self) -> bool:
@@ -137,6 +140,8 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
             1, int(env.get("QMT_QUOTE_SUBSCRIPTION_MIN_FALLBACK_INTERVAL_S", "5"))
         ),
         enable_portfolio_analysis=env.get("QMT_ENABLE_PORTFOLIO_ANALYSIS", "1") != "0",
+        enable_xtdata_sector_write=env.get("QMT_ENABLE_XTDATA_SECTOR_WRITE", "0") == "1",
+        xtdata_sector_write_prefixes=env.get("QMT_XTDATA_SECTOR_WRITE_PREFIXES", "MCP/,AI/") or "MCP/,AI/",
     )
     cfg.validate_security()
     return cfg

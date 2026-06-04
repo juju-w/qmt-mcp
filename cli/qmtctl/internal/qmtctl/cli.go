@@ -77,6 +77,8 @@ func dispatch(ctx context.Context, client *Client, opts globalOptions, args []st
 		return runOption(ctx, client, opts, args[1:], stdout)
 	case "ref":
 		return runRef(ctx, client, opts, args[1:], stdout)
+	case "sector":
+		return runSector(ctx, client, opts, args[1:], stdout)
 	case "smoke":
 		return runSmoke(ctx, client, opts, args[1:], stdout)
 	case "help", "-h", "--help":
@@ -635,6 +637,136 @@ func runRefCodeTool(ctx context.Context, client *Client, opts globalOptions, arg
 	return writePayload(stdout, payload, opts, err)
 }
 
+func runSector(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("sector subcommand is required: create, add, remove, delete, reset, list-managed, or import-json")
+	}
+	switch args[0] {
+	case "create":
+		return runSectorNameTool(ctx, client, opts, args[1:], stdout, "sector create", "qmt_xtdata_sector_create", false)
+	case "create-folder":
+		return runSectorNameTool(ctx, client, opts, args[1:], stdout, "sector create-folder", "qmt_xtdata_sector_create_folder", false)
+	case "add":
+		return runSectorCodesTool(ctx, client, opts, args[1:], stdout, "sector add", "qmt_xtdata_sector_add_codes", false)
+	case "remove":
+		return runSectorCodesTool(ctx, client, opts, args[1:], stdout, "sector remove", "qmt_xtdata_sector_remove_codes", false)
+	case "delete":
+		return runSectorNameTool(ctx, client, opts, args[1:], stdout, "sector delete", "qmt_xtdata_sector_delete", true)
+	case "reset":
+		return runSectorCodesTool(ctx, client, opts, args[1:], stdout, "sector reset", "qmt_xtdata_sector_reset", true)
+	case "list-managed":
+		fs := newFlagSet("sector list-managed", &opts)
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_managed_sector_list", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	case "import-json":
+		return runSectorImportJSON(ctx, client, opts, args[1:], stdout)
+	default:
+		return fmt.Errorf("unknown sector subcommand %q", args[0])
+	}
+}
+
+func runSectorNameTool(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer, flagName string, toolName string, destructive bool) error {
+	fs := newFlagSet(flagName, &opts)
+	sector := fs.String("sector", "", "managed sector name")
+	confirm := fs.Bool("confirm", false, "confirm destructive operation")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	name := strings.TrimSpace(*sector)
+	if name == "" && len(fs.Args()) > 0 {
+		name = fs.Args()[0]
+	}
+	payloadArgs := map[string]any{"sector": name}
+	if toolName == "qmt_xtdata_sector_create_folder" {
+		payloadArgs = map[string]any{"folder": name}
+	}
+	if destructive {
+		payloadArgs["confirm"] = *confirm
+	}
+	payload, err := client.CallTool(ctx, toolName, payloadArgs)
+	return writePayload(stdout, payload, opts, err)
+}
+
+func runSectorCodesTool(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer, flagName string, toolName string, destructive bool) error {
+	fs := newFlagSet(flagName, &opts)
+	sector := fs.String("sector", "", "managed sector name")
+	codesFlag := fs.String("codes", "", "comma-separated codes")
+	confirm := fs.Bool("confirm", false, "confirm destructive operation")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	name := strings.TrimSpace(*sector)
+	codes := splitCSV(*codesFlag)
+	if name == "" && len(fs.Args()) > 0 {
+		name = fs.Args()[0]
+		codes = append(codes, splitPositionals(fs.Args()[1:])...)
+	}
+	payloadArgs := map[string]any{"sector": name, "codes": codes}
+	if destructive {
+		payloadArgs["confirm"] = *confirm
+	}
+	payload, err := client.CallTool(ctx, toolName, payloadArgs)
+	return writePayload(stdout, payload, opts, err)
+}
+
+func runSectorImportJSON(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	fs := newFlagSet("sector import-json", &opts)
+	sector := fs.String("sector", "", "managed sector name")
+	path := fs.String("file", "", "JSON file path")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	if *path == "" && len(fs.Args()) > 0 {
+		*path = fs.Args()[0]
+	}
+	if *sector == "" {
+		return fmt.Errorf("sector import-json requires --sector")
+	}
+	raw, err := os.ReadFile(*path)
+	if err != nil {
+		return err
+	}
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return err
+	}
+	codes := extractCodes(doc)
+	if len(codes) == 0 {
+		return fmt.Errorf("no codes found in %s", *path)
+	}
+	payload, err := client.CallTool(ctx, "qmt_xtdata_sector_add_codes", map[string]any{"sector": *sector, "codes": codes})
+	return writePayload(stdout, payload, opts, err)
+}
+
+func extractCodes(value any) []string {
+	seen := map[string]bool{}
+	var out []string
+	var walk func(any)
+	walk = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			for _, key := range []string{"code", "thscode", "symbol"} {
+				if raw, ok := x[key].(string); ok && strings.Contains(raw, ".") && !seen[raw] {
+					seen[raw] = true
+					out = append(out, raw)
+				}
+			}
+			for _, child := range x {
+				walk(child)
+			}
+		case []any:
+			for _, child := range x {
+				walk(child)
+			}
+		}
+	}
+	walk(value)
+	return out
+}
+
 func runSmoke(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
 	fs := newFlagSet("smoke", &opts)
 	query := fs.String("query", "纳指", "search query used for smoke")
@@ -766,6 +898,7 @@ func interspersedFlags(args []string) []string {
 		"--live":             true,
 		"--cache-only":       true,
 		"--fallback-polling": true,
+		"--confirm":          true,
 	}
 	var flags []string
 	var positionals []string
@@ -865,7 +998,7 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN] [--json] [--timeout 10s] <command>")
-	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, smoke")
+	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, sector, smoke")
 }
 
 func getenvDefault(name, fallback string) string {

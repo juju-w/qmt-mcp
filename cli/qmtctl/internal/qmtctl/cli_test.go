@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -350,6 +352,57 @@ func TestRefIpoCallsExpectedMCPTool(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	code := Run([]string{"--url", server.URL, "ref", "ipo", "--start", "20250101", "--end", "20250131"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !called {
+		t.Fatal("tools/call was not reached")
+	}
+}
+
+func TestSectorImportJSONCallsExpectedMCPTool(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "signal.json")
+	if err := os.WriteFile(path, []byte(`{"holdings":[{"thscode":"510300.SH"}],"top_candidates":[{"thscode":"510500.SH"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		switch req["method"] {
+		case "initialize", "notifications/initialized":
+			writeRPCResult(w, req["id"], map[string]any{})
+		case "tools/call":
+			params := req["params"].(map[string]any)
+			if params["name"] != "qmt_xtdata_sector_add_codes" {
+				t.Fatalf("tool name = %v", params["name"])
+			}
+			args := params["arguments"].(map[string]any)
+			if args["sector"] != "MCP/strategy1/latest-signal" {
+				t.Fatalf("arguments = %#v", args)
+			}
+			codes := args["codes"].([]any)
+			if len(codes) != 2 || codes[0] != "510300.SH" || codes[1] != "510500.SH" {
+				t.Fatalf("codes = %#v", codes)
+			}
+			called = true
+			writeRPCResult(w, req["id"], toolResult(map[string]any{"ok": true}))
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{
+		"--url", server.URL,
+		"sector", "import-json",
+		"--sector", "MCP/strategy1/latest-signal",
+		"--file", path,
+	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("exit %d stderr=%s", code, stderr.String())
 	}

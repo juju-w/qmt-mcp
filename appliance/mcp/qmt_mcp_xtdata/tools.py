@@ -18,6 +18,7 @@ from .quote_subscriptions import QuoteSubscription, QuoteSubscriptionRuntime, Qu
 from .reference_tools import register_reference_tools
 from .search_cache import cache_state, refresh_cache, usable_cache_or_seed
 from .search_index import resolve_from_results, search_records, search_sectors, validate_filters, validate_query
+from .sector_write_tools import register_sector_write_tools
 from .serializers import bars_rows, date_strings, json_clean, snapshot_records
 from .validation import (
     MAX_DOWNLOAD_CODES,
@@ -351,6 +352,8 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
 
     register_option_tools(mcp, registry, health, _call_xtdata)
     register_reference_tools(mcp, registry, _call_xtdata)
+    if health.config.enable_xtdata_sector_write:
+        register_sector_write_tools(mcp, registry, health.config, _call_xtdata)
 
     @registry.register(
         mcp,

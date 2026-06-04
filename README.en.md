@@ -46,7 +46,9 @@ never needs to know the raw QMT code:
 | Launch QMT terminal + RDP login | ✅ | terminal + MCP auto-start after login |
 | Market data `xtdata` (snapshot/bars/instruments/sectors/calendar) | ✅ ready | MCP tools return structured JSON (11/11 verified live) |
 | **Fuzzy instrument search** (name/pinyin/alias/sector/theme) | ✅ ready | the agent locates instruments without knowing QMT codes |
-| Account / trading `xttrader` | ⚠️ needs broker permission | degrades to `not_authorized` (no crash) when not enabled |
+| Read-only account queries `xttrade` | ⚠️ needs broker permission | degrades to `not_authorized` (no crash) when not enabled |
+| Database persistence (PostgreSQL, optional) | ✅ ready | market-data warehouse, read/write-through, off by default |
+| `qmtctl` CLI | ✅ ready | compiled Go CLI client for health/search/quotes/account queries |
 
 > **Trading/account permission**: connecting `xtquant` to the trading interface
 > (orders **and** account queries) requires the broker to enable "programmatic
@@ -74,17 +76,28 @@ front; it searches by Chinese name / pinyin initials / alias / sector / theme
 | `qmt_xtdata_trading_dates` · `qmt_xtdata_trading_calendar` · `qmt_xtdata_holidays` | trading calendar |
 | `qmt_xtdata_download_history` · `_batch` | download history to local cache |
 | `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | search-cache status / refresh |
-| Account read-only `xttrader` (04, **opt-in**) | `qmt_xttrade_asset/positions/orders/trades/...`, off by default |
+| Account read-only `xttrade` (04, **opt-in**) | see table below, off by default |
+
+**xttrade account-query tools** (require `QMT_ENABLE_XTTRADE_QUERY=1` + account allowlist):
+
+| Tool | What it does |
+|---|---|
+| `qmt_xttrade_asset` | cash/total/market-value/frozen asset snapshot |
+| `qmt_xttrade_positions` | holdings (code, volume, can-use/frozen/yesterday/on-road, open/avg price, market value) |
+| `qmt_xttrade_orders` | today's orders (with `cancelable_only` filter) |
+| `qmt_xttrade_trades` | today's fills (code, price, volume, amount, time, order id) |
+| `qmt_xttrade_position_statistics` | aggregate position statistics |
+| `qmt_xttrade_account_status` | trading account status |
+| `qmt_xttrade_new_purchase_limit` | new-share (IPO) purchase limits |
+| `qmt_xttrade_ipo_data` | today's IPO/new-issue data (not account-scoped) |
 
 All tools are **read-only**, authenticated, audited, and return structured JSON
-(no write/order tools).
+(no write/order/cancel/transfer tools).
 
 > **Account queries (feature 04)** are off by default; enable with
 > `QMT_ENABLE_XTTRADE_QUERY=1` **and** an account allowlist `QMT_TRADE_ACCOUNTS`,
 > and the broker must have granted programmatic-trading permission for the success
-> paths (otherwise `not_authorized`, gracefully). Provides asset / positions /
-> orders (with a cancelable filter) / trades / account_status / position_statistics
-> / new_purchase_limit / ipo_data — **strictly read-only, no order/cancel/transfer**.
+> paths (otherwise `not_authorized`, gracefully). **Strictly read-only, no order/cancel/transfer**.
 > Success paths await a permissioned account (PRs welcome).
 
 ## Quick start
@@ -108,6 +121,18 @@ RDP:  <host>:13389   wineuser / password in .env  (use a real RDP client, not VN
 MCP:  http://<host>:18765/mcp   with Authorization: Bearer <QMT_MCP_TOKEN>
 ```
 
+You can also use the **qmtctl** CLI from the command line (see [`cli/qmtctl/README.md`](cli/qmtctl/README.md)):
+
+```bash
+cd cli/qmtctl && go build -o qmtctl .
+export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
+./qmtctl health                       # health check
+./qmtctl search 纳指                   # fuzzy instrument search
+./qmtctl snapshot 510300.SH           # real-time quote snapshot
+./qmtctl bars 510300.SH --period 1d   # OHLC bars
+./qmtctl account asset --account <id> # account asset (requires xttrade enabled)
+```
+
 More: [broker pack guide](appliance/docs/BROKER-PACK.md) ·
 [deploy & hardening](appliance/docs/DEPLOY.md)
 
@@ -122,7 +147,9 @@ More: [broker pack guide](appliance/docs/BROKER-PACK.md) ·
 
 ```text
 appliance/   # deployable appliance: Dockerfile · compose · scripts · mcp/ · brokers/ · docs/
-specs/       # Spec-Driven Development (spec-kit): 001~011 spec/plan/tasks
+cli/         # qmtctl: compiled Go CLI client (streamable-http MCP)
+skills/      # AI agent ops knowledge base (deploy/MCP/CLI/troubleshooting)
+specs/       # Spec-Driven Development (spec-kit): 001~012 spec/plan/tasks
 ```
 
 Managed with **Spec-Driven Development**, one feature at a time, spec before code.
@@ -132,7 +159,7 @@ Principles in [`constitution.md`](.specify/memory/constitution.md); AI-agent map
 
 ## Contributing / Help wanted 🙋
 
-The biggest ask is **feature 04 (read-only account queries via `xttrader`)**:
+The biggest ask is **feature 04 (read-only account queries via `xttrade`)**:
 validating the success paths needs an account with **"programmatic trading /
 external Python API" permission** (`m_nPythonConnectNet`), which the maintainer
 does not have (below the broker's threshold) — so only the "graceful
@@ -161,7 +188,7 @@ too! 🙏
 - Development was greatly accelerated by the AI coding assistants **OpenAI GPT /
   Codex** and **Anthropic Claude (Claude Code)** — thank you 🤖.
 - The MCP server is an independent implementation in this repo
-  (`appliance/mcp/qmt_mcp_core` + `qmt_mcp_xtdata`).
+  (`appliance/mcp/qmt_mcp_core` + `qmt_mcp_xtdata` + `qmt_mcp_xttrade` + `qmt_mcp_db`).
 - Base image built on [`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine).
 - The QMT terminal and `xtquant` belong to the respective brokers / Thinktrader and
   are **not included in this repo** — obtain them yourself.

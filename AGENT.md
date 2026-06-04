@@ -22,7 +22,8 @@
 | 011 发布与版本 | ✅ 完成——VERSION/CHANGELOG/release.yml（tag→GHCR `ghcr.io/juju-w/qmt-mcp`）|
 | 004 账户只读查询 xttrade | 🟡 只读查询族已实现（gated：flag+allowlist，readiness-gated，边界已宿主测试）；成功路径被券商权限硬卡（`m_nPythonConnectNet`），**欢迎有权限者 PR 验证** |
 | 005 进程守护/就绪/autostart | ⏳ 已出 plan+contracts；autostart 已落地，待系统化（supervisor/readiness/healthcheck）|
-| 007 qmtctl CLI | 📋 已出 spec/plan/tasks，待实现 |
+| 007 qmtctl CLI | ✅ 完成——Go 编译 CLI（health/tools/search/resolve/snapshot/bars/cache/account/smoke），release 多平台二进制 |
+| 012 数据库持久化 PostgreSQL | ✅ 完成——asyncpg 原生异步 + sync facade；opt-in via `QMT_DB_URL`；行情仓库 bars read/write-through；graceful degradation |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。

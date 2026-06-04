@@ -43,7 +43,9 @@
 | 启动 QMT 终端 + RDP 登录 | ✅ | 登录后自动拉起终端 + MCP |
 | 行情 `xtdata`（快照/K线/合约/板块/日历） | ✅ 可用 | MCP 工具返回结构化 JSON（11/11 实测通过） |
 | **合约模糊搜索**（中文名/拼音/别名/板块/主题） | ✅ 可用 | Agent 不必知道 QMT 代码即可定位合约 |
-| 账户查询 / 交易 `xttrader` | ⚠️ 需券商权限 | 未开通时报 `not_authorized` 优雅降级，不崩溃 |
+| 账户只读查询 `xttrade` | ⚠️ 需券商权限 | 未开通时报 `not_authorized` 优雅降级，不崩溃 |
+| 数据库持久化（PostgreSQL，可选） | ✅ 可用 | 行情数据仓库，read/write-through，off by default |
+| `qmtctl` CLI | ✅ 可用 | Go 编译命令行客户端，支持行情/搜索/账户查询 |
 
 > **交易/账户权限**：外部 `xtquant` 连交易接口（下单**和**账户查询）需券商开通「程序化交易 /
 > 外部 Python 接口」权限（`m_nPythonConnectNet`）。未开通时只有行情可用。开通通常需满足
@@ -68,14 +70,26 @@
 | `qmt_xtdata_trading_dates` · `qmt_xtdata_trading_calendar` · `qmt_xtdata_holidays` | 交易日历 |
 | `qmt_xtdata_download_history` · `_batch` | 下载历史数据到本地 |
 | `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | 搜索缓存状态 / 刷新 |
-| 账户只读查询 `xttrader`（04，**选配**） | `qmt_xttrade_asset/positions/orders/trades/...`，默认关闭 |
+| 账户只读查询 `xttrade`（04，**选配**） | 见下表，默认关闭 |
 
-所有工具均为**只读**、带鉴权与审计、返回结构化 JSON（无写/下单工具）。
+**xttrade 账户查询工具族**（需 `QMT_ENABLE_XTTRADE_QUERY=1` + 账户白名单）：
+
+| 工具 | 说明 |
+|---|---|
+| `qmt_xttrade_asset` | 资金快照（现金/总值/市值/冻结） |
+| `qmt_xttrade_positions` | 持仓列表（代码/数量/可用/冻结/昨仓/在途/开仓价/均价/市值） |
+| `qmt_xttrade_orders` | 当日委托（支持 `cancelable_only` 过滤可撤单） |
+| `qmt_xttrade_trades` | 当日成交（代码/成交价/量/额/时间/委托号） |
+| `qmt_xttrade_position_statistics` | 持仓汇总统计 |
+| `qmt_xttrade_account_status` | 账户状态 |
+| `qmt_xttrade_new_purchase_limit` | 新股申购额度 |
+| `qmt_xttrade_ipo_data` | 当日新股申购信息（非账户维度） |
+
+所有工具均为**只读**、带鉴权与审计、返回结构化 JSON（无写/下单/撤单/划转工具）。
 
 > **账户查询（feature 04）** 默认关闭，需显式开启 `QMT_ENABLE_XTTRADE_QUERY=1` **且**配置
 > 账户白名单 `QMT_TRADE_ACCOUNTS`；且仍需券商开通程序化交易权限才能联调成功路径，未开通时
-> 报 `not_authorized` 优雅降级。提供 asset/positions/orders（含可撤单过滤）/trades/
-> account_status/position_statistics/new_purchase_limit/ipo_data，**纯只读、无下单/撤单/划转**。
+> 报 `not_authorized` 优雅降级。**纯只读、无下单/撤单/划转**。
 > 成功路径待有权限的账户验证（欢迎 PR）。
 
 ## 快速开始
@@ -97,6 +111,18 @@ RDP:  <host>:13389   wineuser / 密码见 .env  （用真正的 RDP 客户端，
 MCP:  http://<host>:18765/mcp   需 Authorization: Bearer <QMT_MCP_TOKEN>
 ```
 
+也可以用 **qmtctl** CLI 从命令行操作（详见 [`cli/qmtctl/README.md`](cli/qmtctl/README.md)）：
+
+```bash
+cd cli/qmtctl && go build -o qmtctl .
+export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
+./qmtctl health                       # 健康检查
+./qmtctl search 纳指                   # 模糊搜索合约
+./qmtctl snapshot 510300.SH           # 实时行情快照
+./qmtctl bars 510300.SH --period 1d   # K线数据
+./qmtctl account asset --account <id> # 账户资产（需开启 xttrade）
+```
+
 更多：[broker pack 制作与切换](appliance/docs/BROKER-PACK.md) ·
 [部署与安全加固](appliance/docs/DEPLOY.md)
 
@@ -109,7 +135,9 @@ MCP:  http://<host>:18765/mcp   需 Authorization: Bearer <QMT_MCP_TOKEN>
 
 ```text
 appliance/   # 可部署 appliance：Dockerfile · compose · scripts · mcp/ · brokers/ · docs/
-specs/       # Spec-Driven Development（spec-kit）：001~011 规格/计划/任务
+cli/         # qmtctl：Go 编译的命令行客户端（streamable-http MCP）
+skills/      # AI Agent 运维知识库（部署/MCP/CLI/排错）
+specs/       # Spec-Driven Development（spec-kit）：001~012 规格/计划/任务
 ```
 
 用 **Spec-Driven Development** 管理，一次一个 feature、先 spec 后实现；原则见
@@ -118,7 +146,7 @@ specs/       # Spec-Driven Development（spec-kit）：001~011 规格/计划/任
 
 ## 参与贡献 / Help wanted 🙋
 
-最需要社区帮忙的是 **04 账户查询工具（`xttrader` 只读）**：联调"成功路径"需要一个**已开通
+最需要社区帮忙的是 **04 账户查询工具（`xttrade` 只读）**：联调"成功路径"需要一个**已开通
 「程序化交易 / 外部 Python 接口」权限**（`m_nPythonConnectNet`）的账户，而我自己的账户没有此权限
 （达不到券商门槛），只能验证"未授权时优雅降级"。**如果你有已开通权限的账户，欢迎一起把 04 跑通并提
 PR** —— 见 [`specs/004`](specs/004-account-query-tools/spec.md)。
@@ -140,6 +168,6 @@ PR** —— 见 [`specs/004`](specs/004-account-query-tools/spec.md)。
 - 本仓库以 **MIT 许可证**发布（[`LICENSE`](LICENSE)）。
 - 本项目的开发大量借助 AI 编程助手 **OpenAI GPT / Codex** 与 **Anthropic Claude（Claude Code）**
   加速完成 —— 在此致谢 🤖。
-- MCP 服务为本仓库独立实现（`appliance/mcp/qmt_mcp_core` + `qmt_mcp_xtdata`）。
+- MCP 服务为本仓库独立实现（`appliance/mcp/qmt_mcp_core` + `qmt_mcp_xtdata` + `qmt_mcp_xttrade` + `qmt_mcp_db`）。
 - 基础镜像基于 [`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine)。
 - QMT 终端、xtquant 归各券商 / 迅投所有，**不含在本仓库**，由使用者自行获取。

@@ -24,6 +24,10 @@ services:
       # optional PostgreSQL persistence (012); empty = off. For the bundled `db`
       # service below use e.g. postgresql://qmt:qmt@db:5432/qmt
       QMT_DB_URL: "${QMT_DB_URL:-}"
+      # optional read-only account queries (004); off by default. Enable with
+      # QMT_ENABLE_XTTRADE_QUERY=1 and QMT_TRADE_ACCOUNTS=<csv account ids>.
+      QMT_ENABLE_XTTRADE_QUERY: "${QMT_ENABLE_XTTRADE_QUERY:-0}"
+      QMT_TRADE_ACCOUNTS: "${QMT_TRADE_ACCOUNTS:-}"
     volumes:
       # The broker pack: extracted QMT terminal + matching xtquant + broker.yaml.
       # Mounted READ-WRITE (the terminal persists userdata/logs/config in-tree).

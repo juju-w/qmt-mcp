@@ -79,6 +79,8 @@ func dispatch(ctx context.Context, client *Client, opts globalOptions, args []st
 		return runRef(ctx, client, opts, args[1:], stdout)
 	case "sector":
 		return runSector(ctx, client, opts, args[1:], stdout)
+	case "formula":
+		return runFormula(ctx, client, opts, args[1:], stdout)
 	case "smoke":
 		return runSmoke(ctx, client, opts, args[1:], stdout)
 	case "help", "-h", "--help":
@@ -767,6 +769,94 @@ func extractCodes(value any) []string {
 	return out
 }
 
+func runFormula(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("formula subcommand is required: call, batch, generate, subscribe, unsubscribe, subscriptions, or cache")
+	}
+	switch args[0] {
+	case "call":
+		fs := newFlagSet("formula call", &opts)
+		formula := fs.String("formula", "", "allowlisted formula name")
+		code := fs.String("code", "", "instrument code")
+		period := fs.String("period", "1d", "period")
+		start := fs.String("start", "", "start YYYYMMDD")
+		end := fs.String("end", "", "end YYYYMMDD")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_call", map[string]any{
+			"formula_name": *formula,
+			"code":         *code,
+			"period":       *period,
+			"start_time":   *start,
+			"end_time":     *end,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "batch":
+		fs := newFlagSet("formula batch", &opts)
+		formula := fs.String("formula", "", "allowlisted formula name")
+		codesFlag := fs.String("codes", "", "comma-separated codes")
+		period := fs.String("period", "1d", "period")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		codes := splitCSV(*codesFlag)
+		codes = append(codes, splitPositionals(fs.Args())...)
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_call_batch", map[string]any{
+			"formula_name": *formula,
+			"codes":        codes,
+			"period":       *period,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "generate":
+		fs := newFlagSet("formula generate", &opts)
+		formula := fs.String("formula", "", "allowlisted formula name")
+		resultPath := fs.String("result-path", "", "sandboxed result path")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_generate_factor", map[string]any{
+			"formula_name": *formula,
+			"result_path":  *resultPath,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "subscribe":
+		fs := newFlagSet("formula subscribe", &opts)
+		formula := fs.String("formula", "", "allowlisted formula name")
+		code := fs.String("code", "", "instrument code")
+		period := fs.String("period", "tick", "period")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_subscribe", map[string]any{
+			"formula_name": *formula,
+			"code":         *code,
+			"period":       *period,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "unsubscribe":
+		fs := newFlagSet("formula unsubscribe", &opts)
+		id := fs.String("id", "", "subscription id")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		subID := *id
+		if subID == "" && len(fs.Args()) > 0 {
+			subID = fs.Args()[0]
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_unsubscribe", map[string]any{"subscription_id": subID})
+		return writePayload(stdout, payload, opts, err)
+	case "subscriptions":
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_subscriptions", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	case "cache":
+		payload, err := client.CallTool(ctx, "qmt_xtdata_formula_cache", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	default:
+		return fmt.Errorf("unknown formula subcommand %q", args[0])
+	}
+}
+
 func runSmoke(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
 	fs := newFlagSet("smoke", &opts)
 	query := fs.String("query", "纳指", "search query used for smoke")
@@ -998,7 +1088,7 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN] [--json] [--timeout 10s] <command>")
-	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, sector, smoke")
+	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, sector, formula, smoke")
 }
 
 func getenvDefault(name, fallback string) string {

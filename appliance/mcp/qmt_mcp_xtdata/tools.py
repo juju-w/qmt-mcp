@@ -12,6 +12,7 @@ from qmt_mcp_core.errors import McpCoreError, ok_envelope
 from qmt_mcp_core.health import HealthState
 from qmt_mcp_core.registry import ToolRegistry
 
+from .formula_tools import register_formula_tools
 from .option_tools import register_option_tools
 from .quote_cache import QuoteHotCache
 from .quote_subscriptions import QuoteSubscription, QuoteSubscriptionRuntime, QuoteSubscriptionStore
@@ -354,6 +355,8 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
     register_reference_tools(mcp, registry, _call_xtdata)
     if health.config.enable_xtdata_sector_write:
         register_sector_write_tools(mcp, registry, health.config, _call_xtdata)
+    if health.config.enable_formula_runtime:
+        register_formula_tools(mcp, registry, health.config, _call_xtdata)
 
     @registry.register(
         mcp,

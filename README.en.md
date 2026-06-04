@@ -81,6 +81,7 @@ front; it searches by Chinese name / pinyin initials / alias / sector / theme
 | `qmt_xtdata_financial_data` · `qmt_xtdata_ipo_info` · `qmt_xtdata_dividend_factors` · `qmt_xtdata_cb_info` · `qmt_xtdata_etf_info` | financial/IPO/dividend/CB/ETF reference data (read-only, capability-gated) |
 | `qmt_portfolio_summary` · `qmt_portfolio_positions` · `qmt_portfolio_exposure` · `qmt_portfolio_risk_checks` | portfolio holdings/exposure/risk metrics (read-only, xttrade allowlist required) |
 | `qmt_xtdata_sector_create` · `qmt_xtdata_sector_add_codes` · `qmt_xtdata_sector_remove_codes` · `qmt_xtdata_managed_sector_list` | custom sector management (off by default; managed prefixes only) |
+| `qmt_xtdata_formula_call` · `qmt_xtdata_formula_call_batch` · `qmt_xtdata_formula_generate_factor` · `qmt_xtdata_formula_subscribe` | formula/factor runtime (off by default; server allowlist + output sandbox) |
 | Account read-only `xttrade` (04, **opt-in**) | see table below, off by default |
 
 **xttrade account-query tools** (require `QMT_ENABLE_XTTRADE_QUERY=1` + account allowlist):

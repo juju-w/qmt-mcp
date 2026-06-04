@@ -80,6 +80,10 @@ class CoreConfig:
     # 017 local QMT custom-sector mutation. Disabled by default.
     enable_xtdata_sector_write: bool = False
     xtdata_sector_write_prefixes: str = "MCP/,AI/"
+    # 018 formula/model execution. Disabled by default; names are server allowlisted.
+    enable_formula_runtime: bool = False
+    formula_allowlist: str = ""
+    formula_output_sandbox: str = "/broker/formula-output"
 
     @property
     def db_enabled(self) -> bool:
@@ -142,6 +146,10 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         enable_portfolio_analysis=env.get("QMT_ENABLE_PORTFOLIO_ANALYSIS", "1") != "0",
         enable_xtdata_sector_write=env.get("QMT_ENABLE_XTDATA_SECTOR_WRITE", "0") == "1",
         xtdata_sector_write_prefixes=env.get("QMT_XTDATA_SECTOR_WRITE_PREFIXES", "MCP/,AI/") or "MCP/,AI/",
+        enable_formula_runtime=env.get("QMT_ENABLE_FORMULA_RUNTIME", "0") == "1",
+        formula_allowlist=env.get("QMT_FORMULA_ALLOWLIST", ""),
+        formula_output_sandbox=env.get("QMT_FORMULA_OUTPUT_SANDBOX", "/broker/formula-output")
+        or "/broker/formula-output",
     )
     cfg.validate_security()
     return cfg

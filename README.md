@@ -75,6 +75,7 @@
 | `qmt_xtdata_financial_data` · `qmt_xtdata_ipo_info` · `qmt_xtdata_dividend_factors` · `qmt_xtdata_cb_info` · `qmt_xtdata_etf_info` | 财务/新股/分红/可转债/ETF 参考数据（只读，按运行时能力降级） |
 | `qmt_portfolio_summary` · `qmt_portfolio_positions` · `qmt_portfolio_exposure` · `qmt_portfolio_risk_checks` | 组合持仓/敞口/风控指标（只读，依赖 xttrade 白名单） |
 | `qmt_xtdata_sector_create` · `qmt_xtdata_sector_add_codes` · `qmt_xtdata_sector_remove_codes` · `qmt_xtdata_managed_sector_list` | 自定义板块管理（默认关闭，仅允许 `MCP/`、`AI/` 等受管前缀） |
+| `qmt_xtdata_formula_call` · `qmt_xtdata_formula_call_batch` · `qmt_xtdata_formula_generate_factor` · `qmt_xtdata_formula_subscribe` | 公式/因子运行（默认关闭，服务端公式白名单 + 输出目录沙箱） |
 | 账户只读查询 `xttrade`（04，**选配**） | 见下表，默认关闭 |
 
 **xttrade 账户查询工具族**（需 `QMT_ENABLE_XTTRADE_QUERY=1` + 账户白名单）：

@@ -59,6 +59,8 @@ qmtctl ref ipo --start 20250101 --end 20250131
 qmtctl ref dividends 510300.SH
 qmtctl sector create MCP/strategy1/latest-signal
 qmtctl sector import-json --sector MCP/strategy1/latest-signal --file /Users/wangkuiju/project/etf_select/results/strategy_1_main_signal_latest.json
+qmtctl formula call --formula VIX_HELPER --code 510300.SH
+qmtctl formula generate --formula VIX_HELPER --result-path vix.feather
 qmtctl smoke
 ```
 

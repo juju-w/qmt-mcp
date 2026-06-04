@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from qmt_mcp_core.errors import ok_envelope
+from qmt_mcp_core.errors import McpCoreError, ok_envelope
 from qmt_mcp_core.registry import ToolRegistry
 
 from .sector_policy import parse_prefixes, require_confirm, require_managed_sector
 from .validation import validate_codes
+
+
+def _split_parent_leaf(name: str) -> tuple[str, str]:
+    parts = [part for part in name.split("/") if part]
+    if len(parts) <= 1:
+        return "", name
+    return "/".join(parts[:-1]), parts[-1]
 
 
 def register_sector_write_tools(mcp: Any, registry: ToolRegistry, config: Any, call_xtdata) -> None:
@@ -25,8 +32,9 @@ def register_sector_write_tools(mcp: Any, registry: ToolRegistry, config: Any, c
     )
     def qmt_xtdata_sector_create_folder(folder: str) -> dict[str, Any]:
         clean = require_managed_sector(folder, prefixes)
-        raw = call_xtdata("create_sector_folder", clean)
-        return ok_envelope(folder=clean, status="created", raw_result=raw)
+        parent, leaf = _split_parent_leaf(clean)
+        raw = call_xtdata("create_sector_folder", parent, leaf)
+        return ok_envelope(folder=clean, parent=parent, name=leaf, status="created", raw_result=raw)
 
     @registry.register(
         mcp,
@@ -39,8 +47,9 @@ def register_sector_write_tools(mcp: Any, registry: ToolRegistry, config: Any, c
     )
     def qmt_xtdata_sector_create(sector: str) -> dict[str, Any]:
         clean = require_managed_sector(sector, prefixes)
-        raw = call_xtdata("create_sector", clean)
-        return ok_envelope(sector=clean, status="created", raw_result=raw)
+        parent, leaf = _split_parent_leaf(clean)
+        raw = call_xtdata("create_sector", parent, leaf)
+        return ok_envelope(sector=clean, parent=parent, name=leaf, status="created", raw_result=raw)
 
     @registry.register(
         mcp,
@@ -113,6 +122,11 @@ def register_sector_write_tools(mcp: Any, registry: ToolRegistry, config: Any, c
         timeout=20,
     )
     def qmt_xtdata_managed_sector_list() -> dict[str, Any]:
-        raw = call_xtdata("get_sector_list")
+        try:
+            raw = call_xtdata("get_sector_list")
+        except McpCoreError as exc:
+            if "UnicodeDecodeError" not in str(exc):
+                raise
+            return ok_envelope(prefixes=prefixes, sectors=[], warning=str(exc))
         sectors = [sector for sector in (raw or []) if any(str(sector).startswith(prefix) for prefix in prefixes)]
         return ok_envelope(prefixes=prefixes, sectors=sectors)

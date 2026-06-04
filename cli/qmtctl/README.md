@@ -34,6 +34,14 @@ qmtctl snapshot 510300.SH
 qmtctl bars 510300.SH --period 1d --start 20250101 --end 20250110
 qmtctl cache status
 qmtctl cache refresh
+qmtctl account asset --account 123456789
+qmtctl account positions --account 123456789
+qmtctl account orders --account 123456789 --cancelable-only
+qmtctl account trades --account 123456789
+qmtctl account status --account 123456789
+qmtctl account statistics --account 123456789
+qmtctl account purchase-limit --account 123456789
+qmtctl account ipo
 qmtctl smoke
 ```
 

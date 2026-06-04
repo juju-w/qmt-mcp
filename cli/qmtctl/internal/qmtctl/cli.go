@@ -67,6 +67,8 @@ func dispatch(ctx context.Context, client *Client, opts globalOptions, args []st
 		return runBars(ctx, client, opts, args[1:], stdout)
 	case "cache":
 		return runCache(ctx, client, opts, args[1:], stdout)
+	case "account":
+		return runAccount(ctx, client, opts, args[1:], stdout)
 	case "smoke":
 		return runSmoke(ctx, client, opts, args[1:], stdout)
 	case "help", "-h", "--help":
@@ -234,6 +236,78 @@ func runCache(ctx context.Context, client *Client, opts globalOptions, args []st
 	}
 }
 
+func runAccount(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("account subcommand is required: asset, positions, orders, trades, status, statistics, purchase-limit, or ipo")
+	}
+	switch args[0] {
+	case "asset":
+		return runAccountScopedTool(ctx, client, opts, args[1:], stdout, "account asset", "qmt_xttrade_asset", nil)
+	case "positions":
+		return runAccountScopedTool(ctx, client, opts, args[1:], stdout, "account positions", "qmt_xttrade_positions", nil)
+	case "orders":
+		fs := newFlagSet("account orders", &opts)
+		account := fs.String("account", "", "allow-listed account id")
+		cancelableOnly := fs.Bool("cancelable-only", false, "only cancelable orders")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		aid := accountID(*account, fs.Args())
+		if aid == "" {
+			return fmt.Errorf("account orders requires --account")
+		}
+		payload, err := client.CallTool(ctx, "qmt_xttrade_orders", map[string]any{
+			"account_id":      aid,
+			"cancelable_only": *cancelableOnly,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "trades":
+		return runAccountScopedTool(ctx, client, opts, args[1:], stdout, "account trades", "qmt_xttrade_trades", nil)
+	case "status":
+		return runAccountScopedTool(ctx, client, opts, args[1:], stdout, "account status", "qmt_xttrade_account_status", nil)
+	case "statistics", "position-statistics":
+		return runAccountScopedTool(ctx, client, opts, args[1:], stdout, "account statistics", "qmt_xttrade_position_statistics", nil)
+	case "purchase-limit", "new-purchase-limit":
+		return runAccountScopedTool(ctx, client, opts, args[1:], stdout, "account purchase-limit", "qmt_xttrade_new_purchase_limit", nil)
+	case "ipo", "ipo-data":
+		fs := newFlagSet("account ipo", &opts)
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xttrade_ipo_data", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	default:
+		return fmt.Errorf("unknown account subcommand %q", args[0])
+	}
+}
+
+func runAccountScopedTool(
+	ctx context.Context,
+	client *Client,
+	opts globalOptions,
+	args []string,
+	stdout io.Writer,
+	flagName string,
+	toolName string,
+	extra map[string]any,
+) error {
+	fs := newFlagSet(flagName, &opts)
+	account := fs.String("account", "", "allow-listed account id")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	aid := accountID(*account, fs.Args())
+	if aid == "" {
+		return fmt.Errorf("%s requires --account", flagName)
+	}
+	payloadArgs := map[string]any{"account_id": aid}
+	for key, value := range extra {
+		payloadArgs[key] = value
+	}
+	payload, err := client.CallTool(ctx, toolName, payloadArgs)
+	return writePayload(stdout, payload, opts, err)
+}
+
 func runSmoke(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
 	fs := newFlagSet("smoke", &opts)
 	query := fs.String("query", "纳指", "search query used for smoke")
@@ -361,6 +435,7 @@ func interspersedFlags(args []string) []string {
 		"--verbose":         true,
 		"--force":           true,
 		"--refresh-metrics": true,
+		"--cancelable-only": true,
 	}
 	var flags []string
 	var positionals []string
@@ -416,6 +491,16 @@ func splitPositionals(args []string) []string {
 	return out
 }
 
+func accountID(flagValue string, args []string) string {
+	if strings.TrimSpace(flagValue) != "" {
+		return strings.TrimSpace(flagValue)
+	}
+	if len(args) > 0 {
+		return strings.TrimSpace(args[0])
+	}
+	return ""
+}
+
 func summarizeTools(tools map[string]any) any {
 	raw, _ := tools["tools"].([]any)
 	return map[string]any{"count": len(raw)}
@@ -450,7 +535,7 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN] [--json] [--timeout 10s] <command>")
-	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache status, cache refresh, smoke")
+	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache status, cache refresh, account, smoke")
 }
 
 func getenvDefault(name, fallback string) string {

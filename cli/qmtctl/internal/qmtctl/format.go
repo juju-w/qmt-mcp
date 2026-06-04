@@ -48,12 +48,12 @@ func printToolPayload(w io.Writer, raw json.RawMessage) error {
 	if ok, okSet := doc["ok"].(bool); okSet {
 		fmt.Fprintf(w, "ok: %v\n", ok)
 	}
-	for _, key := range []string{"query", "code", "period", "source", "state", "record_count", "sector_count", "updated_at", "resolved"} {
+	for _, key := range []string{"query", "code", "account_id", "period", "source", "state", "record_count", "sector_count", "updated_at", "resolved", "cancelable_only"} {
 		if value, found := doc[key]; found {
 			fmt.Fprintf(w, "%s: %v\n", key, value)
 		}
 	}
-	for _, key := range []string{"best", "results", "rows", "data", "tools", "families"} {
+	for _, key := range []string{"asset", "positions", "orders", "trades", "statistics", "status", "limits", "ipo", "best", "results", "rows", "data", "tools", "families"} {
 		if value, found := doc[key]; found {
 			renderBriefValue(w, key, value)
 		}

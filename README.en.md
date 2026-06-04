@@ -144,7 +144,8 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 ```
 
 More: [broker pack guide](appliance/docs/BROKER-PACK.md) ·
-[deploy & hardening](appliance/docs/DEPLOY.md)
+[deploy & hardening](appliance/docs/DEPLOY.md) ·
+[Codex / Claude Code / WorkBuddy clients](docs/MCP-CLIENTS.md)
 
 ## Requirements
 

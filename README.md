@@ -134,7 +134,8 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 ```
 
 更多：[broker pack 制作与切换](appliance/docs/BROKER-PACK.md) ·
-[部署与安全加固](appliance/docs/DEPLOY.md)
+[部署与安全加固](appliance/docs/DEPLOY.md) ·
+[Codex / Claude Code / WorkBuddy 接入](docs/MCP-CLIENTS.md)
 
 ## ⚠️ 运行要求
 

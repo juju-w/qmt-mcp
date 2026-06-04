@@ -31,9 +31,14 @@ qmtctl tools
 qmtctl search 天岳
 qmtctl resolve 纳指 --rank liquidity --json
 qmtctl snapshot 510300.SH
+qmtctl snapshot --cache-only 510300.SH
 qmtctl bars 510300.SH --period 1d --start 20250101 --end 20250110
 qmtctl cache status
 qmtctl cache refresh
+qmtctl subscription add --id strategy1 510300.SH,510500.SH
+qmtctl subscription status
+qmtctl subscription list
+qmtctl subscription remove --id strategy1
 qmtctl account asset --account 123456789
 qmtctl account positions --account 123456789
 qmtctl account orders --account 123456789 --cancelable-only

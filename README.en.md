@@ -76,6 +76,7 @@ front; it searches by Chinese name / pinyin initials / alias / sector / theme
 | `qmt_xtdata_trading_dates` · `qmt_xtdata_trading_calendar` · `qmt_xtdata_holidays` | trading calendar |
 | `qmt_xtdata_download_history` · `_batch` | download history to local cache |
 | `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | search-cache status / refresh |
+| `qmt_xtdata_quote_subscribe` · `qmt_xtdata_quote_unsubscribe` · `qmt_xtdata_quote_subscriptions` · `qmt_xtdata_quote_subscription_status` | quote subscription hot cache (`subscribe_quote` first, bounded polling fallback) |
 | Account read-only `xttrade` (04, **opt-in**) | see table below, off by default |
 
 **xttrade account-query tools** (require `QMT_ENABLE_XTTRADE_QUERY=1` + account allowlist):

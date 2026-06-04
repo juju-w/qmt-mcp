@@ -67,6 +67,8 @@ func dispatch(ctx context.Context, client *Client, opts globalOptions, args []st
 		return runBars(ctx, client, opts, args[1:], stdout)
 	case "cache":
 		return runCache(ctx, client, opts, args[1:], stdout)
+	case "subscription", "subscriptions", "quote":
+		return runSubscription(ctx, client, opts, args[1:], stdout)
 	case "account":
 		return runAccount(ctx, client, opts, args[1:], stdout)
 	case "smoke":
@@ -162,16 +164,26 @@ func runResolve(ctx context.Context, client *Client, opts globalOptions, args []
 func runSnapshot(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
 	fs := newFlagSet("snapshot", &opts)
 	fields := fs.String("fields", "", "comma-separated fields")
+	cachePolicy := fs.String("cache-policy", "prefer", "cache policy: prefer, cache_only, live")
+	live := fs.Bool("live", false, "bypass quote cache")
+	cacheOnly := fs.Bool("cache-only", false, "read quote cache only")
 	if err := parseFlagSet(fs, args); err != nil {
 		return err
+	}
+	if *live {
+		*cachePolicy = "live"
+	}
+	if *cacheOnly {
+		*cachePolicy = "cache_only"
 	}
 	codes := splitPositionals(fs.Args())
 	if len(codes) == 0 {
 		return fmt.Errorf("snapshot requires at least one code")
 	}
 	payload, err := client.CallTool(ctx, "qmt_xtdata_snapshot", map[string]any{
-		"codes":  codes,
-		"fields": splitCSV(*fields),
+		"codes":        codes,
+		"fields":       splitCSV(*fields),
+		"cache_policy": *cachePolicy,
 	})
 	return writePayload(stdout, payload, opts, err)
 }
@@ -233,6 +245,74 @@ func runCache(ctx context.Context, client *Client, opts globalOptions, args []st
 		return writePayload(stdout, payload, opts, err)
 	default:
 		return fmt.Errorf("unknown cache subcommand %q", args[0])
+	}
+}
+
+func runSubscription(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("subscription subcommand is required: add, remove, list, or status")
+	}
+	switch args[0] {
+	case "add", "update", "subscribe":
+		fs := newFlagSet("subscription add", &opts)
+		id := fs.String("id", "", "subscription id")
+		label := fs.String("label", "", "label")
+		group := fs.String("group", "", "group")
+		period := fs.String("period", "tick", "xtdata period")
+		backend := fs.String("backend", "auto", "backend preference")
+		fallbackInterval := fs.Int("fallback-interval", 5, "fallback polling interval seconds")
+		fallbackPolling := fs.Bool("fallback-polling", true, "allow polling fallback")
+		notes := fs.String("notes", "", "notes")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		codes := splitPositionals(fs.Args())
+		if len(codes) == 0 {
+			return fmt.Errorf("subscription add requires at least one code")
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_quote_subscribe", map[string]any{
+			"codes":                     codes,
+			"subscription_id":           *id,
+			"label":                     *label,
+			"group":                     *group,
+			"period":                    *period,
+			"backend_preference":        *backend,
+			"fallback_interval_seconds": *fallbackInterval,
+			"fallback_polling":          *fallbackPolling,
+			"notes":                     *notes,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "remove", "rm", "delete", "unsubscribe":
+		fs := newFlagSet("subscription remove", &opts)
+		id := fs.String("id", "", "subscription id")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		subID := strings.TrimSpace(*id)
+		if subID == "" && len(fs.Args()) > 0 {
+			subID = strings.TrimSpace(fs.Args()[0])
+		}
+		if subID == "" {
+			return fmt.Errorf("subscription remove requires --id")
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_quote_unsubscribe", map[string]any{"subscription_id": subID})
+		return writePayload(stdout, payload, opts, err)
+	case "list", "ls":
+		fs := newFlagSet("subscription list", &opts)
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_quote_subscriptions", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	case "status":
+		fs := newFlagSet("subscription status", &opts)
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_quote_subscription_status", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	default:
+		return fmt.Errorf("unknown subscription subcommand %q", args[0])
 	}
 }
 
@@ -431,11 +511,14 @@ func parseFlagSet(fs *flag.FlagSet, args []string) error {
 
 func interspersedFlags(args []string) []string {
 	boolFlags := map[string]bool{
-		"--json":            true,
-		"--verbose":         true,
-		"--force":           true,
-		"--refresh-metrics": true,
-		"--cancelable-only": true,
+		"--json":             true,
+		"--verbose":          true,
+		"--force":            true,
+		"--refresh-metrics":  true,
+		"--cancelable-only":  true,
+		"--live":             true,
+		"--cache-only":       true,
+		"--fallback-polling": true,
 	}
 	var flags []string
 	var positionals []string
@@ -535,7 +618,7 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN] [--json] [--timeout 10s] <command>")
-	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache status, cache refresh, account, smoke")
+	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, smoke")
 }
 
 func getenvDefault(name, fallback string) string {

@@ -74,10 +74,18 @@ front; it searches by Chinese name / pinyin initials / alias / sector / theme
 | `qmt_xtdata_trading_dates` · `qmt_xtdata_trading_calendar` · `qmt_xtdata_holidays` | trading calendar |
 | `qmt_xtdata_download_history` · `_batch` | download history to local cache |
 | `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | search-cache status / refresh |
-| Account / trading `xttrader` (feature 04) | ⏸ needs broker permission; `not_authorized` until enabled |
+| Account read-only `xttrader` (04, **opt-in**) | `qmt_xttrade_asset/positions/orders/trades/...`, off by default |
 
 All tools are **read-only**, authenticated, audited, and return structured JSON
 (no write/order tools).
+
+> **Account queries (feature 04)** are off by default; enable with
+> `QMT_ENABLE_XTTRADE_QUERY=1` **and** an account allowlist `QMT_TRADE_ACCOUNTS`,
+> and the broker must have granted programmatic-trading permission for the success
+> paths (otherwise `not_authorized`, gracefully). Provides asset / positions /
+> orders (with a cancelable filter) / trades / account_status / position_statistics
+> / new_purchase_limit / ipo_data — **strictly read-only, no order/cancel/transfer**.
+> Success paths await a permissioned account (PRs welcome).
 
 ## Quick start
 

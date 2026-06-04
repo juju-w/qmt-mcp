@@ -32,6 +32,8 @@
 - 开发机写代码，**构建/运行在一台原生 amd64 Linux 主机上**（Wine 需要真 amd64；可本机或远程）。
 - 若用远程主机，访问信息放本地 `.env`（如 `SSH_*`）——**已 gitignore，绝不提交**。
 - 在该主机上用 docker 构建/部署。本地构建 tag `qmt-appliance-base:local`，发布镜像 `ghcr.io/juju-w/qmt-mcp`；容器按实例命名（如 `qmt-<broker-id>`）。
+- **Python 固定 3.12**：`xtquant` 官方最高只支持到 3.12，不要升级 Wine 内的 Python。
+- **free-threading（无 GIL）已调研、不采用**：无 GIL 是 3.13t/3.14t（不是 3.12）；导入未标记 FT 安全的 C 扩展会让解释器**自动重开 GIL**，而 `xtquant` 是专有编译扩展、不可能标 FT 安全 → 零收益且未测有风险；况且本服务是 I/O 密集（HTTP/asyncpg/共享内存），GIL 非瓶颈。结论：保持 3.12 + GIL。
 
 ## 构建 / 部署 / 测试
 

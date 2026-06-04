@@ -30,15 +30,26 @@
 - [ ] T017 Add `qmtctl sector delete`.
 - [ ] T018 Add `qmtctl sector reset`.
 - [ ] T019 Add `qmtctl sector list-managed`.
-- [ ] T020 Update README/qmtctl docs with disabled-by-default behavior and prefix
+- [ ] T020 Add `qmtctl sector import-json` for local JSON basket/signal files.
+- [ ] T021 Add `qmtctl sector import-csv` for local CSV basket files.
+- [ ] T022 Add Strategy 1 import preset for
+  `/Users/wangkuiju/project/etf_select/results/strategy_1_main_signal_latest.json`
+  producing `MCP/strategy1/latest-holdings`, `MCP/strategy1/latest-candidates`,
+  and `MCP/strategy1/latest-signal`.
+- [ ] T023 Document the recommended `MCP/strategy1/universe` import/export path
+  for `WEEKLY_ROTATION_UNIVERSE` without executing strategy project Python.
+- [ ] T024 Update README/qmtctl docs with disabled-by-default behavior and prefix
   examples.
 
 ## Phase D — Tests & Verification
 
-- [ ] T021 Unit-test disabled writes refuse before xtdata calls.
-- [ ] T022 Unit-test prefix policy and built-in sector refusal.
-- [ ] T023 Unit-test create/add/remove/delete/reset with fake xtdata.
-- [ ] T024 Unit-test confirmation requirement for destructive operations.
-- [ ] T025 Unit-test qmtctl command-to-tool mappings.
-- [ ] T026 Run host CI tier: ruff, format, pytest, Go test/vet/build.
-- [ ] T027 Manual smoke only on an isolated `MCP/Test` sector.
+- [ ] T025 Unit-test disabled writes refuse before xtdata calls.
+- [ ] T026 Unit-test prefix policy and built-in sector refusal.
+- [ ] T027 Unit-test create/add/remove/delete/reset with fake xtdata.
+- [ ] T028 Unit-test confirmation requirement for destructive operations.
+- [ ] T029 Unit-test Strategy 1 signal JSON import fixture and code validation.
+- [ ] T030 Unit-test qmtctl command-to-tool mappings.
+- [ ] T031 Run host CI tier: ruff, format, pytest, Go test/vet/build.
+- [ ] T032 Manual smoke only on an isolated `MCP/Test` sector.
+- [ ] T033 After 013+017 are implemented and approved, import Strategy 1 ETF
+  baskets and subscribe selected managed sectors through `qmt_xtdata_quote_subscribe`.

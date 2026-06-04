@@ -40,6 +40,15 @@ xtdata.
 `qmtctl sector list-managed`, and `qmtctl sector delete` support readable output
 and `--json`.
 
+### US5 - Import Strategy 1 ETF baskets for quote subscription (P2)
+
+**Acceptance**: Given the user's ETF strategy project at
+`/Users/wangkuiju/project/etf_select`, when the operator imports Strategy 1's
+universe or latest signal output, then managed sectors such as
+`MCP/strategy1/universe` and `MCP/strategy1/latest-signal` are created/updated
+with validated ETF codes. The operator can then pass those sector constituents
+to 013 quote subscription tools.
+
 ## Functional Requirements
 
 - **FR-001**: Sector mutation tools MUST be disabled by default and require an
@@ -65,6 +74,17 @@ and `--json`.
   allowed prefixes, and last mutation error without leaking secrets.
 - **FR-009**: qmtctl MUST expose sector management commands and clearly surface
   disabled/refused responses.
+- **FR-010**: qmtctl SHOULD support importing a bounded local basket file or
+  strategy output into a managed sector. Supported inputs SHOULD include JSON and
+  CSV files with code fields such as `code`, `thscode`, `symbol`, `holdings`, or
+  `top_candidates`.
+- **FR-011**: Strategy 1 ETF basket import SHOULD support:
+  `/Users/wangkuiju/project/etf_select/main.py` for the stable
+  `WEEKLY_ROTATION_UNIVERSE` and
+  `/Users/wangkuiju/project/etf_select/results/strategy_1_main_signal_latest.json`
+  for latest holdings/candidates. The import MUST validate codes before sector
+  mutation and MUST NOT execute strategy code unless a future explicit runner
+  integration is added.
 
 ## Safety Policy
 
@@ -75,6 +95,22 @@ and `--json`.
 - Audit: mandatory for every mutation.
 - No account/trading actions are exposed.
 
+## Strategy 1 Basket Mapping
+
+Recommended managed sectors:
+
+- `MCP/strategy1/universe`: stable ETF universe from `WEEKLY_ROTATION_UNIVERSE`.
+- `MCP/strategy1/latest-holdings`: latest `holdings[].thscode`.
+- `MCP/strategy1/latest-candidates`: latest `top_candidates[].thscode`.
+- `MCP/strategy1/latest-signal`: union of latest holdings and top candidates.
+
+Recommended subscription flow after 013 and 017 are implemented:
+
+1. Import/update the managed sectors.
+2. Read constituents through `qmt_xtdata_sector_constituents`.
+3. Call `qmt_xtdata_quote_subscribe` for the chosen sector codes.
+4. Use `qmt_xtdata_snapshot(cache_policy=prefer)` for fast reads.
+
 ## Success Criteria
 
 - **SC-001**: With sector writes disabled, every mutation tool returns disabled
@@ -84,6 +120,8 @@ and `--json`.
 - **SC-003**: Attempts to mutate sectors outside allowed prefixes are rejected.
 - **SC-004**: Delete/reset require confirmation and remain prefix-limited.
 - **SC-005**: qmtctl sector commands map to the MCP tools and support JSON output.
+- **SC-006**: A local Strategy 1 signal JSON fixture imports holdings and top
+  candidates into managed sectors without executing strategy code.
 
 ## Out of Scope
 

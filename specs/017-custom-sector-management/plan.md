@@ -16,7 +16,8 @@ constituent tools because it changes local QMT state.
 **Primary Dependencies**: existing xtdata connector, validation helpers, audit,
 health/capability reporting, official `xtdata.create_sector_folder`,
 `create_sector`, `add_sector`, `remove_stock_from_sector`, and optional delete/
-reset functions when present.
+reset functions when present. Local import helpers may parse JSON/CSV strategy
+outputs without executing those strategy projects.
 
 **Testing**: pytest with fake xtdata mutation functions; qmtctl mapping tests;
 manual smoke only against an isolated `MCP/` test prefix.
@@ -44,6 +45,9 @@ appliance/mcp/tests/unit/
 cli/qmtctl/internal/qmtctl/
 ├── cli.go                   # EDIT: sector commands
 └── cli_test.go              # EDIT: command mappings
+
+scripts/
+└── import-strategy-basket fixtures or docs only if needed
 ```
 
 ## Design Decisions
@@ -64,14 +68,29 @@ Create/add operations should be idempotent where possible: if the target sector
 exists or codes are already present, return `unchanged`/`updated` rather than
 failing.
 
+### Strategy Basket Imports
+
+Treat local strategy outputs as data files, not executable code. For the user's
+ETF Select Strategy 1, the initial supported import targets are:
+
+- `/Users/wangkuiju/project/etf_select/results/strategy_1_main_signal_latest.json`
+  for latest holdings and candidates.
+- A documented operator-provided JSON/CSV export for the stable universe.
+
+If importing `WEEKLY_ROTATION_UNIVERSE` from `main.py` is needed, prefer a small
+parser for literal list assignments or require an exported JSON file. Do not
+import and execute arbitrary project Python from qmt-mcp.
+
 ## Implementation Phases
 
 1. Config and policy helpers for enable flag, prefixes, confirmation, and
    capability checks.
 2. MCP mutation tools with audit and health updates.
 3. qmtctl sector commands.
-4. Tests for disabled, allowed, refused, idempotent, and destructive paths.
-5. Isolated manual smoke on `MCP/Test`.
+4. qmtctl/local basket import helpers for JSON/CSV strategy outputs.
+5. Tests for disabled, allowed, refused, idempotent, destructive, and import
+   paths.
+6. Isolated manual smoke on `MCP/Test`, then Strategy 1 sectors when approved.
 
 ## Risks
 

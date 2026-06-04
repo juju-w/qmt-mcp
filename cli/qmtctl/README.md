@@ -54,6 +54,9 @@ qmtctl portfolio risk --account 123456789 --max-single-weight 0.3
 qmtctl option chain --family 300ETF
 qmtctl option quotes 10000001.SHO,10000002.SHO
 qmtctl option vix-inputs --family 300ETF
+qmtctl ref financial 600000.SH --tables Income,CashFlow --start 20250101
+qmtctl ref ipo --start 20250101 --end 20250131
+qmtctl ref dividends 510300.SH
 qmtctl smoke
 ```
 

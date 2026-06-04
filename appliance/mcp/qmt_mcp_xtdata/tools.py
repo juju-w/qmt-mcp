@@ -15,6 +15,7 @@ from qmt_mcp_core.registry import ToolRegistry
 from .option_tools import register_option_tools
 from .quote_cache import QuoteHotCache
 from .quote_subscriptions import QuoteSubscription, QuoteSubscriptionRuntime, QuoteSubscriptionStore
+from .reference_tools import register_reference_tools
 from .search_cache import cache_state, refresh_cache, usable_cache_or_seed
 from .search_index import resolve_from_results, search_records, search_sectors, validate_filters, validate_query
 from .serializers import bars_rows, date_strings, json_clean, snapshot_records
@@ -349,6 +350,7 @@ def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthSt
         return ok_envelope(**quote_runtime.status())
 
     register_option_tools(mcp, registry, health, _call_xtdata)
+    register_reference_tools(mcp, registry, _call_xtdata)
 
     @registry.register(
         mcp,

@@ -78,6 +78,7 @@ front; it searches by Chinese name / pinyin initials / alias / sector / theme
 | `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | search-cache status / refresh |
 | `qmt_xtdata_quote_subscribe` · `qmt_xtdata_quote_unsubscribe` · `qmt_xtdata_quote_subscriptions` · `qmt_xtdata_quote_subscription_status` | quote subscription hot cache (`subscribe_quote` first, bounded polling fallback) |
 | `qmt_xtdata_option_chain` · `qmt_xtdata_option_quotes` · `qmt_xtdata_option_iv` · `qmt_xtdata_volatility_index_inputs` | option chains, call/put quotes, IV, and VIX input packages (read-only; no index publishing) |
+| `qmt_xtdata_financial_data` · `qmt_xtdata_ipo_info` · `qmt_xtdata_dividend_factors` · `qmt_xtdata_cb_info` · `qmt_xtdata_etf_info` | financial/IPO/dividend/CB/ETF reference data (read-only, capability-gated) |
 | `qmt_portfolio_summary` · `qmt_portfolio_positions` · `qmt_portfolio_exposure` · `qmt_portfolio_risk_checks` | portfolio holdings/exposure/risk metrics (read-only, xttrade allowlist required) |
 | Account read-only `xttrade` (04, **opt-in**) | see table below, off by default |
 

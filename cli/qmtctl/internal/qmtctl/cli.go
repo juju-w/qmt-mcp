@@ -75,6 +75,8 @@ func dispatch(ctx context.Context, client *Client, opts globalOptions, args []st
 		return runPortfolio(ctx, client, opts, args[1:], stdout)
 	case "option":
 		return runOption(ctx, client, opts, args[1:], stdout)
+	case "ref":
+		return runRef(ctx, client, opts, args[1:], stdout)
 	case "smoke":
 		return runSmoke(ctx, client, opts, args[1:], stdout)
 	case "help", "-h", "--help":
@@ -542,6 +544,97 @@ func runOptionCodesTool(
 	return writePayload(stdout, payload, opts, err)
 }
 
+func runRef(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("ref subcommand is required: financial, download-financial, dividends, ipo, cb, etf, or periods")
+	}
+	switch args[0] {
+	case "financial":
+		fs := newFlagSet("ref financial", &opts)
+		tables := fs.String("tables", "", "comma-separated financial tables")
+		start := fs.String("start", "", "start YYYYMMDD")
+		end := fs.String("end", "", "end YYYYMMDD")
+		reportType := fs.String("report-type", "report_time", "report type")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		codes := splitPositionals(fs.Args())
+		if len(codes) == 0 {
+			return fmt.Errorf("ref financial requires at least one code")
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_financial_data", map[string]any{
+			"codes":       codes,
+			"tables":      splitCSV(*tables),
+			"start_time":  *start,
+			"end_time":    *end,
+			"report_type": *reportType,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "download-financial":
+		fs := newFlagSet("ref download-financial", &opts)
+		code := fs.String("code", "", "instrument code")
+		tables := fs.String("tables", "", "comma-separated financial tables")
+		start := fs.String("start", "", "start YYYYMMDD")
+		end := fs.String("end", "", "end YYYYMMDD")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		c := strings.TrimSpace(*code)
+		if c == "" && len(fs.Args()) > 0 {
+			c = fs.Args()[0]
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_download_financial_data", map[string]any{
+			"code":       c,
+			"tables":     splitCSV(*tables),
+			"start_time": *start,
+			"end_time":   *end,
+		})
+		return writePayload(stdout, payload, opts, err)
+	case "dividends":
+		return runRefCodeTool(ctx, client, opts, args[1:], stdout, "ref dividends", "qmt_xtdata_dividend_factors")
+	case "ipo":
+		fs := newFlagSet("ref ipo", &opts)
+		start := fs.String("start", "", "start YYYYMMDD")
+		end := fs.String("end", "", "end YYYYMMDD")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_ipo_info", map[string]any{"start_time": *start, "end_time": *end})
+		return writePayload(stdout, payload, opts, err)
+	case "cb":
+		return runRefCodeTool(ctx, client, opts, args[1:], stdout, "ref cb", "qmt_xtdata_cb_info")
+	case "etf":
+		return runRefCodeTool(ctx, client, opts, args[1:], stdout, "ref etf", "qmt_xtdata_etf_info")
+	case "periods":
+		fs := newFlagSet("ref periods", &opts)
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		payload, err := client.CallTool(ctx, "qmt_xtdata_period_list", map[string]any{})
+		return writePayload(stdout, payload, opts, err)
+	default:
+		return fmt.Errorf("unknown ref subcommand %q", args[0])
+	}
+}
+
+func runRefCodeTool(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer, flagName string, toolName string) error {
+	fs := newFlagSet(flagName, &opts)
+	code := fs.String("code", "", "instrument code")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	c := strings.TrimSpace(*code)
+	if c == "" && len(fs.Args()) > 0 {
+		c = fs.Args()[0]
+	}
+	payloadArgs := map[string]any{}
+	if c != "" {
+		payloadArgs["code"] = c
+	}
+	payload, err := client.CallTool(ctx, toolName, payloadArgs)
+	return writePayload(stdout, payload, opts, err)
+}
+
 func runSmoke(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
 	fs := newFlagSet("smoke", &opts)
 	query := fs.String("query", "纳指", "search query used for smoke")
@@ -772,7 +865,7 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN] [--json] [--timeout 10s] <command>")
-	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, smoke")
+	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, smoke")
 }
 
 func getenvDefault(name, fallback string) string {

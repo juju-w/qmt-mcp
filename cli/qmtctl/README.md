@@ -47,6 +47,10 @@ qmtctl account status --account 123456789
 qmtctl account statistics --account 123456789
 qmtctl account purchase-limit --account 123456789
 qmtctl account ipo
+qmtctl portfolio summary --account 123456789
+qmtctl portfolio positions --account 123456789 --quote-policy live
+qmtctl portfolio exposure --account 123456789
+qmtctl portfolio risk --account 123456789 --max-single-weight 0.3
 qmtctl smoke
 ```
 

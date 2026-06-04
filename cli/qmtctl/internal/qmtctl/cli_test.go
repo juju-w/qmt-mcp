@@ -237,6 +237,53 @@ func TestSubscriptionAddCallsExpectedMCPTool(t *testing.T) {
 	}
 }
 
+func TestPortfolioRiskCallsExpectedMCPTool(t *testing.T) {
+	var called bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		switch req["method"] {
+		case "initialize", "notifications/initialized":
+			writeRPCResult(w, req["id"], map[string]any{})
+		case "tools/call":
+			params := req["params"].(map[string]any)
+			if params["name"] != "qmt_portfolio_risk_checks" {
+				t.Fatalf("tool name = %v", params["name"])
+			}
+			args := params["arguments"].(map[string]any)
+			if args["account_id"] != "123456789" || args["quote_policy"] != "live" {
+				t.Fatalf("arguments = %#v", args)
+			}
+			thresholds := args["thresholds"].(map[string]any)
+			if thresholds["max_single_position_weight"] != 0.25 {
+				t.Fatalf("thresholds = %#v", thresholds)
+			}
+			called = true
+			writeRPCResult(w, req["id"], toolResult(map[string]any{"ok": true, "checks": []any{}}))
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{
+		"--url", server.URL,
+		"portfolio", "risk",
+		"--account", "123456789",
+		"--quote-policy", "live",
+		"--max-single-weight", "0.25",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !called {
+		t.Fatal("tools/call was not reached")
+	}
+}
+
 func writeRPCResult(w http.ResponseWriter, id any, result any) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 }

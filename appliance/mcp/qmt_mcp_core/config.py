@@ -75,6 +75,8 @@ class CoreConfig:
     quote_subscription_max_codes: int = 100
     quote_subscription_max_official: int = 50
     quote_subscription_min_fallback_interval_s: int = 5
+    # 014 derived portfolio analysis (registered only when xttrade query is enabled).
+    enable_portfolio_analysis: bool = True
 
     @property
     def db_enabled(self) -> bool:
@@ -134,6 +136,7 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         quote_subscription_min_fallback_interval_s=max(
             1, int(env.get("QMT_QUOTE_SUBSCRIPTION_MIN_FALLBACK_INTERVAL_S", "5"))
         ),
+        enable_portfolio_analysis=env.get("QMT_ENABLE_PORTFOLIO_ANALYSIS", "1") != "0",
     )
     cfg.validate_security()
     return cfg

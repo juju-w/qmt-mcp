@@ -71,6 +71,8 @@ func dispatch(ctx context.Context, client *Client, opts globalOptions, args []st
 		return runSubscription(ctx, client, opts, args[1:], stdout)
 	case "account":
 		return runAccount(ctx, client, opts, args[1:], stdout)
+	case "portfolio":
+		return runPortfolio(ctx, client, opts, args[1:], stdout)
 	case "smoke":
 		return runSmoke(ctx, client, opts, args[1:], stdout)
 	case "help", "-h", "--help":
@@ -388,6 +390,71 @@ func runAccountScopedTool(
 	return writePayload(stdout, payload, opts, err)
 }
 
+func runPortfolio(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("portfolio subcommand is required: summary, positions, exposure, or risk")
+	}
+	switch args[0] {
+	case "summary":
+		return runPortfolioTool(ctx, client, opts, args[1:], stdout, "portfolio summary", "qmt_portfolio_summary", false)
+	case "positions":
+		return runPortfolioTool(ctx, client, opts, args[1:], stdout, "portfolio positions", "qmt_portfolio_positions", false)
+	case "exposure":
+		return runPortfolioTool(ctx, client, opts, args[1:], stdout, "portfolio exposure", "qmt_portfolio_exposure", false)
+	case "risk", "risk-checks":
+		return runPortfolioTool(ctx, client, opts, args[1:], stdout, "portfolio risk", "qmt_portfolio_risk_checks", true)
+	default:
+		return fmt.Errorf("unknown portfolio subcommand %q", args[0])
+	}
+}
+
+func runPortfolioTool(
+	ctx context.Context,
+	client *Client,
+	opts globalOptions,
+	args []string,
+	stdout io.Writer,
+	flagName string,
+	toolName string,
+	withThresholds bool,
+) error {
+	fs := newFlagSet(flagName, &opts)
+	account := fs.String("account", "", "allow-listed account id")
+	quotePolicy := fs.String("quote-policy", "prefer_cache", "quote policy: prefer_cache, live, cache_only")
+	maxSingle := fs.Float64("max-single-weight", -1, "max single position weight")
+	maxTop5 := fs.Float64("max-top5-weight", -1, "max top-5 weight")
+	minCash := fs.Float64("min-cash-ratio", -1, "min cash ratio")
+	minQuoteCoverage := fs.Float64("min-quote-coverage", -1, "min quote coverage")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	aid := accountID(*account, fs.Args())
+	if aid == "" {
+		return fmt.Errorf("%s requires --account", flagName)
+	}
+	payloadArgs := map[string]any{"account_id": aid, "quote_policy": *quotePolicy}
+	if withThresholds {
+		thresholds := map[string]any{}
+		if *maxSingle >= 0 {
+			thresholds["max_single_position_weight"] = *maxSingle
+		}
+		if *maxTop5 >= 0 {
+			thresholds["max_top5_weight"] = *maxTop5
+		}
+		if *minCash >= 0 {
+			thresholds["min_cash_ratio"] = *minCash
+		}
+		if *minQuoteCoverage >= 0 {
+			thresholds["min_quote_coverage"] = *minQuoteCoverage
+		}
+		if len(thresholds) > 0 {
+			payloadArgs["thresholds"] = thresholds
+		}
+	}
+	payload, err := client.CallTool(ctx, toolName, payloadArgs)
+	return writePayload(stdout, payload, opts, err)
+}
+
 func runSmoke(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
 	fs := newFlagSet("smoke", &opts)
 	query := fs.String("query", "纳指", "search query used for smoke")
@@ -618,7 +685,7 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN] [--json] [--timeout 10s] <command>")
-	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, smoke")
+	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, smoke")
 }
 
 func getenvDefault(name, fallback string) string {

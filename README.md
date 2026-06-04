@@ -71,6 +71,7 @@
 | `qmt_xtdata_download_history` · `_batch` | 下载历史数据到本地 |
 | `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | 搜索缓存状态 / 刷新 |
 | `qmt_xtdata_quote_subscribe` · `qmt_xtdata_quote_unsubscribe` · `qmt_xtdata_quote_subscriptions` · `qmt_xtdata_quote_subscription_status` | 行情订阅热缓存（官方 `subscribe_quote` 优先，轮询兜底） |
+| `qmt_portfolio_summary` · `qmt_portfolio_positions` · `qmt_portfolio_exposure` · `qmt_portfolio_risk_checks` | 组合持仓/敞口/风控指标（只读，依赖 xttrade 白名单） |
 | 账户只读查询 `xttrade`（04，**选配**） | 见下表，默认关闭 |
 
 **xttrade 账户查询工具族**（需 `QMT_ENABLE_XTTRADE_QUERY=1` + 账户白名单）：

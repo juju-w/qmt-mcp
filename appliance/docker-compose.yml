@@ -28,6 +28,22 @@ services:
       # QMT_ENABLE_XTTRADE_QUERY=1 and QMT_TRADE_ACCOUNTS=<csv account ids>.
       QMT_ENABLE_XTTRADE_QUERY: "${QMT_ENABLE_XTTRADE_QUERY:-0}"
       QMT_TRADE_ACCOUNTS: "${QMT_TRADE_ACCOUNTS:-}"
+      # optional quote subscription/cache tuning (013); defaults are safe for
+      # personal watchlists.
+      QMT_QUOTE_SUBSCRIPTION_STORE: "${QMT_QUOTE_SUBSCRIPTION_STORE:-/broker/cache/quote-subscriptions-v1.json}"
+      QMT_QUOTE_CACHE_MAX_AGE_MS: "${QMT_QUOTE_CACHE_MAX_AGE_MS:-10000}"
+      QMT_QUOTE_SUBSCRIPTION_MAX_CODES: "${QMT_QUOTE_SUBSCRIPTION_MAX_CODES:-100}"
+      QMT_QUOTE_SUBSCRIPTION_MAX_OFFICIAL: "${QMT_QUOTE_SUBSCRIPTION_MAX_OFFICIAL:-50}"
+      QMT_QUOTE_SUBSCRIPTION_MIN_FALLBACK_INTERVAL_S: "${QMT_QUOTE_SUBSCRIPTION_MIN_FALLBACK_INTERVAL_S:-5}"
+      # optional custom sector writes (017); disabled by default and restricted
+      # to managed prefixes.
+      QMT_ENABLE_XTDATA_SECTOR_WRITE: "${QMT_ENABLE_XTDATA_SECTOR_WRITE:-0}"
+      QMT_XTDATA_SECTOR_WRITE_PREFIXES: "${QMT_XTDATA_SECTOR_WRITE_PREFIXES:-MCP/,AI/}"
+      # optional formula runtime (018); disabled by default and requires an
+      # explicit formula allowlist.
+      QMT_ENABLE_FORMULA_RUNTIME: "${QMT_ENABLE_FORMULA_RUNTIME:-0}"
+      QMT_FORMULA_ALLOWLIST: "${QMT_FORMULA_ALLOWLIST:-}"
+      QMT_FORMULA_OUTPUT_SANDBOX: "${QMT_FORMULA_OUTPUT_SANDBOX:-/broker/formula-output}"
     volumes:
       # The broker pack: extracted QMT terminal + matching xtquant + broker.yaml.
       # Mounted READ-WRITE (the terminal persists userdata/logs/config in-tree).

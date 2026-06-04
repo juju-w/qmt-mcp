@@ -4,11 +4,14 @@
 
 ## Summary
 
-Implement a read-only quote watchlist/prefetch layer. MCP tools manage
-subscriptions; a bounded worker periodically refreshes latest snapshots into an
-in-memory hot cache; `qmt_xtdata_snapshot` can prefer that cache for subscribed
-codes; `qmtctl` exposes the workflow. Optional DB aggregation can compact
-snapshots into minute bars when 012 persistence is enabled.
+Implement a read-only quote watchlist/subscription layer. MCP tools manage
+subscriptions; the runtime prefers official xtdata quote subscriptions and
+normalizes callbacks into an in-memory hot cache; `qmt_xtdata_snapshot` can
+prefer that cache for subscribed codes; `qmtctl` exposes the workflow. Bounded
+polling through the existing snapshot path remains an explicit fallback when the
+broker pack, entitlement, or callback loop cannot support official
+subscriptions. Optional DB aggregation can compact quote updates into minute
+bars when 012 persistence is enabled.
 
 This is deliberately not SSE push, and SSE compatibility is not part of the
 current roadmap.
@@ -18,7 +21,9 @@ current roadmap.
 **Language/Version**: Python 3.12 for MCP; Go 1.22 for qmtctl.
 
 **Primary Dependencies**: existing FastMCP app, `qmt_mcp_core.WorkerPool`,
-xtdata tools/validators, optional `qmt_mcp_db.Warehouse`.
+xtdata tools/validators, official `xtdata.subscribe_quote` /
+`xtdata.unsubscribe_quote`, optional `xtdata.subscribe_whole_quote`, optional
+`qmt_mcp_db.Warehouse`.
 
 **Storage**: process-local hot cache; JSON subscription config under `/broker`
 by default; optional PostgreSQL minute bars through 012.
@@ -35,7 +40,8 @@ watchlists; refresh loop must not block MCP request handling.
 
 - Read-only only.
 - No raw snapshot-history persistence by default.
-- Conservative limits: default max 100 codes, min interval 5 seconds.
+- Conservative limits: default max 50 official subscriptions, max 100 cached
+  watchlist codes with explicit override, min fallback interval 5 seconds.
 - Fail gracefully when xtdata is not ready.
 
 **Scale/Scope**: personal-agent and small watchlist workloads first; broad market
@@ -46,7 +52,7 @@ scanning requires explicit higher limits and may become a later feature.
 ```text
 appliance/mcp/qmt_mcp_xtdata/
 ├── quote_cache.py          # NEW: hot cache + freshness metadata
-├── quote_subscriptions.py  # NEW: subscription config store + refresh scheduler
+├── quote_subscriptions.py  # NEW: store + official subscription/fallback manager
 ├── tools.py                # EDIT: register subscription tools; cache-aware snapshot
 └── validation.py           # EDIT if interval/limit validators are added
 
@@ -84,11 +90,19 @@ No append-only raw snapshot table in v1.
 Persist small config JSON under `/broker/cache/quote-subscriptions-v1.json`.
 This keeps behavior available even when DB is disabled.
 
-### Refresh Strategy
+### Subscription Backend Strategy
 
-Use periodic polling through existing `get_full_tick`/snapshot path in v1. The
-interface should not depend on polling, so a future implementation can swap in
-`xtdata.subscribe_quote` callbacks internally if reliable.
+Use official `xtdata.subscribe_quote` as the primary backend for normal
+single-instrument watchlists. Persist the returned subscription id so remove/
+disable can call `xtdata.unsubscribe_quote`. Callback payloads update the hot
+cache without exposing client push.
+
+Use `xtdata.subscribe_whole_quote` only when the operator explicitly chooses a
+broad/full-push workload. It is not the default for personal watchlists.
+
+Use polling via existing snapshot logic only as a fallback backend when official
+subscription setup fails, entitlement limits are hit, callbacks stop arriving,
+or the installed xtquant lacks the needed function.
 
 ### Snapshot Cache Policy
 
@@ -108,19 +122,22 @@ mark the subscription family degraded while hot-cache refresh continues.
 
 ## Implementation Phases
 
-1. Pure data structures: hot cache, subscription model/store, interval/limit
-   validation, refresh planning.
-2. Background refresh loop: start/stop with app lifecycle, bounded worker calls,
-   readiness/error tracking.
+1. Pure data structures: hot cache, subscription model/store, backend/period/
+   interval/limit validation, refresh planning.
+2. Subscription runtime: start/stop with app lifecycle, official
+   subscribe/unsubscribe calls, callback normalization, readiness/error tracking.
 3. MCP tools: subscribe/unsubscribe/list/status and cache-aware snapshot.
-4. Optional DB aggregation: minute OHLCV accumulator and warehouse upsert.
-5. qmtctl commands and docs.
-6. NAS/manual verification.
+4. Fallback polling: bounded worker calls through existing snapshot logic.
+5. Optional DB aggregation: minute OHLCV accumulator and warehouse upsert.
+6. qmtctl commands and docs.
+7. NAS/manual verification.
 
 ## Risks
 
-- Polling too many codes too often can burden xtdata/QMT. Mitigate with default
-  limits and clear status output.
+- Official subscription limits can be broker/entitlement dependent. Mitigate with
+  conservative defaults, clear diagnostics, and bounded polling fallback.
+- Polling too many codes too often can burden xtdata/QMT. Keep it fallback-only
+  by default and expose active backend in health/status output.
 - Process-local hot cache disappears on restart. This is acceptable; subscription
   definitions persist and repopulate after startup.
 - Mixing cache and live reads can confuse callers. Mitigate by returning explicit

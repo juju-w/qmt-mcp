@@ -6,16 +6,21 @@
 
 ## Summary
 
-Add an opt-in quote prefetch/watchlist layer for instruments the operator or
-agent cares about. A new read-only MCP tool family lets clients add, update,
-delete, list, and inspect quote subscriptions. A bounded background worker then
-refreshes the latest quote snapshot for those instruments at a configured
-interval, keeping only the most recent snapshot in a hot in-memory cache.
+Add an opt-in quote subscription/watchlist layer for instruments the operator
+or agent cares about. A new read-only MCP tool family lets clients add, update,
+delete, list, and inspect quote subscriptions. The runtime should prefer the
+official xtdata subscription APIs (`subscribe_quote`/`unsubscribe_quote`, and
+`subscribe_whole_quote` only when the configured workload clearly benefits from
+full-push semantics), then normalize callbacks into a hot in-memory cache that
+keeps only the most recent quote per instrument.
 
 The goal is **fast reads and lower repeated xtdata latency**, not real-time
 client push. v1 does not add SSE/WebSocket quote streaming and does not store
-every tick. When 012 PostgreSQL market-data persistence is enabled, the worker
-may also aggregate refreshed snapshots into compact 1-minute OHLCV bars; raw
+every tick. If official subscription setup fails, is unsupported in the current
+broker pack, exceeds entitlement limits, or stops delivering fresh data, the
+runtime may degrade to bounded snapshot polling through the existing xtdata
+snapshot path. When 012 PostgreSQL market-data persistence is enabled, the
+runtime may also aggregate quote updates into compact 1-minute OHLCV bars; raw
 snapshot history is not persisted by default.
 
 Recommended default behavior:
@@ -33,9 +38,9 @@ Recommended default behavior:
 ### US1 - Add a small watchlist and get fast snapshots (P1)
 
 **Acceptance**: Given QMT xtdata is ready, when an agent subscribes 10 instrument
-codes at a 5-second interval, then a background worker refreshes their latest
-snapshots and later `qmt_xtdata_snapshot` calls return fresh cached values in
-milliseconds when available.
+codes, then the runtime registers official xtdata quote subscriptions where
+available, caches callback updates, and later `qmt_xtdata_snapshot` calls return
+fresh cached values in milliseconds when available.
 
 ### US2 - Manage subscriptions safely (P1)
 
@@ -72,33 +77,49 @@ without writing raw MCP JSON.
 - **FR-002**: Add subscription management tools:
   `qmt_xtdata_quote_subscribe`, `qmt_xtdata_quote_unsubscribe`,
   `qmt_xtdata_quote_subscriptions`, and `qmt_xtdata_quote_subscription_status`.
-- **FR-003**: A subscription MUST include validated `codes`, `interval_seconds`,
-  `enabled`, `created_at`, `updated_at`, and last refresh diagnostics. Optional
-  metadata may include `label`, `group`, `source`, and `notes`.
+- **FR-003**: A subscription MUST include validated `codes`, `period`,
+  `backend_preference`, optional `fallback_interval_seconds`, `enabled`,
+  `created_at`, `updated_at`, active xtdata subscription ids when available, and
+  last update diagnostics. Optional metadata may include `label`, `group`,
+  `source`, and `notes`.
 - **FR-004**: Subscription changes MUST be persisted across MCP restarts using a
   small JSON file under `/broker` by default, and MAY use PostgreSQL later if 012
   adds a config-domain persistence adapter.
-- **FR-005**: A bounded background worker MUST refresh enabled subscriptions using
-  existing xtdata snapshot logic. It MUST enforce maximum code count, minimum
-  interval, and worker concurrency limits.
-- **FR-006**: Hot cache storage MUST keep only the latest snapshot per
+- **FR-005**: The runtime MUST prefer official `xtdata.subscribe_quote` for
+  enabled single-instrument subscriptions and MUST call `xtdata.unsubscribe_quote`
+  when subscriptions are removed or disabled. It MUST preserve and expose xtdata
+  subscription ids for diagnostics.
+- **FR-006**: The runtime MAY use `xtdata.subscribe_whole_quote` for explicitly
+  configured broad/full-push workloads, but MUST NOT use full-market subscription
+  as the default personal watchlist path.
+- **FR-007**: If official subscription setup fails, entitlement limits are hit,
+  callbacks stop arriving, or the installed xtquant does not expose the needed
+  API, the runtime MUST degrade to bounded polling using the existing snapshot
+  path when `fallback_polling` is enabled. It MUST report the active backend as
+  `official_subscription`, `whole_quote`, `polling_fallback`, or `disabled`.
+- **FR-008**: Subscription backends MUST enforce maximum code count, period
+  allowlist, minimum fallback interval, subscription-count limits, and worker
+  concurrency limits.
+- **FR-009**: Hot cache storage MUST keep only the latest snapshot per
   `(broker_id, code)` plus freshness metadata by default. Raw per-refresh history
   MUST NOT be stored unless a future feature explicitly enables retention.
-- **FR-007**: `qmt_xtdata_snapshot` MUST support cache-aware reads for subscribed
+- **FR-010**: `qmt_xtdata_snapshot` MUST support cache-aware reads for subscribed
   codes with `cache_policy` values: `prefer` (default), `cache_only`, and `live`.
   Cached responses MUST include cache metadata so the caller can judge freshness.
-- **FR-008**: When cache data is stale, `prefer` MUST fall back to live xtdata when
+- **FR-011**: When cache data is stale, `prefer` MUST fall back to live xtdata when
   possible; `cache_only` MUST return a clear stale/missing-cache error; `live`
   MUST bypass the cache.
-- **FR-009**: Optional DB aggregation MUST be compact: aggregate snapshots into
+- **FR-012**: Optional DB aggregation MUST be compact: aggregate snapshots into
   minute OHLCV bars and upsert them. It MUST NOT write every raw snapshot by
   default.
-- **FR-010**: Health/capabilities MUST expose subscription state: disabled,
-  enabled, degraded, code count, interval bounds, last refresh time, and last
-  error without leaking secrets.
-- **FR-011**: `qmtctl` MUST expose subscription commands and snapshot cache-policy
+- **FR-013**: Health/capabilities MUST expose subscription state: disabled,
+  enabled, degraded, backend, code count, period/count bounds, last callback or
+  fallback refresh time, xtdata subscription ids, and last error without leaking
+  secrets.
+- **FR-014**: `qmtctl` MUST expose subscription commands and snapshot cache-policy
   flags in the CLI.
-- **FR-012**: All subscription tool calls and refresh failures MUST be audited with
+- **FR-015**: All subscription tool calls, callback failures, fallback refresh
+  failures, and unsubscribe failures MUST be audited with
   sanitized code/count summaries, never large raw quote payloads.
 
 ## Scale Guidance
@@ -113,18 +134,22 @@ Expected common cases:
   higher limits; this is a scanning workload, not the default personal-agent
   watchlist.
 
-Defaults should be conservative: max 100 subscribed codes, min 5-second refresh
-interval, max batch size aligned with existing snapshot validation.
+Defaults should be conservative: max 50 official single-code subscriptions by
+default, max 100 cached watchlist codes with explicit override, min 5-second
+fallback polling interval, max batch size aligned with existing snapshot
+validation, and no implicit full-market `subscribe_whole_quote`.
 
 ## Success Criteria
 
-- **SC-001**: With 10 subscribed codes at 5 seconds, cached snapshot reads return
-  in under 50 ms p95 when cache is fresh.
+- **SC-001**: With 10 subscribed codes, official xtdata callbacks populate the
+  hot cache in a permissioned environment and cached snapshot reads return in
+  under 50 ms p95 when cache is fresh.
 - **SC-002**: With no subscriptions configured, existing xtdata snapshot/bars
   behavior remains unchanged.
 - **SC-003**: Restarting MCP preserves the subscription list and resumes refreshes.
-- **SC-004**: xtdata outage does not crash the server; health reports degraded and
-  cache-only/live/prefer policies behave as specified.
+- **SC-004**: xtdata outage or subscription callback failure does not crash the
+  server; health reports degraded/backend fallback and cache-only/live/prefer
+  policies behave as specified.
 - **SC-005**: For 100 subscribed codes with DB aggregation enabled, one trading day
   writes minute-bar scale rows, not raw snapshot scale rows.
 
@@ -138,10 +163,10 @@ interval, max batch size aligned with existing snapshot validation.
 
 ## Assumptions
 
-- xtdata snapshot reads are the first implementation path because they already
-  exist and are host-testable with fake xtquant. If `xtdata.subscribe_quote`
-  proves reliable in a permissioned amd64 environment, it can be used internally
-  behind the same subscription/cache interface later.
+- Official xtdata subscription is the preferred implementation path. Host tests
+  use fake xtquant callbacks; NAS/manual tests verify callback delivery and
+  entitlement behavior in a real amd64 QMT environment.
+- Polling is retained as an internal fallback, not as the normal v1 backend.
 - The hot cache is process-local. Multi-appliance coordination is out of scope for
   v1.
 - 012 DB persistence is optional. Without DB, prefetch still works as in-memory

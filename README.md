@@ -126,6 +126,10 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 ./qmtctl search 纳指                   # 模糊搜索合约
 ./qmtctl snapshot 510300.SH           # 实时行情快照
 ./qmtctl bars 510300.SH --period 1d   # K线数据
+./qmtctl subscription add --id s1 510300.SH,510500.SH  # 行情订阅
+./qmtctl portfolio summary --account <id>              # 组合概览
+./qmtctl option chain --family 300ETF                  # 期权链
+./qmtctl ref financial 600000.SH --tables Income       # 参考数据
 ./qmtctl account asset --account <id> # 账户资产（需开启 xttrade）
 ```
 
@@ -143,7 +147,7 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 appliance/   # 可部署 appliance：Dockerfile · compose · scripts · mcp/ · brokers/ · docs/
 cli/         # qmtctl：Go 编译的命令行客户端（streamable-http MCP）
 skills/      # AI Agent 运维知识库（部署/MCP/CLI/排错）
-specs/       # Spec-Driven Development（spec-kit）：001~012 规格/计划/任务
+specs/       # Spec-Driven Development（spec-kit）：001~018 规格/计划/任务
 ```
 
 用 **Spec-Driven Development** 管理，一次一个 feature、先 spec 后实现；原则见

@@ -136,6 +136,10 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 ./qmtctl search 纳指                   # fuzzy instrument search
 ./qmtctl snapshot 510300.SH           # real-time quote snapshot
 ./qmtctl bars 510300.SH --period 1d   # OHLC bars
+./qmtctl subscription add --id s1 510300.SH,510500.SH  # quote subscription
+./qmtctl portfolio summary --account <id>              # portfolio summary
+./qmtctl option chain --family 300ETF                  # option chain
+./qmtctl ref financial 600000.SH --tables Income       # reference data
 ./qmtctl account asset --account <id> # account asset (requires xttrade enabled)
 ```
 
@@ -155,7 +159,7 @@ More: [broker pack guide](appliance/docs/BROKER-PACK.md) ·
 appliance/   # deployable appliance: Dockerfile · compose · scripts · mcp/ · brokers/ · docs/
 cli/         # qmtctl: compiled Go CLI client (streamable-http MCP)
 skills/      # AI agent ops knowledge base (deploy/MCP/CLI/troubleshooting)
-specs/       # Spec-Driven Development (spec-kit): 001~012 spec/plan/tasks
+specs/       # Spec-Driven Development (spec-kit): 001~018 spec/plan/tasks
 ```
 
 Managed with **Spec-Driven Development**, one feature at a time, spec before code.

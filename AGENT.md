@@ -21,9 +21,15 @@
 | 010 部署与安全加固 | ✅ 完成——DEPLOY.md/Caddy TLS 示例/compose.tls/harden-check.sh |
 | 011 发布与版本 | ✅ 完成——VERSION/CHANGELOG/release.yml（tag→GHCR `ghcr.io/juju-w/qmt-mcp`）|
 | 004 账户只读查询 xttrade | 🟡 只读查询族已实现（gated：flag+allowlist，readiness-gated，边界已宿主测试）；成功路径被券商权限硬卡（`m_nPythonConnectNet`），**欢迎有权限者 PR 验证** |
-| 005 进程守护/就绪/autostart | ⏳ 已出 plan+contracts；autostart 已落地，待系统化（supervisor/readiness/healthcheck）|
+| 005 进程守护/就绪/autostart | ✅ 完成——supervisor/readiness/healthcheck/tmpfs guard 全部 amd64 真机验证通过 |
 | 007 qmtctl CLI | ✅ 完成——Go 编译 CLI（health/tools/search/resolve/snapshot/bars/cache/account/smoke），release 多平台二进制 |
 | 012 数据库持久化 PostgreSQL | ✅ 完成——asyncpg 原生异步 + sync facade；opt-in via `QMT_DB_URL`；行情仓库 bars read/write-through；graceful degradation |
+| 013 行情预取/订阅缓存 | ✅ 完成——subscribe/unsubscribe/list/status 4 工具 + CLI；官方 `subscribe_quote` 优先、轮询兜底；内存热缓存 <1ms |
+| 014 组合风险分析 | ✅ 完成——portfolio_summary/positions/exposure/risk_checks 4 工具（只读，依赖 xttrade 白名单）+ CLI |
+| 015 期权波动率数据 | ✅ 完成——option_chain/quotes/iv/volatility_index_inputs 4 工具（只读，不发布指数值）+ CLI |
+| 016 xtdata 参考数据 | ✅ 完成——financial_data/ipo_info/dividend_factors/cb_info/etf_info 5 工具（只读，按运行时能力降级）+ CLI |
+| 017 自定义板块管理 | ✅ 完成——sector_create/add_codes/remove_codes/managed_sector_list 4 工具（默认关闭，受管前缀沙箱）+ CLI |
+| 018 公式因子运行时 | ✅ 完成——formula_call/batch/generate_factor/subscribe 4 工具（默认关闭，白名单 + 输出沙箱）+ CLI |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。

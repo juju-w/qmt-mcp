@@ -40,6 +40,15 @@ def _is_loopback(host: str) -> bool:
     return host in {"127.0.0.1", "localhost", "::1"}
 
 
+def _split_csv(value: str) -> tuple[str, ...]:
+    return tuple(part.strip() for part in (value or "").split(",") if part.strip())
+
+
+def _split_scopes(value: str) -> tuple[str, ...]:
+    normalized = (value or "").replace(",", " ")
+    return tuple(part.strip() for part in normalized.split() if part.strip())
+
+
 @dataclass(frozen=True)
 class CoreConfig:
     broker_id: str
@@ -84,6 +93,13 @@ class CoreConfig:
     enable_formula_runtime: bool = False
     formula_allowlist: str = ""
     formula_output_sandbox: str = "/broker/formula-output"
+    # MCP authorization discovery compatibility. The appliance remains a
+    # resource server; token issuance is delegated to an external authorization server.
+    public_base_url: str = ""
+    oauth_authorization_servers: tuple[str, ...] = ()
+    oauth_scopes_supported: tuple[str, ...] = ("qmt:read",)
+    oauth_resource: str = ""
+    oauth_resource_name: str = "QMT MCP"
 
     @property
     def db_enabled(self) -> bool:
@@ -92,6 +108,10 @@ class CoreConfig:
     @property
     def auth_required(self) -> bool:
         return bool(self.token)
+
+    @property
+    def oauth_enabled(self) -> bool:
+        return bool(self.oauth_authorization_servers)
 
     def validate_security(self) -> None:
         if self.transport not in {"streamable-http", "http", "sse"}:
@@ -150,6 +170,11 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         formula_allowlist=env.get("QMT_FORMULA_ALLOWLIST", ""),
         formula_output_sandbox=env.get("QMT_FORMULA_OUTPUT_SANDBOX", "/broker/formula-output")
         or "/broker/formula-output",
+        public_base_url=env.get("QMT_MCP_PUBLIC_BASE_URL", "").rstrip("/"),
+        oauth_authorization_servers=_split_csv(env.get("QMT_MCP_OAUTH_AUTHORIZATION_SERVERS", "")),
+        oauth_scopes_supported=_split_scopes(env.get("QMT_MCP_OAUTH_SCOPES", "qmt:read")) or ("qmt:read",),
+        oauth_resource=env.get("QMT_MCP_OAUTH_RESOURCE", "").rstrip("/"),
+        oauth_resource_name=env.get("QMT_MCP_OAUTH_RESOURCE_NAME", "QMT MCP") or "QMT MCP",
     )
     cfg.validate_security()
     return cfg

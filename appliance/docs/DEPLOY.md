@@ -43,6 +43,29 @@ operator ──VPN/tunnel──> 127.0.0.1:3389 (RDP, loopback only)
   clients/`qmtctl` config accordingly. Rotate on suspected exposure or staff
   changes.
 
+## OAuth discovery metadata
+
+QMT-MCP can advertise MCP OAuth 2.1 protected-resource metadata for clients that
+support modern auth discovery. The appliance remains the resource server; login,
+authorization code flow, token issuance, refresh tokens, and dynamic client
+registration belong to an external authorization server or gateway.
+
+Set these optional variables when publishing through HTTPS:
+
+```env
+QMT_MCP_PUBLIC_BASE_URL=https://qmt.example.com
+QMT_MCP_OAUTH_AUTHORIZATION_SERVERS=https://auth.example.com
+QMT_MCP_OAUTH_SCOPES=qmt:read
+QMT_MCP_OAUTH_RESOURCE=https://qmt.example.com/mcp
+QMT_MCP_OAUTH_RESOURCE_NAME=QMT MCP
+```
+
+When enabled, unauthenticated MCP requests include a `WWW-Authenticate` challenge
+with `resource_metadata`, and the metadata document is served at
+`/.well-known/oauth-protected-resource`. If your authorization server issues JWTs
+or opaque OAuth tokens, validate/translate them at the ingress or gateway before
+forwarding to the appliance, or add a dedicated JWT/JWKS validation layer.
+
 ## TLS
 
 - Public domain: use the Caddy example — it auto-provisions Let's Encrypt certs.

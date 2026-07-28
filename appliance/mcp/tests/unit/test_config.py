@@ -85,3 +85,17 @@ def test_connector_knobs_from_env(monkeypatch, tmp_path):
     cfg = load_config(_empty_env(tmp_path))
     assert cfg.enable_connector is True
     assert cfg.readiness_poll_s == 2.0
+
+
+def test_oauth_discovery_knobs_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv("QMT_MCP_PUBLIC_BASE_URL", "https://qmt.example.com/")
+    monkeypatch.setenv("QMT_MCP_OAUTH_AUTHORIZATION_SERVERS", "https://auth1.example.com, https://auth2.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_SCOPES", "qmt:read qmt:account")
+    monkeypatch.setenv("QMT_MCP_OAUTH_RESOURCE", "https://qmt.example.com/mcp/")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.public_base_url == "https://qmt.example.com"
+    assert cfg.oauth_enabled is True
+    assert cfg.oauth_authorization_servers == ("https://auth1.example.com", "https://auth2.example.com")
+    assert cfg.oauth_scopes_supported == ("qmt:read", "qmt:account")
+    assert cfg.oauth_resource == "https://qmt.example.com/mcp"

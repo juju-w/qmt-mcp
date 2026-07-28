@@ -29,16 +29,65 @@ def _add_xtquant_path(config: CoreConfig) -> None:
         sys.path.insert(0, xtq)
 
 
-async def _json_response(send, status: int, payload: dict[str, Any]) -> None:
+async def _json_response(
+    send, status: int, payload: dict[str, Any], headers: list[tuple[bytes, bytes]] | None = None
+) -> None:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    response_headers = [(b"content-type", b"application/json; charset=utf-8")]
+    if headers:
+        response_headers.extend(headers)
     await send(
         {
             "type": "http.response.start",
             "status": status,
-            "headers": [(b"content-type", b"application/json; charset=utf-8")],
+            "headers": response_headers,
         }
     )
     await send({"type": "http.response.body", "body": body})
+
+
+def _header_map(scope) -> dict[bytes, bytes]:
+    return dict(scope.get("headers") or [])
+
+
+def _base_url(scope, config: CoreConfig) -> str:
+    if config.public_base_url:
+        return config.public_base_url
+    headers = _header_map(scope)
+    host = headers.get(b"x-forwarded-host") or headers.get(b"host") or b""
+    proto = headers.get(b"x-forwarded-proto") or scope.get("scheme", "http").encode()
+    if host:
+        return f"{proto.decode()}://{host.decode()}".rstrip("/")
+    return f"http://{config.host}:{config.port}".rstrip("/")
+
+
+def _resource_url(scope, config: CoreConfig) -> str:
+    if config.oauth_resource:
+        return config.oauth_resource
+    return f"{_base_url(scope, config)}/mcp"
+
+
+def _resource_metadata_url(scope, config: CoreConfig) -> str:
+    return f"{_base_url(scope, config)}/.well-known/oauth-protected-resource"
+
+
+def _protected_resource_metadata(scope, config: CoreConfig) -> dict[str, Any]:
+    return {
+        "resource": _resource_url(scope, config),
+        "resource_name": config.oauth_resource_name,
+        "authorization_servers": list(config.oauth_authorization_servers),
+        "scopes_supported": list(config.oauth_scopes_supported),
+        "bearer_methods_supported": ["header"],
+    }
+
+
+def _www_authenticate(scope, config: CoreConfig) -> str:
+    if not config.oauth_enabled:
+        return "Bearer"
+    parts = [f'resource_metadata="{_resource_metadata_url(scope, config)}"']
+    if config.oauth_scopes_supported:
+        parts.append(f'scope="{" ".join(config.oauth_scopes_supported)}"')
+    return "Bearer " + ", ".join(parts)
 
 
 def _win_to_unix(win_path: str) -> str:
@@ -113,10 +162,24 @@ class CoreASGI:
             await _json_response(send, 200 if doc.get("ok") else 503, doc)
             return
 
-        headers = dict(scope.get("headers") or [])
+        if path in {"/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"}:
+            if not self.config.oauth_enabled:
+                await _json_response(
+                    send, 404, error_envelope("disabled", "OAuth protected resource metadata disabled")
+                )
+                return
+            await _json_response(send, 200, _protected_resource_metadata(scope, self.config))
+            return
+
+        headers = _header_map(scope)
         auth = headers.get(b"authorization", b"").decode()
         if self.config.auth_required and auth != f"Bearer {self.config.token}":
-            await _json_response(send, 401, error_envelope("auth", "unauthorized"))
+            await _json_response(
+                send,
+                401,
+                error_envelope("auth", "unauthorized"),
+                headers=[(b"www-authenticate", _www_authenticate(scope, self.config).encode("utf-8"))],
+            )
             return
 
         if path == "/healthz":

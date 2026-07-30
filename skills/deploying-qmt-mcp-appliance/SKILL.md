@@ -1,6 +1,6 @@
 ---
 name: deploying-qmt-mcp-appliance
-description: Use when building or deploying the QMT-MCP appliance for the first time, deploying to a remote Linux host, building from a Windows workstation, or when the container exits immediately, exits with code 10-14, reports `bash\r: No such file or directory`, has no xtquant package, or `/livez` returns nothing and the container stays unhealthy.
+description: Build, deploy, and verify the QMT-MCP appliance locally or on remote Linux, including static-token and OAuth access-token endpoints. Use for first deployment, release artifacts, broker-pack or xtquant failures, exit codes 10-14, CRLF-broken images, silent `/livez`, and post-deploy validation.
 ---
 
 # Deploying the QMT-MCP Appliance
@@ -140,17 +140,34 @@ count in one shot:
 read -r -s -p "QMT MCP token: " QMT_MCP_TOKEN; printf '\n'; export QMT_MCP_TOKEN
 ./verify-mcp.sh https://qmt.example.com
 
+# OAuth/gateway-issued bearer (takes precedence over QMT_MCP_TOKEN)
+read -r -s -p "QMT access token: " QMT_MCP_ACCESS_TOKEN; printf '\n'
+export QMT_MCP_ACCESS_TOKEN
+./verify-mcp.sh https://qmt.example.com
+
 # Or keep MCP private and verify through an SSH tunnel
 ssh -L 38765:127.0.0.1:38765 <host>
 ./verify-mcp.sh http://127.0.0.1:38765
-unset QMT_MCP_TOKEN
+unset QMT_MCP_ACCESS_TOKEN QMT_MCP_TOKEN
 ```
 
 The verifier never accepts the bearer token as a positional argument, so it does not
 land in shell history or process arguments. Remote plain HTTP is refused by default.
 `QMT_MCP_ALLOW_INSECURE_HTTP=1` is an explicit escape hatch for an isolated, controlled
 network. Set `QMT_MCP_MIN_TOOLS` only when intentionally deploying a reduced tool set;
-the standard readonly appliance requires at least 37.
+the standard appliance requires at least 37.
+
+Use qmtctl for client-level discovery and smoke checks:
+
+```bash
+qmtctl version
+qmtctl auth discover --json
+qmtctl health
+qmtctl smoke --code 510300.SH
+```
+
+`qmtctl auth discover` needs no token. The other MCP commands use
+`QMT_MCP_ACCESS_TOKEN` first and fall back to `QMT_MCP_TOKEN`.
 
 Manual probes worth knowing:
 
@@ -189,3 +206,14 @@ the path: `./scripts/harden-check.sh .env`.
 | Pass `.whl` to `make-broker-pack.sh` | `unsupported xtquant archive` — copy to `.zip` |
 | Nested inline `wine -c "..."` over ssh | `failed to open "C:Python312python.exe"` |
 | Publish MCP on `0.0.0.0` over plain HTTP | Bearer token sniffable; use TLS proxy per `docs/DEPLOY.md` |
+
+## Release artifacts and project rules
+
+Each automatic GitHub Release publishes the appliance image plus qmtctl archives
+for Linux, macOS, and Windows on amd64 and arm64 with `SHA256SUMS`. Prefer those
+artifacts over rebuilding the CLI on an operator machine.
+
+This skill owns deployment and validation only. Repository development,
+Conventional Commits, CI gates, automatic SemVer, Docker layering, and cache
+ownership are canonical in `AGENT.md`; detailed release operations are in
+`docs/RELEASE.md`. Do not duplicate or override those policies here.

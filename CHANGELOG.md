@@ -14,7 +14,18 @@ project constitution's quality gates.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+- Added a standard `AGENTS.md` discovery entry that points coding agents to the
+  repository's canonical development guide.
+
+### Changed
+- Updated the QMT operation and deployment skills for the complete qmtctl
+  command surface, OAuth protected-resource discovery, current tool families,
+  and optional write gates.
+- Centralized Conventional Commit, CI, automatic release, Docker layer, and
+  build-cache rules in `AGENT.md`.
+- The deployment verifier now accepts `QMT_MCP_ACCESS_TOKEN`, with precedence
+  over the static `QMT_MCP_TOKEN`, matching qmtctl.
 
 ## [0.4.2] - 2026-07-30
 

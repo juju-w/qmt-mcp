@@ -16,20 +16,20 @@
 | 002 MCP server core | ✅ 实现+验证（`qmt_mcp_core`：鉴权/健康/审计/注册表/线程池/无写工具断言）|
 | 003 行情工具 xtdata | ✅ 完成——11/11 工具真机验证（含中文板块，经 zh_CN.GBK 修复）；见 specs/003/VERIFICATION.md |
 | 006 合约模糊搜索 | ✅ 完成——中文名/代码/别名/拼音首字母/板块/主题 模糊匹配 + 排序；见 specs/006/VERIFICATION.md |
-| 008 CI + 测试基座 | ✅ 完成——宿主可跑 pytest（52 passed）+ ruff + GitHub Actions（lint/test/gitleaks）|
+| 008 CI + 测试基座 | ✅ 完成——pytest + ruff + Go test/vet/build + gitleaks + release policy |
 | 009 开源就绪 | ✅ 完成——LICENSE(MIT)/SECURITY/CONTRIBUTING |
 | 010 部署与安全加固 | ✅ 完成——DEPLOY.md/Caddy TLS 示例/compose.tls/harden-check.sh |
-| 011 发布与版本 | ✅ 完成——VERSION/CHANGELOG/release.yml（tag→GHCR `ghcr.io/juju-w/qmt-mcp`）|
+| 011 发布与版本 | ✅ 完成——main CI 后自动 SemVer、GitHub Release、GHCR/国内镜像和 6 平台 qmtctl 包 |
 | 004 账户只读查询 xttrade | 🟡 只读查询族已实现（gated：flag+allowlist，readiness-gated，边界已宿主测试）；成功路径被券商权限硬卡（`m_nPythonConnectNet`），**欢迎有权限者 PR 验证** |
 | 005 进程守护/就绪/autostart | ✅ 完成——supervisor/readiness/healthcheck/tmpfs guard 全部 amd64 真机验证通过 |
-| 007 qmtctl CLI | ✅ 完成——Go 编译 CLI（health/tools/search/resolve/snapshot/bars/cache/account/smoke），release 多平台二进制 |
+| 007 qmtctl CLI | ✅ 完成——Go CLI 覆盖 version/auth、行情订阅、账户/组合、期权、参考数据、板块、公式等命令族；支持静态 token 与已有 OAuth access token |
 | 012 数据库持久化 PostgreSQL | ✅ 完成——asyncpg 原生异步 + sync facade；opt-in via `QMT_DB_URL`；行情仓库 bars read/write-through；graceful degradation |
 | 013 行情预取/订阅缓存 | ✅ 完成——subscribe/unsubscribe/list/status 4 工具 + CLI；官方 `subscribe_quote` 优先、轮询兜底；内存热缓存 <1ms |
 | 014 组合风险分析 | ✅ 完成——portfolio_summary/positions/exposure/risk_checks 4 工具（只读，依赖 xttrade 白名单）+ CLI |
-| 015 期权波动率数据 | ✅ 完成——option_chain/quotes/iv/volatility_index_inputs 4 工具（只读，不发布指数值）+ CLI |
-| 016 xtdata 参考数据 | ✅ 完成——financial_data/ipo_info/dividend_factors/cb_info/etf_info 5 工具（只读，按运行时能力降级）+ CLI |
-| 017 自定义板块管理 | ✅ 完成——sector_create/add_codes/remove_codes/managed_sector_list 4 工具（默认关闭，受管前缀沙箱）+ CLI |
-| 018 公式因子运行时 | ✅ 完成——formula_call/batch/generate_factor/subscribe 4 工具（默认关闭，白名单 + 输出沙箱）+ CLI |
+| 015 期权波动率数据 | ✅ 完成——underlyings/chain/detail/quotes/iv/volatility_index_inputs 6 工具（只读，不发布指数值）+ CLI |
+| 016 xtdata 参考数据 | ✅ 完成——财务/分红/新股/可转债/ETF/周期等 9 工具（只读，按运行时能力降级）+ CLI |
+| 017 自定义板块管理 | ✅ 完成——文件夹及板块增删改查 7 工具（默认关闭，受管前缀沙箱）+ CLI |
+| 018 公式因子运行时 | ✅ 完成——调用/批量/生成/订阅/缓存等 7 工具（默认关闭，白名单 + 输出沙箱）+ CLI |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。
@@ -93,6 +93,39 @@ registry._tools['qmt_xtdata_snapshot']['callable'](codes=['000001.SZ'])
   这些已在 `.gitignore`。
 - **开源前脱敏**：从 tracked 文档/spec 注释里清掉真实**账户号、余额数字、主机 IP/凭据**。
 - 只读默认；交易工具须显式开关 + 账户白名单 + 审计（见 constitution）。
+
+## 开发与 CI/CD 规范
+
+- 功能和修复从分支提交 PR，不直接向 `main` 推业务提交；合并前 CI 必须通过。
+- commit subject 和 PR title 使用 Conventional Commits，例如
+  `feat(cli): add command`、`fix(release): preserve cache`、`docs(skills): sync qmtctl usage`。
+- `feat` 触发 minor，`!` 或 `BREAKING CHANGE:` 触发 major，其他被接受的非破坏类型触发 patch。
+- 正常发布不要手改 `VERSION`、创建 tag 或手工发 Release。`main` CI 成功后自动生成 release commit，
+  构建 GHCR 镜像、可选国内镜像和 Linux/macOS/Windows × amd64/arm64 的 qmtctl 包。
+- 合并后必须观察 `main` CI 和后续 Release 到终态；失败时修复根因并重新验证，不能只以 PR CI 通过收尾。
+- Dockerfile 按依赖失效边界分层：稳定系统/Wine/Python 依赖放在频繁变化的源码前，下载与清理留在同一层。
+  最新版本可更新共享 `buildcache`，历史 tag 重试只能读取，不能覆盖。
+- 发布流程与缓存细节以 `docs/RELEASE.md` 为准；部署 skill 不复制开发规范。
+- 永不提交 token、账户信息、broker pack、个人策略文件或本机 `.env`。
+
+提交前至少运行：
+
+```bash
+cd appliance/mcp
+ruff check .
+ruff format --check .
+pytest -m 'not integration'
+
+cd ../../cli/qmtctl
+go test ./...
+go vet ./...
+go build ./...
+
+cd ../..
+python -m unittest discover -s .github/scripts -p 'test_*.py'
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+git diff --check
+```
 
 ## 流程
 

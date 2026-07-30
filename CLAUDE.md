@@ -1,7 +1,9 @@
+Read and follow `AGENT.md` before changing this repository. It is the canonical
+source for architecture, security, testing, Conventional Commits, CI, and
+release rules. The block below only carries the active Speckit context.
+
 <!-- SPECKIT START -->
-Active feature: 018-formula-factor-runtime
-Plan: specs/018-formula-factor-runtime/plan.md
-Spec: specs/018-formula-factor-runtime/spec.md
+Active feature: none
 Constitution: .specify/memory/constitution.md
 
 Project: broker-agnostic QMT-MCP appliance. Base image (Wine wow64 + Windows

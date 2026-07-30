@@ -1,67 +1,103 @@
 # QMT-MCP Reference
 
-Detailed reference for the qmt-mcp-ops skill.
+Detailed configuration and request examples for **qmt-mcp-ops**.
 
-## Environment variables
+## Environment Variables
 
-### Required
+### Required server configuration
 
 | Variable | Description |
 |---|---|
-| `QMT_MCP_TOKEN` | Bearer token for MCP auth. Generate: `openssl rand -hex 32` |
-| `BROKER_PACK` | Host path to broker pack directory |
+| `QMT_MCP_TOKEN` | Static bearer secret accepted by the MCP server |
+| `BROKER_PACK` | Host path to the QMT terminal, matching xtquant, and optional `broker.yaml` |
 
-### Optional
+Generate a static token with `openssl rand -hex 32`.
+
+### Runtime and persistence
 
 | Variable | Default | Description |
 |---|---|---|
-| `INSTANCE` | `default` | Container name suffix (`qmt-<INSTANCE>`) |
-| `RDP_PORT` | `13389` | Host RDP port (container: 3389) |
-| `MCP_PORT` | `18765` | Host MCP port (container: 8765) |
-| `QMT_RDP_PASSWORD` | `qmt` | RDP password for `wineuser` — **change for prod** |
-| `QMT_DB_URL` | _(empty)_ | PostgreSQL DSN for persistence (012) |
-| `QMT_DB_USER` | `qmt` | Bundled DB user (with `--profile db`) |
-| `QMT_DB_PASSWORD` | `qmt` | Bundled DB password |
-| `QMT_DB_NAME` | `qmt` | Bundled DB name |
-| `QMT_ENABLE_XTTRADE_QUERY` | `0` | Enable read-only account queries (004) |
-| `QMT_TRADE_ACCOUNTS` | _(empty)_ | CSV of allowed account IDs |
+| `INSTANCE` | `default` | Container suffix |
+| `RDP_PORT` | `13389` | Host RDP port |
+| `MCP_PORT` | `18765` | Host MCP port |
+| `QMT_RDP_PASSWORD` | `qmt` | RDP password; change outside development |
+| `QMT_DB_URL` | empty | PostgreSQL DSN; empty disables persistence |
+| `QMT_DB_USER` / `QMT_DB_PASSWORD` / `QMT_DB_NAME` | `qmt` | Bundled `db` profile settings |
 
-## Broker pack structure
+### OAuth protected-resource metadata
 
-```
+| Variable | Default | Description |
+|---|---|---|
+| `QMT_MCP_PUBLIC_BASE_URL` | empty | Public HTTPS origin used for metadata URL |
+| `QMT_MCP_OAUTH_AUTHORIZATION_SERVERS` | empty | CSV authorization-server issuer URLs |
+| `QMT_MCP_OAUTH_SCOPES` | `qmt:read` | Space or comma separated supported scopes |
+| `QMT_MCP_OAUTH_RESOURCE` | `<public-base>/mcp` | Protected resource identifier |
+| `QMT_MCP_OAUTH_RESOURCE_NAME` | `QMT MCP` | Display name |
+
+These variables publish discovery metadata; they do not add an authorization
+server or JWT verifier.
+
+### Feature gates
+
+| Variable | Default | Description |
+|---|---|---|
+| `QMT_ENABLE_XTTRADE_QUERY` | `0` | Enable read-only account tools |
+| `QMT_TRADE_ACCOUNTS` | empty | CSV server-side account allowlist |
+| `QMT_ENABLE_XTDATA_SECTOR_WRITE` | `0` | Enable managed custom-sector mutation |
+| `QMT_XTDATA_SECTOR_WRITE_PREFIXES` | `MCP/,AI/` | Writable sector namespace prefixes |
+| `QMT_ENABLE_FORMULA_RUNTIME` | `0` | Enable formula/factor runtime |
+| `QMT_FORMULA_ALLOWLIST` | empty | CSV formulas the runtime may invoke |
+| `QMT_FORMULA_OUTPUT_SANDBOX` | `/broker/formula-output` | Allowed generated-output root |
+
+### Quote subscription cache
+
+| Variable | Default | Description |
+|---|---|---|
+| `QMT_QUOTE_SUBSCRIPTION_STORE` | `/broker/cache/quote-subscriptions-v1.json` | Persistent subscription definitions |
+| `QMT_QUOTE_CACHE_MAX_AGE_MS` | `10000` | Freshness threshold for cached snapshot reads |
+| `QMT_QUOTE_SUBSCRIPTION_MAX_CODES` | `100` | Total code limit |
+| `QMT_QUOTE_SUBSCRIPTION_MAX_OFFICIAL` | `50` | Official callback subscription limit |
+| `QMT_QUOTE_SUBSCRIPTION_MIN_FALLBACK_INTERVAL_S` | `5` | Minimum polling fallback interval |
+
+### qmtctl client
+
+| Variable | Description |
+|---|---|
+| `QMT_MCP_URL` | MCP URL ending in `/mcp` |
+| `QMT_MCP_ACCESS_TOKEN` | Existing OAuth/gateway token; highest precedence |
+| `QMT_MCP_TOKEN` | Static bearer fallback |
+
+## Broker Pack
+
+```text
 <pack>/
-├── broker.yaml                 # optional config (schema v1)
-├── bin.x64/XtItClient.exe      # broker's QMT terminal
-├── userdata_mini/              # created at login
-├── xtquant/                    # matching xtquant package
-└── ...
+  broker.yaml
+  bin.x64/XtItClient.exe
+  userdata_mini/
+  xtquant/
 ```
 
-### `broker.yaml` schema (v1)
-
-All fields optional; omitted → auto-detected by `detect-broker`.
+All `broker.yaml` fields are optional; omitted fields are auto-detected:
 
 ```yaml
 schema_version: 1
 broker: { id: my-broker, name: 我的券商 QMT }
 terminal: { client: bin.x64/XtItClient.exe, userdata: userdata_mini }
-xtquant:  { path: xtquant }
-mcp:      { mode: readonly }   # readonly (default) | trade (deferred)
+xtquant: { path: xtquant }
+mcp: { mode: readonly }
 ```
 
-### detect-broker exit codes
-
-| Code | Meaning |
-|---|---|
-| 10 | `/broker` empty/unreadable |
+| Exit | Meaning |
+|---:|---|
+| 10 | `/broker` empty or unreadable |
 | 11 | `broker.yaml` malformed |
-| 12 | Explicit path doesn't exist |
-| 13 | Client unresolved (set `terminal.client`) |
-| 14 | xtquant unresolved (set `xtquant.path`) |
+| 12 | Explicit path missing |
+| 13 | Terminal client unresolved |
+| 14 | xtquant unresolved |
 
-## Tool parameter details
+## Selected Tool Requests
 
-### search_instruments
+Search:
 
 ```json
 {
@@ -70,52 +106,51 @@ mcp:      { mode: readonly }   # readonly (default) | trade (deferred)
   "markets": ["SH", "SZ"],
   "types": ["stock"],
   "limit": 20,
-  "rank_by": "combined",     // combined | liquidity | relevance
-  "refresh": "stale",        // stale | force | never
+  "rank_by": "combined",
+  "refresh": "stale",
   "include_external": false,
   "include_metrics": true
 }
 ```
 
-### resolve_instrument
-
-```json
-{
-  "query": "纳指",
-  "prefer_types": ["ETF"],
-  "rank_by": "combined",
-  "min_score": 70,
-  "limit": 5,
-  "refresh": "stale"
-}
-```
-
-### snapshot
+Snapshot:
 
 ```json
 {
   "codes": ["510300.SH", "000001.SZ"],
-  "fields": ["lastPrice", "bidPrice", "askPrice"]  // optional filter
+  "fields": ["lastPrice", "bidPrice", "askPrice"],
+  "cache_policy": "prefer"
 }
 ```
 
-### bars
+Bars:
 
 ```json
 {
   "codes": ["510300.SH"],
-  "period": "1d",            // tick/1m/5m/15m/30m/1h/1d/1w/1mon
-  "fields": ["open","high","low","close","volume","amount"],
+  "period": "1d",
+  "fields": ["open", "high", "low", "close", "volume", "amount"],
   "start_time": "20250101",
   "end_time": "20250110",
-  "count": -1,               // -1 = all, else last N (max 10000)
-  "dividend_type": "none",   // none/front/back/front_ratio/back_ratio
+  "count": -1,
+  "dividend_type": "none",
   "fill_data": true,
   "enable_read_from_server": true
 }
 ```
 
-### download_history
+Quote subscription:
+
+```json
+{
+  "subscription_id": "strategy1",
+  "codes": ["510300.SH", "510500.SH"],
+  "period": "tick",
+  "fallback_interval_seconds": 5
+}
+```
+
+Download history:
 
 ```json
 {
@@ -127,36 +162,34 @@ mcp:      { mode: readonly }   # readonly (default) | trade (deferred)
 }
 ```
 
-Batch version: `codes` (list, max 200), same period/time args.
+Use the batch variant for up to 200 codes, then call bars to read the result.
 
-## Docker Compose profiles
+## Compose Profiles And Health
 
-| Profile | Service | Description |
-|---|---|---|
-| _(default)_ | `qmt` | Core appliance only |
-| `db` | `db` | Bundled PostgreSQL 16 |
+| Profile | Service |
+|---|---|
+| default | Core QMT appliance |
+| `db` | Appliance plus PostgreSQL 16 |
 
 ```bash
-# Default (no DB)
 docker compose up -d
-
-# With bundled PostgreSQL
 docker compose --profile db up -d
 ```
 
-## Health endpoints
-
 | Endpoint | Auth | Purpose |
 |---|---|---|
-| `/healthz` | Bearer token | Full health (families, deps, readiness) |
-| `/livez` | None | Liveness probe (for Docker HEALTHCHECK) |
+| `/livez` | None | Minimal liveness |
+| `/healthz` | Bearer | Readiness and family state |
+| `/.well-known/oauth-protected-resource` | None | Optional OAuth resource metadata |
 
-## Gotchas (from AGENT.md)
+## Operational Constraints
 
-1. **Pin base image to date-stamped tag** (e.g. `stable-11.0-20260531`). Never use floating `:stable` — different base produces broken Wine prefixes (`nodrv_CreateWindow`).
-2. **GBK locale**: QMT is cp936 Chinese. Image uses `zh_CN.GBK`; without it, `get_sector_list` etc. crash on Chinese file paths.
-3. **Resolved env values need single quotes**: Wine paths have backslashes; without quotes, bash `source` eats them.
-4. **Trading permission**: `xttrader.connect()==-1` is usually missing broker permission, not a code bug.
-5. **Client priority**: `detect-broker` prefers `XtItClient.exe` (research edition) over standalone `XtMiniQmt.exe`.
-6. **Storage**: broker pack must be on real disk, never tmpfs (RAM exhaustion risk).
-7. **Python 3.12 fixed**: `xtquant` officially supports up to 3.12 only.
+1. Pin the Wine base to a date-stamped tag; do not use floating `stable`.
+2. Keep Python at 3.12 because the proprietary xtquant extension targets it.
+3. Build the Wine prefix with `zh_CN.GBK` for Chinese QMT paths.
+4. Quote resolved Wine paths when shell-sourcing generated env files.
+5. Keep broker packs on real disk, never tmpfs.
+6. Treat `xttrader.connect()==-1` as a likely broker permission issue.
+7. Prefer `XtItClient.exe` when both QMT executables exist.
+8. Follow the canonical repository rules in `AGENT.md`; release mechanics live
+   in `docs/RELEASE.md`.

@@ -2,6 +2,7 @@
 # Verify a deployed QMT-MCP endpoint: liveness, auth enforcement, MCP handshake,
 # tool count, and qmt_health. Read-only — calls no market-data or account tools.
 #
+#   QMT_MCP_ACCESS_TOKEN=... ./verify-mcp.sh <base-url>
 #   QMT_MCP_TOKEN=... ./verify-mcp.sh <base-url>
 #   ./verify-mcp.sh http://127.0.0.1:38765
 #
@@ -9,7 +10,8 @@
 set -uo pipefail
 
 usage() {
-  printf 'usage: QMT_MCP_TOKEN=... %s <base-url>\n' "${0##*/}" >&2
+  printf 'usage: QMT_MCP_ACCESS_TOKEN=... %s <base-url>\n' "${0##*/}" >&2
+  printf '   or: QMT_MCP_TOKEN=... %s <base-url>\n' "${0##*/}" >&2
   printf '       %s http://127.0.0.1:38765  # prompts in a terminal\n' "${0##*/}" >&2
   exit 2
 }
@@ -17,7 +19,7 @@ usage() {
 [ "$#" -eq 1 ] || usage
 BASE="$1"
 BASE="${BASE%/}"
-TOKEN="${QMT_MCP_TOKEN:-}"
+TOKEN="${QMT_MCP_ACCESS_TOKEN:-${QMT_MCP_TOKEN:-}}"
 MIN_TOOLS="${QMT_MCP_MIN_TOOLS:-37}"
 
 if [ -z "$TOKEN" ] && [ -t 0 ]; then
@@ -25,7 +27,7 @@ if [ -z "$TOKEN" ] && [ -t 0 ]; then
   printf '\n'
 fi
 if [ -z "$TOKEN" ]; then
-  printf 'verify-mcp: set QMT_MCP_TOKEN or run interactively to enter the token.\n' >&2
+  printf 'verify-mcp: set QMT_MCP_ACCESS_TOKEN or QMT_MCP_TOKEN, or run interactively to enter the token.\n' >&2
   exit 2
 fi
 if [[ ! "$MIN_TOOLS" =~ ^[1-9][0-9]*$ ]]; then

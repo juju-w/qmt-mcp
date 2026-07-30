@@ -2,15 +2,43 @@
 # Verify a deployed QMT-MCP endpoint: liveness, auth enforcement, MCP handshake,
 # tool count, and qmt_health. Read-only — calls no market-data or account tools.
 #
-#   ./verify-mcp.sh <base-url> <token>
-#   ./verify-mcp.sh http://127.0.0.1:38765 "$QMT_MCP_TOKEN"
+#   QMT_MCP_TOKEN=... ./verify-mcp.sh <base-url>
+#   ./verify-mcp.sh http://127.0.0.1:38765
 #
 # Exit 0 = all checks passed. Non-zero = at least one failed (usable as a deploy gate).
 set -uo pipefail
 
-BASE="${1:?usage: verify-mcp.sh <base-url> <token>   e.g. http://127.0.0.1:38765}"
-TOKEN="${2:?missing bearer token}"
+usage() {
+  printf 'usage: QMT_MCP_TOKEN=... %s <base-url>\n' "${0##*/}" >&2
+  printf '       %s http://127.0.0.1:38765  # prompts in a terminal\n' "${0##*/}" >&2
+  exit 2
+}
+
+[ "$#" -eq 1 ] || usage
+BASE="$1"
 BASE="${BASE%/}"
+TOKEN="${QMT_MCP_TOKEN:-}"
+MIN_TOOLS="${QMT_MCP_MIN_TOOLS:-37}"
+
+if [ -z "$TOKEN" ] && [ -t 0 ]; then
+  read -r -s -p "QMT MCP token: " TOKEN
+  printf '\n'
+fi
+if [ -z "$TOKEN" ]; then
+  printf 'verify-mcp: set QMT_MCP_TOKEN or run interactively to enter the token.\n' >&2
+  exit 2
+fi
+if [[ ! "$MIN_TOOLS" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'verify-mcp: QMT_MCP_MIN_TOOLS must be a positive integer.\n' >&2
+  exit 2
+fi
+if [[ "$BASE" == http://* ]] &&
+   [[ ! "$BASE" =~ ^http://(127\.0\.0\.1|localhost|\[::1\])(:[0-9]+)?(/|$) ]] &&
+   [ "${QMT_MCP_ALLOW_INSECURE_HTTP:-0}" != "1" ]; then
+  printf 'verify-mcp: refusing remote plain HTTP; use HTTPS or an SSH tunnel to localhost.\n' >&2
+  printf 'verify-mcp: set QMT_MCP_ALLOW_INSECURE_HTTP=1 only on a controlled private network.\n' >&2
+  exit 2
+fi
 
 ACCEPT='application/json, text/event-stream'
 HDR="$(mktemp)"; trap 'rm -f "$HDR"' EXIT
@@ -62,13 +90,13 @@ call() {  # call <json-body> — authenticated, session-bound POST
 
 call '{"jsonrpc":"2.0","method":"notifications/initialized"}' >/dev/null
 
-# 4) Tool registry. A readonly appliance registers ~37 tools; xtdata alone is ~35.
+# 4) Tool registry. The standard readonly appliance registers 37 tools.
 tools="$(call '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-         | grep -o '"name":"qmt_[a-z_]*"' | sort -u | wc -l | tr -d ' ')"
-if [ "${tools:-0}" -ge 10 ]; then
+         | grep -o '"name":"qmt_[a-z0-9_]*"' | sort -u | wc -l | tr -d ' ')"
+if [ "${tools:-0}" -ge "$MIN_TOOLS" ]; then
   ok "tools/list returned ${tools} tools."
 else
-  err "tools/list returned only ${tools:-0} tools — registration likely failed."
+  err "tools/list returned only ${tools:-0} tools; expected at least ${MIN_TOOLS}."
 fi
 
 # 5) qmt_health. Parsed from the SSE data: line without assuming a JSON parser exists.
@@ -81,6 +109,13 @@ else
   err "qmt_health did not report ok=true."
 fi
 
+# A missing broker configuration means the image cannot start the terminal reliably.
+case "$(field broker_config)" in
+  loaded) ok "broker configuration loaded." ;;
+  "")     err "could not read broker_config from qmt_health." ;;
+  *)      err "broker_config=$(field broker_config) — broker pack configuration is incomplete." ;;
+esac
+
 # xtquant must import — that validates the broker pack itself.
 case "$(field xtquant_import)" in
   ok) ok "xtquant imports under Wine (broker pack valid)." ;;
@@ -88,16 +123,28 @@ case "$(field xtquant_import)" in
   *)  err "xtquant_import=$(field xtquant_import) — broker pack xtquant is unusable." ;;
 esac
 
-# xtdata/xttrade state is informational: both stay degraded until the QMT terminal
-# itself is logged in over RDP. Never a deploy failure.
+# Login-dependent states are acceptable before the terminal session is established.
+# Registration/configuration failures are deploy failures even when qmt_health.ok is true.
 xtdata="$(field xtdata)"
-if [ "$xtdata" = "ok" ]; then
-  ok "xtdata ready."
-else
-  printf '  [info] xtdata=%s, xttrade=%s — expected until the QMT terminal is\n' \
-         "${xtdata:-unknown}" "$(field xttrade)"
-  printf '         logged in over RDP. Not a deployment fault.\n'
-fi
+case "$xtdata" in
+  ready)
+    ok "xtdata ready."
+    ;;
+  awaiting_login|degraded|not_ready)
+    printf '  [info] xtdata=%s, xttrade=%s — expected until the QMT terminal is\n' \
+           "$xtdata" "$(field xttrade)"
+    printf '         logged in over RDP. Not a deployment fault.\n'
+    ;;
+  "")
+    err "could not read xtdata from qmt_health."
+    ;;
+  error|disabled)
+    err "xtdata=${xtdata} — standard readonly market-data tools are unavailable."
+    ;;
+  *)
+    err "xtdata=${xtdata} — unexpected readiness state."
+    ;;
+esac
 
 echo "verify-mcp: ${fail} failure(s)."
 [ "$fail" -eq 0 ] || { echo "verify-mcp: FAILED."; exit 1; }

@@ -136,8 +136,21 @@ Run `verify-mcp.sh` (in this skill directory) — handshake, auth enforcement, a
 count in one shot:
 
 ```bash
-./verify-mcp.sh http://<host>:38765 <token>
+# Public/remote endpoint: terminate TLS at the reverse proxy
+read -r -s -p "QMT MCP token: " QMT_MCP_TOKEN; printf '\n'; export QMT_MCP_TOKEN
+./verify-mcp.sh https://qmt.example.com
+
+# Or keep MCP private and verify through an SSH tunnel
+ssh -L 38765:127.0.0.1:38765 <host>
+./verify-mcp.sh http://127.0.0.1:38765
+unset QMT_MCP_TOKEN
 ```
+
+The verifier never accepts the bearer token as a positional argument, so it does not
+land in shell history or process arguments. Remote plain HTTP is refused by default.
+`QMT_MCP_ALLOW_INSECURE_HTTP=1` is an explicit escape hatch for an isolated, controlled
+network. Set `QMT_MCP_MIN_TOOLS` only when intentionally deploying a reduced tool set;
+the standard readonly appliance requires at least 37.
 
 Manual probes worth knowing:
 

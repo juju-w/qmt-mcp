@@ -168,6 +168,9 @@ Stable `2026-07-28` clients may also use durable Tasks. Keep
 `QMT_MCP_TASK_STORE` on persistent real disk, never share one SQLite file among
 multiple active MCP replicas, and include it in backups when detached task
 recovery matters. Older and non-declaring clients remain synchronous.
+Waiting tasks may expose standard MCP `inputRequests`; the prompt snapshot is
+durable, but response values are in-process only. A restart marks the task
+failed instead of replaying answers.
 
 Use qmtctl for client-level discovery and smoke checks:
 
@@ -182,13 +185,16 @@ qmtctl health
 qmtctl smoke --code 510300.SH
 qmtctl --task-mode detach --json cache refresh --force
 qmtctl task wait tsk_<id>
+qmtctl --json task get tsk_<id>
 ```
 
 `qmtctl auth discover` needs no token. Login uses Authorization Code + PKCE and
 persists refresh rotation. MCP commands use an explicit access token first,
 then a static token, then the saved per-resource OAuth session.
 qmtctl's default task mode waits and prints the final tool result;
-`--task-mode sync` exercises the old-client compatibility path.
+`--task-mode sync` exercises the old-client compatibility path. If wait returns
+`task_input_required`, review its request data and use explicit
+`qmtctl task update`; never auto-accept a confirmation.
 
 Manual probes worth knowing:
 

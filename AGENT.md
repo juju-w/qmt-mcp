@@ -35,6 +35,7 @@
 | 021 OAuth 授权 | ✅ 完成——static/oauth/hybrid；JWT/JWKS resource server、scope 工具裁剪、qmtctl PKCE 登录/刷新 |
 | 022 MCP 分页与压缩 | ✅ 完成——授权后 `tools/list` opaque cursor 分页、qmtctl 有界聚合、JSON gzip/SSE 排除 |
 | 023 MCP Tasks | ✅ 完成——主推 2026-07-28 Tasks，持久化生命周期、qmtctl 等待/脱离/同步，旧客户端同步兼容 |
+| 024 MCP 任务多轮输入 | 🟡 实现中——标准 inputRequests、部分回答、MRTR→Task 组合、qmtctl 显式响应，旧客户端同步兼容 |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。

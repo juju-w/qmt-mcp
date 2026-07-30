@@ -404,9 +404,9 @@ func runTask(
 		if strings.TrimSpace(*responsesJSON) == "" {
 			return fmt.Errorf("task update requires --responses-json")
 		}
-		var responses map[string]any
-		if err := json.Unmarshal([]byte(*responsesJSON), &responses); err != nil {
-			return fmt.Errorf("invalid --responses-json: %w", err)
+		responses, err := parseTaskInputResponses(*responsesJSON)
+		if err != nil {
+			return err
 		}
 		ack, err := client.TaskUpdate(ctx, fs.Arg(0), responses)
 		return writeTaskObject(stdout, ack, opts, err)
@@ -1431,6 +1431,11 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 	}
 	if appErr.Kind != "" {
 		fmt.Fprintf(stderr, "%s: %s\n", appErr.Kind, appErr.Message)
+		if appErr.Data != nil {
+			if detail, marshalErr := json.MarshalIndent(appErr.Data, "", "  "); marshalErr == nil {
+				fmt.Fprintf(stderr, "%s\n", detail)
+			}
+		}
 		return
 	}
 	fmt.Fprintln(stderr, appErr.Message)

@@ -48,6 +48,7 @@
 | `qmtctl` CLI | ✅ 可用 | Go 编译命令行客户端，支持行情/搜索/账户查询 |
 | MCP 协议 | ✅ 双线兼容 | 主推稳定版 `2026-07-28`，同一 `/mcp` 自动兼容 2025 客户端 |
 | MCP 长任务 | ✅ 可用 | 2026 Tasks 持久化执行；未升级或未声明扩展的客户端继续同步调用 |
+| MCP 任务多轮输入 | ✅ 可用 | 任务可暂停并分批接收标准 MCP 输入；qmtctl 显式回答，不自动确认 |
 | MCP 工具契约 / Profile | ✅ 可用 | 结构化结果、行为注解；可按 full/readonly/market/account/core/custom 裁剪工具面 |
 | OAuth 2.1 授权 | ✅ 可用 | static/oauth/hybrid；JWT/JWKS 校验、scope 裁剪、qmtctl PKCE 登录与刷新 |
 
@@ -159,6 +160,12 @@ QMT_MCP_TASK_POLL_INTERVAL_MS=1000
 QMT_MCP_TASK_MAX_RETAINED=1000
 ```
 
+长任务可以进入 `input_required`，通过 `tasks/get` 暴露带 `{method, params}`
+的标准 `inputRequests`。客户端可分批调用 `tasks/update`；未知、重复或已回答
+的键会幂等忽略，最后一个待答键完成后任务恢复。待答问题快照会写入任务库，
+回答值只交给当前任务协程，不写 SQLite、日志或审计。服务重启时等待输入的
+任务与其他未完成任务一样明确失败，不会重放回答。
+
 qmtctl 默认等待任务结束并保持原命令输出，也可脱离后续查：
 
 ```bash
@@ -167,7 +174,14 @@ qmtctl --task-mode detach --json cache refresh --force
 qmtctl task get tsk_<id>
 qmtctl task wait tsk_<id>
 qmtctl task cancel tsk_<id>
+qmtctl task update tsk_<id> \
+  --responses-json '{"confirmation":{"action":"accept","content":{"confirm":true}}}'
 ```
+
+默认等待遇到 `input_required` 时会返回结构化
+`task_input_required` 错误，包含 task ID 和待答请求；qmtctl 不会替用户确认。
+只有 `2026-07-28` 且声明 Tasks 的客户端启用这些语义，2025 或未声明客户端
+仍同步执行。
 
 ## 快速开始
 

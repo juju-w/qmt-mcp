@@ -80,6 +80,13 @@ marks interrupted work failed rather than leaving it permanently active.
 Keep this file on persistent storage and do not share one store between
 multiple concurrently running MCP server instances.
 
+A task may pause as `input_required` with standard keyed MCP
+`inputRequests`. `tasks/update` accepts partial answers and resumes after the
+last pending key. Pending prompts are durable; response values remain
+in-process and are never written to SQLite or logs. qmtctl exposes the task ID
+and pending requests and requires an explicit `task update`; it does not
+auto-confirm.
+
 ## Connect
 
 Use a real RDP client (macOS: **Windows App** / Microsoft Remote Desktop —

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -299,5 +301,103 @@ func TestRunRejectsNonPositiveTaskTimeout(t *testing.T) {
 		if code != 2 || !strings.Contains(stderr.String(), "greater than zero") {
 			t.Fatalf("args=%v exit=%d stderr=%s", args, code, stderr.String())
 		}
+	}
+}
+
+func TestParseTaskInputResponsesEnforcesBounds(t *testing.T) {
+	valid, err := parseTaskInputResponses(
+		`{"confirmation":{"action":"accept","content":{"confirm":true}}}`,
+	)
+	if err != nil || len(valid) != 1 {
+		t.Fatalf("valid responses = %#v, %v", valid, err)
+	}
+
+	for _, raw := range []string{
+		`null`,
+		`[]`,
+		`{"":{"action":"accept"}}`,
+		`{"` + strings.Repeat("x", maxTaskInputKeyBytes+1) + `":{"action":"accept"}}`,
+		strings.Repeat(" ", maxTaskInputBatchBytes+1),
+	} {
+		if _, err := parseTaskInputResponses(raw); err == nil {
+			t.Fatalf("parseTaskInputResponses(%d bytes) unexpectedly succeeded", len(raw))
+		}
+	}
+
+	tooMany := make(map[string]any, maxTaskInputItems+1)
+	for i := 0; i <= maxTaskInputItems; i++ {
+		tooMany[fmt.Sprintf("request-%d", i)] = map[string]any{"action": "accept"}
+	}
+	raw, err := json.Marshal(tooMany)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseTaskInputResponses(string(raw)); err == nil {
+		t.Fatal("oversized response map unexpectedly succeeded")
+	}
+}
+
+func TestClientWaitModePreservesInputRequiredDetails(t *testing.T) {
+	const taskID = "tsk_abcdefghijklmnopqrstuvwxyz0123456789ABCD"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		switch request["method"] {
+		case "server/discover":
+			writeRPCResult(w, request["id"], modernTaskDiscover())
+		case "tools/call":
+			writeRPCResult(w, request["id"], createdTaskWire(taskID))
+		case "tasks/get":
+			result := taskWire(taskID, "input_required")
+			result["inputRequests"] = map[string]any{
+				"confirmation": map[string]any{
+					"method": "elicitation/create",
+					"params": map[string]any{"mode": "form", "message": "Confirm"},
+				},
+			}
+			writeRPCResult(w, request["id"], result)
+		default:
+			t.Fatalf("unexpected method %v", request["method"])
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "", 2*time.Second, false)
+	defer client.Close()
+	_, err := client.CallTool(context.Background(), "qmt_long", map[string]any{})
+	var appErr *AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("CallTool error = %T %v", err, err)
+	}
+	if appErr.Kind != "task_input_required" {
+		t.Fatalf("error kind = %q", appErr.Kind)
+	}
+	detail, marshalErr := json.Marshal(appErr.Data)
+	if marshalErr != nil {
+		t.Fatal(marshalErr)
+	}
+	if !bytes.Contains(detail, []byte(taskID)) ||
+		!bytes.Contains(detail, []byte("elicitation/create")) {
+		t.Fatalf("error data = %s", detail)
+	}
+
+	var human bytes.Buffer
+	printError(&human, appErr, false)
+	if !strings.Contains(human.String(), taskID) ||
+		!strings.Contains(human.String(), "elicitation/create") {
+		t.Fatalf("human error = %s", human.String())
+	}
+
+	var asJSON bytes.Buffer
+	printError(&asJSON, appErr, true)
+	if !strings.Contains(asJSON.String(), `"error_type": "task_input_required"`) ||
+		!strings.Contains(asJSON.String(), `"inputRequests"`) {
+		t.Fatalf("JSON error = %s", asJSON.String())
 	}
 }

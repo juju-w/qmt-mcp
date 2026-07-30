@@ -18,13 +18,19 @@ python3 -m pytest -m 'not integration'
 
 Exercises app assembly + the ASGI auth/`/healthz` path. It installs official `mcp`
 and injects a **fake `xtquant`** (see `conftest.py::fake_xtquant`), so it still
-needs no Wine or broker pack. It is skipped automatically when `mcp` is
-absent.
+needs no Wine or broker pack. It covers stable/legacy MCP negotiation, OAuth,
+durable Tasks, partial task input, MRTR-to-Task composition, and transient
+answer handling. It is skipped automatically when `mcp` is absent.
 
 ```bash
 python3 -m pip install "mcp==2.0.0"
 python3 -m pytest -m integration
 ```
+
+CI additionally runs the pinned official MCP conformance package, including
+the 023 Tasks lifecycle scenarios plus `tasks-mrtr-input` and
+`tasks-mrtr-composition`. Their synthetic tools are available only when
+`QMT_MCP_TASK_CONFORMANCE_FIXTURES=1`.
 
 ## Intentionally out of host scope
 

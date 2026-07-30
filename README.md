@@ -123,6 +123,22 @@ QMT_MCP_TOOL_DENYLIST=qmt_xtdata_download_*
 模式下它们会再与 token scope 取交集；`qmt:admin` 也不能越过启动 Profile 和
 feature gate。
 
+### 工具分页与 HTTP 压缩
+
+`tools/list` 默认每页最多 50 个已授权工具，并用标准 opaque cursor 继续
+翻页。Profile、allow/deny 和 OAuth scope 会先裁剪工具面，再生成 cursor；
+qmtctl 会自动取完全部页面，所以 `qmtctl tools` 的使用方式和输出不变。
+这里分页的是 MCP 工具目录，不会改变行情、期权或参考数据工具各自的 `limit`。
+
+远程 MCP JSON 响应在客户端接受 gzip 且正文至少 1024 字节时自动压缩，SSE
+始终不压缩。可在 `appliance/.env` 调整；若反向代理统一负责压缩，可设阈值为
+`0` 关闭应用层 gzip：
+
+```env
+QMT_MCP_LIST_PAGE_SIZE=50
+QMT_MCP_GZIP_MIN_SIZE=1024
+```
+
 ## 快速开始
 
 > 必须在**原生 amd64 主机**构建运行（Apple Silicon 仅模拟，QMT 可能触发 Rosetta AVX 崩溃）。

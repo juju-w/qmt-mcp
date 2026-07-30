@@ -2,6 +2,7 @@ package qmtctl
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -95,6 +96,138 @@ func TestAuthDiscoverUsesPathAwareMetadataWithoutBearer(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), `"authorization_servers"`) {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestToolsAggregatesModernGzipPages(t *testing.T) {
+	var cursors []string
+	var gzipResponses int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode MCP request: %v", err)
+		}
+		switch req["method"] {
+		case "server/discover":
+			writeMaybeGzipRPCResult(t, w, r, req["id"], map[string]any{
+				"resultType":        "complete",
+				"supportedVersions": []string{"2026-07-28"},
+				"capabilities":      map[string]any{"tools": map[string]any{}},
+				"ttlMs":             0,
+				"cacheScope":        "private",
+			})
+			gzipResponses++
+		case "tools/list":
+			params := req["params"].(map[string]any)
+			cursor, _ := params["cursor"].(string)
+			cursors = append(cursors, cursor)
+			var result map[string]any
+			switch cursor {
+			case "":
+				result = toolPage("cursor-1", "alpha")
+			case "cursor-1":
+				result = toolPage("cursor-2", "bravo")
+			case "cursor-2":
+				result = toolPage("", "charlie")
+			default:
+				t.Fatalf("unexpected cursor %q", cursor)
+			}
+			writeMaybeGzipRPCResult(t, w, r, req["id"], result)
+			gzipResponses++
+		default:
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL, "--json", "tools"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if got := strings.Join(cursors, ","); got != ",cursor-1,cursor-2" {
+		t.Fatalf("cursors = %q", got)
+	}
+	for _, name := range []string{"alpha", "bravo", "charlie"} {
+		if !strings.Contains(stdout.String(), `"name": "`+name+`"`) {
+			t.Fatalf("missing %s in stdout: %s", name, stdout.String())
+		}
+	}
+	if gzipResponses != 4 {
+		t.Fatalf("gzip responses = %d", gzipResponses)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result["resultType"] != "complete" {
+		t.Fatalf("metadata was not preserved: %#v", result)
+	}
+	for _, key := range []string{"ttlMs", "cacheScope"} {
+		if _, found := result[key]; !found {
+			t.Fatalf("metadata key %q was not preserved: %#v", key, result)
+		}
+	}
+	if _, found := result["nextCursor"]; found {
+		t.Fatalf("consumed cursor leaked into aggregate: %#v", result)
+	}
+}
+
+func TestToolsRejectsPaginationCursorCycle(t *testing.T) {
+	var listCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
+		}
+		if req["method"] != "tools/list" {
+			t.Fatalf("unexpected method %v", req["method"])
+		}
+		listCalls++
+		writeRPCResult(w, req["id"], toolPage("repeated", "tool-"+string(rune('a'+listCalls-1))))
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL, "tools"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("exit %d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if listCalls != 2 {
+		t.Fatalf("list calls = %d", listCalls)
+	}
+	if !strings.Contains(stderr.String(), "pagination cursor cycle") {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+}
+
+func TestToolsRejectsDuplicateNamesAcrossPages(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
+		}
+		params, _ := req["params"].(map[string]any)
+		cursor, _ := params["cursor"].(string)
+		next := "second"
+		if cursor == "second" {
+			next = ""
+		}
+		writeRPCResult(w, req["id"], toolPage(next, "duplicate"))
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL, "tools"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("exit %d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), `duplicate tool "duplicate"`) {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
 }
 
@@ -509,6 +642,26 @@ func writeRPCResult(w http.ResponseWriter, id any, result any) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 }
 
+func writeMaybeGzipRPCResult(t *testing.T, w http.ResponseWriter, r *http.Request, id any, result any) {
+	t.Helper()
+	if !strings.Contains(r.Header.Get("accept-encoding"), "gzip") {
+		t.Fatalf("request did not advertise gzip: %q", r.Header.Get("accept-encoding"))
+	}
+	raw, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Header().Set("content-type", "application/json")
+	w.Header().Set("content-encoding", "gzip")
+	writer := gzip.NewWriter(w)
+	if _, err := writer.Write(raw); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func writeRPCError(w http.ResponseWriter, id any, code int, message string) {
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
@@ -552,6 +705,25 @@ func toolResult(payload map[string]any) map[string]any {
 	return map[string]any{
 		"content": []any{map[string]any{"type": "text", "text": string(raw)}},
 	}
+}
+
+func toolPage(nextCursor, names string) map[string]any {
+	tools := make([]any, 0)
+	for _, name := range strings.Fields(names) {
+		tools = append(tools, map[string]any{
+			"name":        name,
+			"description": name + " tool",
+			"inputSchema": map[string]any{"type": "object"},
+		})
+	}
+	result := map[string]any{
+		"resultType": "complete",
+		"tools":      tools,
+	}
+	if nextCursor != "" {
+		result["nextCursor"] = nextCursor
+	}
+	return result
 }
 
 func serverURL(r *http.Request) string {

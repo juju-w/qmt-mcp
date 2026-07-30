@@ -159,6 +159,10 @@ the standard `full` appliance requires at least 37. For a server using
 `QMT_MCP_TOOL_PROFILE=core`, `readonly`, `market`, `account`, or `custom`, set
 the verifier threshold to the intended visible count and confirm the effective
 policy with `qmtctl tools --json` plus `qmt_capabilities.tool_visibility`.
+`qmtctl tools` follows all `tools/list` cursors, so the verifier and CLI see the
+complete authorized catalog even when `QMT_MCP_LIST_PAGE_SIZE` is smaller than
+the tool count. Eligible JSON responses use negotiated gzip by default; set
+`QMT_MCP_GZIP_MIN_SIZE=0` only when the ingress owns compression.
 
 Use qmtctl for client-level discovery and smoke checks:
 

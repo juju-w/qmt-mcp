@@ -111,6 +111,17 @@ OAuth scopes then intersect this startup surface:
 
 Neither `qmt:manage` nor `qmt:admin` bypasses feature gates or enables trading.
 
+## Catalog Pagination and Compression
+
+The server applies Profile and OAuth visibility before paginating
+`tools/list`. `QMT_MCP_LIST_PAGE_SIZE` defaults to 50; qmtctl follows all
+opaque cursors automatically and rejects cycles or duplicate tools.
+Tool-catalog pagination does not change business-level `limit` arguments.
+
+MCP JSON responses at or above `QMT_MCP_GZIP_MIN_SIZE` use negotiated gzip
+(default 1024 bytes). SSE is excluded. Set the threshold to `0` when an ingress
+must own compression.
+
 ## Tool Families
 
 The standard registry has 37 tools:
@@ -170,6 +181,8 @@ qmtctl health
 
 `QMT_MCP_ACCESS_TOKEN` takes precedence over `QMT_MCP_TOKEN`. Equivalent global
 flags are `--url`, `--access-token`/`--token`, `--json`, and `--timeout`.
+The `tools` command always combines the complete paginated catalog and standard
+Go HTTP gzip decoding is automatic.
 
 For browser login with persisted refresh:
 

@@ -28,6 +28,9 @@ services:
       QMT_MCP_TOOL_PROFILE: "${QMT_MCP_TOOL_PROFILE:-full}"
       QMT_MCP_TOOL_ALLOWLIST: "${QMT_MCP_TOOL_ALLOWLIST:-}"
       QMT_MCP_TOOL_DENYLIST: "${QMT_MCP_TOOL_DENYLIST:-}"
+      # Bounded standard tools/list pages and negotiated JSON gzip (022).
+      QMT_MCP_LIST_PAGE_SIZE: "${QMT_MCP_LIST_PAGE_SIZE:-50}"
+      QMT_MCP_GZIP_MIN_SIZE: "${QMT_MCP_GZIP_MIN_SIZE:-1024}"
       # OAuth resource-server discovery and JWT/JWKS validation. Login and token
       # issuance stay in an external authorization server.
       QMT_MCP_PUBLIC_BASE_URL: "${QMT_MCP_PUBLIC_BASE_URL:-}"

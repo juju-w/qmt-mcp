@@ -39,6 +39,24 @@ Ports (host → container):
 18765 → 8765   MCP (bearer-token)
 ```
 
+## MCP transport controls
+
+The server paginates the authorized `tools/list` catalog with opaque cursors.
+The default page size is 50; qmtctl consumes all pages automatically. This
+transport-level pagination is separate from business `limit` arguments on
+market-data tools.
+
+Eligible JSON responses use negotiated gzip at 1024 bytes by default. SSE
+remains uncompressed. Configure both in `.env`:
+
+```env
+QMT_MCP_LIST_PAGE_SIZE=50
+QMT_MCP_GZIP_MIN_SIZE=1024
+```
+
+Set `QMT_MCP_GZIP_MIN_SIZE=0` if a reverse proxy should be the only compression
+layer.
+
 ## Connect
 
 Use a real RDP client (macOS: **Windows App** / Microsoft Remote Desktop —

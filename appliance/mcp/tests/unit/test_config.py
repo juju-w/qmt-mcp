@@ -68,6 +68,8 @@ def test_defaults_and_env_file_overlay(monkeypatch, tmp_path):
     assert cfg.transport == "streamable-http"
     assert cfg.worker_limit >= 1
     assert cfg.enable_xtdata is True
+    assert cfg.mcp_list_page_size == 50
+    assert cfg.mcp_gzip_minimum_size == 1024
 
 
 def test_process_env_overrides_file(monkeypatch, tmp_path):
@@ -185,6 +187,32 @@ def test_tool_profile_knobs_from_env(monkeypatch, tmp_path):
     assert cfg.tool_profile == "custom"
     assert cfg.tool_allowlist == ("qmt_xtdata_snapshot", "qmt_xtdata_option_*")
     assert cfg.tool_denylist == ("qmt_xtdata_option_quotes",)
+
+
+def test_pagination_and_compression_knobs_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv("QMT_MCP_LIST_PAGE_SIZE", "17")
+    monkeypatch.setenv("QMT_MCP_GZIP_MIN_SIZE", "0")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.mcp_list_page_size == 17
+    assert cfg.mcp_gzip_minimum_size == 0
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("QMT_MCP_LIST_PAGE_SIZE", "0"),
+        ("QMT_MCP_LIST_PAGE_SIZE", "1001"),
+        ("QMT_MCP_GZIP_MIN_SIZE", "-1"),
+        ("QMT_MCP_GZIP_MIN_SIZE", "10485761"),
+    ],
+)
+def test_invalid_pagination_or_compression_knobs_fail_closed(monkeypatch, tmp_path, name, value):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv(name, value)
+    with pytest.raises(McpCoreError) as exc:
+        load_config(_empty_env(tmp_path))
+    assert exc.value.error_type == "config"
 
 
 @pytest.mark.parametrize("profile", ["unknown", ""])

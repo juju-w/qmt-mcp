@@ -91,6 +91,27 @@ status, and logout. See `docs/MCP-CLIENTS.md`.
 - Plain HTTP is acceptable **only** on loopback for local dev. Any bearer
   credential over plain HTTP on a LAN is sniffable.
 
+## Pagination and compression
+
+`tools/list` is server-paginated after Profile and OAuth filtering. The default
+page size is 50 and qmtctl automatically follows every opaque cursor:
+
+```env
+QMT_MCP_LIST_PAGE_SIZE=50
+```
+
+Eligible MCP JSON responses use negotiated gzip above 1024 bytes. SSE is
+excluded to preserve incremental delivery:
+
+```env
+QMT_MCP_GZIP_MIN_SIZE=1024
+```
+
+Leave this enabled when the upstream proxy passes `Accept-Encoding` through.
+Set it to `0` when the ingress is the sole compression layer. The middleware
+does not double-compress an already encoded response and emits
+`Vary: Accept-Encoding`.
+
 ## RDP
 
 - Set a strong `QMT_RDP_PASSWORD` (the compose default `qmt` is for dev only).
@@ -115,6 +136,8 @@ status, and logout. See `docs/MCP-CLIENTS.md`.
       algorithm allowlist, and only the scopes actually needed.
 - [ ] `QMT_RDP_PASSWORD` is strong and non-default.
 - [ ] MCP reachable only via TLS proxy (not host-published on a LAN).
+- [ ] Compression ownership is intentional; app gzip is disabled if the
+      ingress must be the only compressor.
 - [ ] RDP bound to loopback / behind VPN.
 - [ ] Broker pack on real disk (not tmpfs).
 - [ ] Audit log destination is persistent and monitored.

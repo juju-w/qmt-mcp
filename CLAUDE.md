@@ -3,7 +3,7 @@ source for architecture, security, testing, Conventional Commits, CI, and
 release rules. The block below only carries the active Speckit context.
 
 <!-- SPECKIT START -->
-Active feature: specs/021-oauth-authorization
+Active feature: specs/022-mcp-pagination-compression
 Constitution: .specify/memory/constitution.md
 
 Project: broker-agnostic QMT-MCP appliance. Base image (Wine wow64 + Windows

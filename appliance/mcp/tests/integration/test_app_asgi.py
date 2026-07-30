@@ -17,7 +17,7 @@ pytestmark = pytest.mark.integration
 
 from starlette.testclient import TestClient  # noqa: E402
 
-from qmt_mcp_core.app import create_app  # noqa: E402
+from qmt_mcp_core.app import NegotiatedGZipMiddleware, _accepts_gzip, create_app  # noqa: E402
 from qmt_mcp_core.config import CoreConfig  # noqa: E402
 
 MODERN_VERSION = "2026-07-28"
@@ -261,6 +261,125 @@ def test_modern_tool_contracts_and_structured_results(fake_xtquant, tmp_path):
     assert error_result["structuredContent"]["error_type"] == "validation"
 
 
+def test_modern_tools_list_uses_stable_cursor_pages_and_rejects_invalid_cursor(fake_xtquant, tmp_path):
+    app, _cfg, _health, _registry = create_app(
+        _config(
+            tmp_path,
+            "",
+            host="127.0.0.1",
+            allow_unauth_loopback=True,
+            enable_xtdata=False,
+            mcp_list_page_size=1,
+        )
+    )
+    first_payload, first_headers = _modern_request("tools/list", 30)
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        first_response = client.post("/mcp", json=first_payload, headers=first_headers)
+        first = _response_json(first_response)["result"]
+        assert len(first["tools"]) == 1
+        assert first["nextCursor"]
+        assert first["ttlMs"] == 0
+        assert first["cacheScope"] == "private"
+
+        second_payload, second_headers = _modern_request(
+            "tools/list",
+            31,
+            {"cursor": first["nextCursor"]},
+        )
+        second_response = client.post("/mcp", json=second_payload, headers=second_headers)
+        second = _response_json(second_response)["result"]
+
+        invalid_payload, invalid_headers = _modern_request(
+            "tools/list",
+            32,
+            {"cursor": "not-a-valid-cursor"},
+        )
+        invalid_response = client.post("/mcp", json=invalid_payload, headers=invalid_headers)
+        invalid = _response_json(invalid_response)
+
+    assert len(second["tools"]) == 1
+    assert "nextCursor" not in second
+    assert [first["tools"][0]["name"], second["tools"][0]["name"]] == [
+        "qmt_capabilities",
+        "qmt_health",
+    ]
+    assert invalid["error"]["code"] == -32602
+    assert invalid["error"]["message"] == "Invalid pagination cursor"
+    assert "not-a-valid-cursor" not in invalid_response.text
+
+
+def test_tools_list_gzip_is_negotiated_for_json_and_excluded_for_sse(fake_xtquant, tmp_path):
+    app, _cfg, _health, _registry = create_app(
+        _config(
+            tmp_path,
+            "",
+            host="127.0.0.1",
+            allow_unauth_loopback=True,
+            enable_xtdata=True,
+            mcp_list_page_size=1000,
+            mcp_gzip_minimum_size=1,
+        )
+    )
+    payload, headers = _modern_request("tools/list", 40)
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        identity = client.post("/mcp", json=payload, headers={**headers, "accept-encoding": "identity"})
+        compressed = client.post("/mcp", json=payload, headers={**headers, "accept-encoding": "gzip"})
+        rejected = client.post("/mcp", json=payload, headers={**headers, "accept-encoding": "gzip;q=0"})
+
+    assert identity.status_code == 200
+    assert compressed.status_code == 200
+    assert compressed.headers["content-encoding"] == "gzip"
+    assert "accept-encoding" in compressed.headers["vary"].lower()
+    assert compressed.json() == identity.json()
+    assert int(compressed.headers["content-length"]) < len(identity.content) * 0.6
+    assert "content-encoding" not in rejected.headers
+    assert rejected.json() == identity.json()
+
+    async def sse_app(_scope, _receive, send):
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [(b"content-type", b"text/event-stream")],
+            }
+        )
+        await send({"type": "http.response.body", "body": b"data: first\n\n", "more_body": True})
+        await send({"type": "http.response.body", "body": b"data: second\n\n"})
+
+    streamed = NegotiatedGZipMiddleware(sse_app, minimum_size=1)
+    status, raw_headers, body = _drive_full(
+        streamed,
+        {
+            "type": "http",
+            "path": "/mcp",
+            "headers": [(b"accept-encoding", b"gzip")],
+            "method": "POST",
+        },
+    )
+    header_map = {key.lower(): value for key, value in raw_headers}
+    assert status == 200
+    assert header_map[b"content-type"] == b"text/event-stream"
+    assert b"content-encoding" not in header_map
+    assert body == b"data: first\n\ndata: second\n\n"
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [
+        ("gzip", True),
+        ("br, gzip;q=0.5", True),
+        ("gzip;q=0", False),
+        ("br, *;q=0.2", True),
+        ("identity", False),
+        ("gzip;q=broken", False),
+    ],
+)
+def test_gzip_accept_encoding_quality_negotiation(header, expected):
+    assert _accepts_gzip(header) is expected
+
+
 def test_core_profile_hides_and_rejects_non_core_tools(fake_xtquant, tmp_path):
     app, _cfg, _health, registry = create_app(
         _config(
@@ -292,7 +411,14 @@ def test_core_profile_hides_and_rejects_non_core_tools(fake_xtquant, tmp_path):
 
 def test_legacy_initialize_and_session_share_modern_endpoint(fake_xtquant, tmp_path):
     app, _cfg, _health, _reg = create_app(
-        _config(tmp_path, "", host="127.0.0.1", allow_unauth_loopback=True, enable_xtdata=False)
+        _config(
+            tmp_path,
+            "",
+            host="127.0.0.1",
+            allow_unauth_loopback=True,
+            enable_xtdata=False,
+            mcp_list_page_size=1,
+        )
     )
     accept = {"accept": "application/json, text/event-stream"}
     initialize = {
@@ -330,12 +456,31 @@ def test_legacy_initialize_and_session_share_modern_endpoint(fake_xtquant, tmp_p
             headers=session_headers,
         )
         assert listed.status_code == 200
-        assert {tool["name"] for tool in _response_json(listed)["result"]["tools"]} >= {
+        first_page = _response_json(listed)["result"]
+        assert len(first_page["tools"]) == 1
+        assert first_page["nextCursor"]
+        for tool in first_page["tools"]:
+            _assert_complete_tool_contract(tool)
+
+        listed_next = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/list",
+                "params": {"cursor": first_page["nextCursor"]},
+            },
+            headers=session_headers,
+        )
+        assert listed_next.status_code == 200
+        second_page = _response_json(listed_next)["result"]
+        assert len(second_page["tools"]) == 1
+        assert "nextCursor" not in second_page
+        assert {first_page["tools"][0]["name"], second_page["tools"][0]["name"]} == {
             "qmt_health",
             "qmt_capabilities",
         }
-        for tool in _response_json(listed)["result"]["tools"]:
-            _assert_complete_tool_contract(tool)
+        _assert_complete_tool_contract(second_page["tools"][0])
 
         called = client.post(
             "/mcp",

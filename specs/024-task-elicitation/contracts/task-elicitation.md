@@ -145,9 +145,11 @@ The client retries the same call and adds:
 }
 ```
 
-That retry returns the ordinary flat `resultType: "task"` handle. It does not
-carry `requestState` or `inputRequests`. The eventual nested tool result
-contains `Alice`.
+The server validates and resolves the retry before creating durable state.
+Unknown or malformed responses return another `input_required` result or
+Invalid Params without inserting a task. A resolved retry returns the ordinary
+flat `resultType: "task"` handle in completed state. It does not carry
+`requestState` or `inputRequests`; the nested tool result contains `Alice`.
 
 ## qmtctl
 

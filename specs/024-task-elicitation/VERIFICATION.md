@@ -10,7 +10,7 @@
 |---|---|
 | Ruff lint and format | PASS: 92 files |
 | Python unit tier | PASS: 219 passed, 1 PostgreSQL-only skipped |
-| Python SDK integration tier | PASS: 38 passed |
+| Python SDK integration tier | PASS: 40 passed |
 | Go test, vet, and build | PASS |
 | qmtctl cross-build | PASS: Linux/macOS/Windows, amd64/arm64 |
 | Release-policy unit tests | PASS: 7 tests |
@@ -38,6 +38,7 @@ Evidence directories:
 
 - `/tmp/qmt024-all-tasks.p8BeGc`
 - `/tmp/qmt024-protocol.mSmYwc`
+- `/tmp/qmt024-review-tasks-*`
 
 | Surface | Scenarios | Passed |
 |---|---|---:|
@@ -79,10 +80,16 @@ The new stable checks passed:
   input fields, and its terminal result uses the supplied answer.
 - Stable `2026-07-28` remains primary; supported 2025 and modern
   non-declaring clients remain synchronous.
+- Interactive tools use an explicit safe synchronous fallback when Tasks are
+  unavailable; legacy calls no longer reach the task-only helper.
+- Unknown MRTR response keys return another input request without creating an
+  orphan task. Only a validated final tool result is persisted.
+- Active task TTLs have a live expiry watcher. Expiry deletes durable state,
+  cancels the runner, and removes the input waiter and runtime maps.
 
 ## Remote gates
 
-PR CI run
+Pre-review PR CI run
 [`30581290887`](https://github.com/juju-w/qmt-mcp/actions/runs/30581290887)
 passed all six required jobs:
 
@@ -93,4 +100,5 @@ passed all six required jobs:
 - Secret scan with gitleaks: PASS
 - Native linux/amd64 appliance build: PASS in 2m50s
 
-Main CI and automated release evidence remain pending delivery.
+Final review-fix PR CI, main CI, and automated release evidence remain pending
+delivery.

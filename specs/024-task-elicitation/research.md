@@ -65,12 +65,13 @@ unboundedly.
 
 **Decision**: For a tool declared as MRTR-before-task, let the first call reach
 the tool and return `InputRequiredResult` directly. On a retry carrying
-`inputResponses`, create the durable task and execute the tool using the
-official SDK context.
+`inputResponses`, let the official SDK validate and resolve the tool first.
+Only a final non-input-required result is persisted as a completed task.
 
 **Rationale**: This is the SEP-2663 composition rule and the official
 `tasks-mrtr-composition` expectation. Creating the task first would strand an
-orphan and incorrectly attach a task ID to the initial input request.
+orphan when the response is unknown or malformed. Executing before persistence
+also avoids running a side-effecting final round twice.
 
 ## Decision 7: qmtctl remains explicit, not interactive-by-default
 

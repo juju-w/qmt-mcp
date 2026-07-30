@@ -6,6 +6,7 @@ import asyncio
 import json
 import sqlite3
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -14,13 +15,17 @@ pytest.importorskip("mcp")
 pytestmark = pytest.mark.integration
 
 from mcp.shared.exceptions import MCPError  # noqa: E402
-from mcp_types import ElicitRequest, ElicitRequestFormParams  # noqa: E402
+from mcp_types import CallToolRequestParams, ElicitRequest, ElicitRequestFormParams  # noqa: E402
 from starlette.testclient import TestClient  # noqa: E402
 
 from qmt_mcp_core.app import create_app  # noqa: E402
 from qmt_mcp_core.config import CoreConfig  # noqa: E402
 from qmt_mcp_core.task_store import TaskStore  # noqa: E402
-from qmt_mcp_core.tasks_extension import TaskInteraction  # noqa: E402
+from qmt_mcp_core.tasks_extension import (  # noqa: E402
+    TaskInteraction,
+    TasksExtension,
+    request_task_input,
+)
 
 VERSION = "2026-07-28"
 TASKS_ID = "io.modelcontextprotocol/tasks"
@@ -214,6 +219,26 @@ def test_task_capability_gating_sync_fallback_and_update_ack(fake_xtquant, tmp_p
         )["result"]
         assert synchronous["resultType"] == "complete"
         assert "taskId" not in synchronous
+
+        safe_confirmation = _rpc(
+            client,
+            "tools/call",
+            11,
+            {"name": "confirm_delete", "arguments": {"filename": "safe.txt"}},
+            tasks=False,
+        )["result"]
+        assert safe_confirmation["resultType"] == "complete"
+        assert safe_confirmation["content"][0]["text"] == "Deletion of safe.txt was not confirmed"
+
+        safe_multi = _rpc(
+            client,
+            "tools/call",
+            12,
+            {"name": "multi_input", "arguments": {}},
+            tasks=False,
+        )["result"]
+        assert safe_multi["resultType"] == "complete"
+        assert safe_multi["content"][0]["text"] == "Received 0 confirmations"
 
         missing = _rpc(
             client,
@@ -435,6 +460,23 @@ def test_mrtr_resolves_before_task_creation_then_uses_response(fake_xtquant, tmp
         with sqlite3.connect(config.effective_task_store) as connection:
             assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
 
+        unresolved = _rpc(
+            client,
+            "tools/call",
+            11,
+            {
+                "name": "test_tool_with_task",
+                "arguments": {},
+                "inputResponses": {"unknown": {"action": "cancel"}},
+            },
+        )["result"]
+        assert unresolved["resultType"] == "input_required"
+        assert set(unresolved["inputRequests"]) == {"user_name"}
+        assert "taskId" not in unresolved
+
+        with sqlite3.connect(config.effective_task_store) as connection:
+            assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
+
         created = _rpc(
             client,
             "tools/call",
@@ -457,6 +499,110 @@ def test_mrtr_resolves_before_task_creation_then_uses_response(fake_xtquant, tmp
         terminal = _wait_terminal(client, created["taskId"], request_id=900)
         assert terminal["status"] == "completed"
         assert terminal["result"]["content"][0]["text"] == "Completed task for Alice"
+
+
+def test_legacy_interactive_fixtures_use_safe_synchronous_fallback(fake_xtquant, tmp_path):
+    app, _cfg, _health, _registry = create_app(_config(tmp_path))
+    accept = {"accept": "application/json, text/event-stream"}
+    initialize = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "legacy-task-test", "version": "1.0.0"},
+        },
+    }
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        initialized = client.post("/mcp", json=initialize, headers=accept)
+        session_headers = {
+            **accept,
+            "mcp-session-id": initialized.headers["mcp-session-id"],
+            "mcp-protocol-version": "2025-11-25",
+        }
+        client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+            headers=session_headers,
+        )
+
+        confirmation = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "confirm_delete", "arguments": {"filename": "safe.txt"}},
+            },
+            headers=session_headers,
+        )
+        assert _response_json(confirmation)["result"]["content"][0]["text"] == (
+            "Deletion of safe.txt was not confirmed"
+        )
+
+        mrtr = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": "test_tool_with_task", "arguments": {}},
+            },
+            headers=session_headers,
+        )
+        assert _response_json(mrtr)["result"]["content"][0]["text"] == (
+            "Task input is unavailable for this legacy client"
+        )
+
+
+def test_expired_input_task_cleans_live_runtime(tmp_path):
+    store = TaskStore(tmp_path / "tasks.sqlite3", ttl_ms=100)
+    extension = TasksExtension(store, task_tools=("interactive",))
+    context = SimpleNamespace(
+        protocol_version=VERSION,
+        session=SimpleNamespace(
+            client_capabilities=SimpleNamespace(extensions={TASKS_ID: {}}),
+        ),
+    )
+    request = ElicitRequest(
+        params=ElicitRequestFormParams(
+            message="Wait for expiry",
+            requested_schema={
+                "type": "object",
+                "properties": {"value": {"type": "string"}},
+                "required": ["value"],
+            },
+        )
+    )
+
+    async def scenario():
+        async def call_next(_ctx):
+            await request_task_input({"expiring": request})
+            return "unreachable"
+
+        created = await extension.intercept_tool_call(
+            CallToolRequestParams(name="interactive", arguments={}),
+            context,
+            call_next,
+        )
+        task_id = created["taskId"]
+        deadline = time.monotonic() + 1
+        while time.monotonic() < deadline:
+            record = store.get(task_id)
+            if record is not None and record.status == "input_required":
+                break
+            await asyncio.sleep(0.005)
+        else:
+            raise AssertionError("task did not request input before expiry")
+
+        await asyncio.sleep(0.2)
+        assert store.get(task_id) is None
+        assert task_id not in extension._running
+        assert task_id not in extension._interactions
+        assert task_id not in extension._expiry_watchers
+
+    asyncio.run(scenario())
 
 
 def test_task_interaction_concurrent_delivery_unique_round_keys_and_transient_answers(tmp_path):

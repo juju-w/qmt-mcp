@@ -44,6 +44,8 @@ type AppError struct {
 	Status  int    `json:"status,omitempty"`
 }
 
+const maxToolListPages = 1000
+
 func (e *AppError) Error() string {
 	if e.Kind == "" {
 		return e.Message
@@ -137,19 +139,77 @@ func (c *Client) ListTools(ctx context.Context) (map[string]any, error) {
 	if err := c.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	result, err := c.session.ListTools(ctx, nil)
-	if err != nil {
-		return nil, sdkError(err)
+	var tools []*mcp.Tool
+	seenCursors := make(map[string]struct{})
+	seenTools := make(map[string]struct{})
+	cursor := ""
+	var combined map[string]any
+	for page := 0; page < maxToolListPages; page++ {
+		var params *mcp.ListToolsParams
+		if cursor != "" {
+			params = &mcp.ListToolsParams{Cursor: cursor}
+		}
+		result, err := c.session.ListTools(ctx, params)
+		if err != nil {
+			return nil, sdkError(err)
+		}
+		if page == 0 {
+			wire, err := json.Marshal(result)
+			if err != nil {
+				return nil, &AppError{
+					Kind:    "protocol",
+					Message: fmt.Sprintf("cannot encode MCP tools result: %v", err),
+				}
+			}
+			if err := json.Unmarshal(wire, &combined); err != nil {
+				return nil, &AppError{
+					Kind:    "protocol",
+					Message: fmt.Sprintf("cannot decode MCP tools result: %v", err),
+				}
+			}
+		}
+		for _, tool := range result.Tools {
+			if tool == nil || tool.Name == "" {
+				return nil, &AppError{Kind: "protocol", Message: "tools/list returned a tool without a name"}
+			}
+			if _, exists := seenTools[tool.Name]; exists {
+				return nil, &AppError{
+					Kind:    "protocol",
+					Message: fmt.Sprintf("tools/list returned duplicate tool %q across pages", tool.Name),
+				}
+			}
+			seenTools[tool.Name] = struct{}{}
+			tools = append(tools, tool)
+		}
+		if result.NextCursor == "" {
+			wire, err := json.Marshal(tools)
+			if err != nil {
+				return nil, &AppError{
+					Kind:    "protocol",
+					Message: fmt.Sprintf("cannot encode aggregated MCP tools: %v", err),
+				}
+			}
+			var aggregated []any
+			if err := json.Unmarshal(wire, &aggregated); err != nil {
+				return nil, &AppError{
+					Kind:    "protocol",
+					Message: fmt.Sprintf("cannot decode aggregated MCP tools: %v", err),
+				}
+			}
+			combined["tools"] = aggregated
+			delete(combined, "nextCursor")
+			return combined, nil
+		}
+		if _, exists := seenCursors[result.NextCursor]; exists {
+			return nil, &AppError{Kind: "protocol", Message: "tools/list pagination cursor cycle"}
+		}
+		seenCursors[result.NextCursor] = struct{}{}
+		cursor = result.NextCursor
 	}
-	wire, err := json.Marshal(result)
-	if err != nil {
-		return nil, &AppError{Kind: "protocol", Message: fmt.Sprintf("cannot encode MCP tools result: %v", err)}
+	return nil, &AppError{
+		Kind:    "protocol",
+		Message: fmt.Sprintf("tools/list pagination exceeded %d pages", maxToolListPages),
 	}
-	var out map[string]any
-	if err := json.Unmarshal(wire, &out); err != nil {
-		return nil, &AppError{Kind: "protocol", Message: fmt.Sprintf("cannot decode MCP tools result: %v", err)}
-	}
-	return out, nil
 }
 
 func (c *Client) CallTool(ctx context.Context, name string, args map[string]any) (json.RawMessage, error) {

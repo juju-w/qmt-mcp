@@ -33,6 +33,7 @@
 | 019 MCP 协议基座 | ✅ 完成——官方 Python/Go SDK；主推 2026-07-28，同端点兼容 2025；官方 conformance 进 CI |
 | 020 工具契约与 Profile | ✅ 完成——统一 output schema/structuredContent/行为注解；6 种启动 profile + glob 裁剪 |
 | 021 OAuth 授权 | ✅ 完成——static/oauth/hybrid；JWT/JWKS resource server、scope 工具裁剪、qmtctl PKCE 登录/刷新 |
+| 022 MCP 分页与压缩 | ✅ 完成——授权后 `tools/list` opaque cursor 分页、qmtctl 有界聚合、JSON gzip/SSE 排除 |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。

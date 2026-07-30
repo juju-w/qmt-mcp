@@ -76,6 +76,9 @@ class CoreConfig:
     allow_unauth_loopback: bool
     enable_xtdata: bool
     test_mode: bool
+    # 022 bounded MCP catalog pages and negotiated HTTP gzip.
+    mcp_list_page_size: int = 50
+    mcp_gzip_minimum_size: int = 1024
     # 005 readiness/connector knobs (defaults so direct construction stays easy).
     readiness_poll_s: float = 5.0
     enable_connector: bool = False
@@ -173,6 +176,18 @@ class CoreConfig:
                 "invalid QMT_MCP_AUTH_MODE",
                 {"auth_mode": self.auth_mode, "allowed": sorted(VALID_AUTH_MODES)},
             )
+        if not 1 <= self.mcp_list_page_size <= 1000:
+            raise McpCoreError(
+                "config",
+                "QMT_MCP_LIST_PAGE_SIZE must be between 1 and 1000",
+                {"value": self.mcp_list_page_size},
+            )
+        if not 0 <= self.mcp_gzip_minimum_size <= 10 * 1024 * 1024:
+            raise McpCoreError(
+                "config",
+                "QMT_MCP_GZIP_MIN_SIZE must be between 0 and 10485760",
+                {"value": self.mcp_gzip_minimum_size},
+            )
         if (
             self.auth_mode == "static"
             and not self.token
@@ -254,6 +269,8 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         allow_unauth_loopback=env.get("QMT_MCP_ALLOW_UNAUTH_LOOPBACK", "0") == "1",
         enable_xtdata=env.get("QMT_MCP_ENABLE_XTDATA", "1") != "0",
         test_mode=env.get("QMT_MCP_TEST_MODE", "0") == "1",
+        mcp_list_page_size=int(env.get("QMT_MCP_LIST_PAGE_SIZE", "50")),
+        mcp_gzip_minimum_size=int(env.get("QMT_MCP_GZIP_MIN_SIZE", "1024")),
         readiness_poll_s=max(1.0, float(env.get("QMT_READINESS_POLL_S", "5"))),
         enable_connector=env.get("QMT_ENABLE_CONNECTOR", "0") == "1",
         connect_retry=max(1, int(env.get("QMT_CONNECT_RETRY", "8"))),

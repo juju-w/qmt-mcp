@@ -11,6 +11,11 @@ Authorization: Bearer <credential>
 `2025-11-25`、`2025-06-18` 和 `2025-03-26` 客户端，不需要维护两套 URL
 或手动选择协议。
 
+`tools/list` 使用标准 opaque cursor 分页，服务端决定页大小。客户端应持续请求
+`nextCursor` 直到该字段缺失；qmtctl 会自动完成这个过程。服务端还会在客户端
+接受 gzip 时压缩足够大的 JSON 响应，SSE 不压缩。Codex、Claude Code、
+WorkBuddy 等标准 HTTP 客户端通常无需额外配置。
+
 最小连通性检查：
 
 ```bash
@@ -102,6 +107,8 @@ feature gate ∩ startup profile/allowlist/denylist ∩ token scope
 ## qmtctl
 
 qmtctl 优先使用 `2026-07-28`，对旧服务自动回退到 2025 initialize/session。
+`qmtctl tools` 会合并所有目录页面，并通过 Go 标准 HTTP transport 自动解压
+gzip；不需要分页或压缩参数。
 
 静态 token：
 
@@ -246,6 +253,7 @@ resource metadata；否则使用静态 header。只支持旧 SSE transport 的�
 | OAuth 找不到 AS | 检查公开 HTTPS URL、issuer、authorization servers 和两种 RFC 9728 metadata 路径。 |
 | OAuth 登录后工具很少 | 查看 token scope，再检查 startup Profile、allow/deny 与 feature gate；它们取交集。 |
 | qmtctl 没复用登录 | `auth status` 检查 resource 是否完全相同；显式 token 会覆盖保存的会话。 |
+| 客户端只显示部分工具 | 客户端需支持标准 `nextCursor`；先用 `qmtctl tools --json` 验证完整目录，再升级客户端。 |
 | 能连上但没有行情 | QMT 未登录或 xtdata 未 ready；查看 `qmt_health`。 |
 | Claude Code 看不到工具 | `/mcp` 检查连接和授权，并确认所申请 scope。 |
 | Codex 看不到工具 | `bearer_token_env_var` 应是变量名，不是 token 值。 |

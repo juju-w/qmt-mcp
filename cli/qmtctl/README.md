@@ -5,6 +5,11 @@ MCP Go SDK, prefers stable MCP `2026-07-28`, and automatically falls back to the
 supported 2025 initialize/session flow. It never imports `xtquant` or duplicates
 broker logic locally.
 
+`qmtctl tools` follows every standard `tools/list` cursor and presents one
+complete catalog. It also uses Go's standard transparent gzip negotiation and
+decoding. There is no paging or compression flag, and single-page servers keep
+the same output.
+
 Building from source requires Go 1.25 or newer:
 
 ```bash

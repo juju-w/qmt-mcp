@@ -13,6 +13,8 @@ from mcp.server import CacheHint, MCPServer
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings
 from mcp.shared.exceptions import MCPError
+from mcp.types import ListToolsResult
+from starlette.middleware.gzip import GZipMiddleware
 
 from .audit import JsonlAuditSink
 from .auth import build_token_verifier
@@ -20,6 +22,7 @@ from .config import CoreConfig, load_config
 from .connector import TraderConnector
 from .errors import McpCoreError, error_envelope
 from .health import HealthState
+from .pagination import InvalidPaginationCursor, paginate_by_key
 from .readiness import ReadinessProbe
 from .registry import ToolRegistry
 from .tool_contracts import ToolVisibilityPolicy
@@ -266,6 +269,54 @@ class CoreASGI:
         await self.app(scope, receive, send)
 
 
+def _accepts_gzip(value: str) -> bool:
+    explicit: bool | None = None
+    wildcard: bool | None = None
+    for member in value.split(","):
+        parts = [part.strip() for part in member.split(";")]
+        coding = parts[0].lower()
+        if not coding:
+            continue
+        quality = 1.0
+        for parameter in parts[1:]:
+            name, separator, raw_value = parameter.partition("=")
+            if name.strip().lower() != "q" or not separator:
+                continue
+            try:
+                quality = float(raw_value.strip())
+            except ValueError:
+                quality = 0.0
+        accepted = 0.0 < quality <= 1.0
+        if coding == "gzip":
+            explicit = accepted
+        elif coding == "*":
+            wildcard = accepted
+    return explicit if explicit is not None else bool(wildcard)
+
+
+class NegotiatedGZipMiddleware:
+    """Apply Starlette gzip only when HTTP quality negotiation permits it."""
+
+    def __init__(self, app, minimum_size: int):
+        self.app = app
+        self.gzip_app = GZipMiddleware(app, minimum_size=minimum_size, compresslevel=6)
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = _header_map(scope)
+        if not _accepts_gzip(headers.get(b"accept-encoding", b"").decode("latin-1")):
+            await self.app(scope, receive, send)
+            return
+        gzip_scope = dict(scope)
+        gzip_scope["headers"] = [
+            (name, value) for name, value in scope.get("headers", []) if name.lower() != b"accept-encoding"
+        ]
+        gzip_scope["headers"].append((b"accept-encoding", b"gzip"))
+        await self.gzip_app(gzip_scope, receive, send)
+
+
 def register_core_tools(mcp: MCPServer, registry: ToolRegistry, health: HealthState) -> None:
     @registry.register(
         mcp,
@@ -293,6 +344,10 @@ class AuthorizedMCPServer(MCPServer):
 
     tool_registry: ToolRegistry | None = None
 
+    def __init__(self, *args, tool_page_size: int = 50, **kwargs):
+        self.tool_page_size = tool_page_size
+        super().__init__(*args, **kwargs)
+
     async def list_tools(self):
         tools = await super().list_tools()
         token = get_access_token()
@@ -300,6 +355,20 @@ class AuthorizedMCPServer(MCPServer):
             return tools
         allowed = set(self.tool_registry.oauth_tool_names(set(token.scopes)))
         return [tool for tool in tools if tool.name in allowed]
+
+    async def _handle_list_tools(self, ctx, params):
+        tools = await self.list_tools()
+        cursor = params.cursor if params is not None else None
+        try:
+            page, next_cursor = paginate_by_key(
+                tools,
+                page_size=self.tool_page_size,
+                cursor=cursor,
+                key=lambda tool: tool.name,
+            )
+        except InvalidPaginationCursor as exc:
+            raise MCPError(code=-32602, message="Invalid pagination cursor") from exc
+        return ListToolsResult(tools=page, nextCursor=next_cursor)
 
     async def call_tool(self, name, arguments, context=None):
         token = get_access_token()
@@ -440,6 +509,7 @@ def create_app(config: CoreConfig | None = None):
         )
     mcp = AuthorizedMCPServer(
         "QMT MCP",
+        tool_page_size=config.mcp_list_page_size,
         version=os.environ.get("QMT_MCP_VERSION", "dev"),
         cache_hints={
             "server/discover": private_no_cache,
@@ -473,6 +543,8 @@ def create_app(config: CoreConfig | None = None):
             stateless_http=False,
             host=config.host,
         )
+    if config.mcp_gzip_minimum_size > 0:
+        app = NegotiatedGZipMiddleware(app, config.mcp_gzip_minimum_size)
     core = CoreASGI(app, config, health, registry, token_verifier)
     # Build (do not start) the background readiness probe / trader connector.
     # main() starts them; tests can drive .step()/.attempt() directly.

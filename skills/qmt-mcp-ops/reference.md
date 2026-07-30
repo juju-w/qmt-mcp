@@ -70,6 +70,17 @@ issues JWTs; QMT-MCP validates them but never issues tokens.
 Startup visibility is fixed for one server process; restart after changes.
 OAuth `tools/list` and `tools/call` additionally intersect it with token scopes.
 
+### MCP paging and HTTP compression
+
+| Variable | Default | Description |
+|---|---|---|
+| `QMT_MCP_LIST_PAGE_SIZE` | `50` | Server-selected `tools/list` page size, 1 through 1000 |
+| `QMT_MCP_GZIP_MIN_SIZE` | `1024` | Minimum eligible JSON response bytes; `0` disables app gzip |
+
+Pagination is applied after startup and OAuth visibility. qmtctl consumes all
+pages automatically. SSE is never compressed; set gzip to `0` when a reverse
+proxy owns compression.
+
 ### Feature gates
 
 | Variable | Default | Description |

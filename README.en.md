@@ -133,6 +133,25 @@ startup, so restart the container after changing them. In OAuth mode this
 surface is intersected with token scopes; even `qmt:admin` cannot bypass a
 startup profile or feature gate.
 
+### Tool pagination and HTTP compression
+
+`tools/list` returns at most 50 authorized tools per page by default and uses a
+standard opaque cursor for continuation. Profiles, allow/deny rules, and OAuth
+scopes are applied before cursor creation. qmtctl automatically consumes every
+page, so `qmtctl tools` usage and output remain unchanged. This paginates the
+MCP catalog; it does not change any market, option, or reference tool's own
+`limit`.
+
+Remote MCP JSON responses are compressed when the client accepts gzip and the
+body is at least 1024 bytes. SSE is never compressed. Tune the defaults in
+`appliance/.env`, or set the threshold to `0` when a reverse proxy owns
+compression:
+
+```env
+QMT_MCP_LIST_PAGE_SIZE=50
+QMT_MCP_GZIP_MIN_SIZE=1024
+```
+
 ## Quick start
 
 > Must build & run on a **native amd64 host** (Apple Silicon is emulation-only and

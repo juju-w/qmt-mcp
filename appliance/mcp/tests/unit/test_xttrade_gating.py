@@ -16,7 +16,7 @@ class FakeMCP:
     def __init__(self):
         self.registered = []
 
-    def tool(self):
+    def tool(self, **_metadata):
         def deco(fn):
             self.registered.append(fn.__name__)
             return fn

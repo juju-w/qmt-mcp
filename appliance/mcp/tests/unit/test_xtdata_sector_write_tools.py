@@ -11,7 +11,7 @@ from qmt_mcp_xtdata.sector_write_tools import register_sector_write_tools
 
 
 class DummyMCP:
-    def tool(self):
+    def tool(self, **_metadata):
         def decorator(func):
             return func
 
@@ -73,3 +73,11 @@ def test_sector_refuses_unmanaged_and_requires_confirm(tmp_path):
     assert result["ok"] is False
     delete_result = registry._tools["qmt_xtdata_sector_delete"]["callable"](sector="MCP/Test")
     assert delete_result["ok"] is False
+
+
+def test_sector_mutation_annotations(tmp_path):
+    registry, _ = registry_with_sector_write(tmp_path)
+    assert registry._tools["qmt_xtdata_sector_create"]["behavior"].read_only is False
+    assert registry._tools["qmt_xtdata_sector_add_codes"]["behavior"].destructive is False
+    assert registry._tools["qmt_xtdata_sector_remove_codes"]["behavior"].destructive is True
+    assert registry._tools["qmt_xtdata_sector_delete"]["behavior"].destructive is True

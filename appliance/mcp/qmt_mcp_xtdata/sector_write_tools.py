@@ -29,6 +29,9 @@ def register_sector_write_tools(mcp: Any, registry: ToolRegistry, config: Any, c
         audit_fields=["folder"],
         worker_backed=True,
         timeout=20,
+        read_only=False,
+        destructive=False,
+        idempotent=True,
     )
     def qmt_xtdata_sector_create_folder(folder: str) -> dict[str, Any]:
         clean = require_managed_sector(folder, prefixes)
@@ -44,6 +47,9 @@ def register_sector_write_tools(mcp: Any, registry: ToolRegistry, config: Any, c
         audit_fields=["sector"],
         worker_backed=True,
         timeout=20,
+        read_only=False,
+        destructive=False,
+        idempotent=True,
     )
     def qmt_xtdata_sector_create(sector: str) -> dict[str, Any]:
         clean = require_managed_sector(sector, prefixes)
@@ -59,6 +65,9 @@ def register_sector_write_tools(mcp: Any, registry: ToolRegistry, config: Any, c
         audit_fields=["sector", "codes"],
         worker_backed=True,
         timeout=30,
+        read_only=False,
+        destructive=False,
+        idempotent=True,
     )
     def qmt_xtdata_sector_add_codes(sector: str, codes: list[str]) -> dict[str, Any]:
         clean = require_managed_sector(sector, prefixes)
@@ -74,6 +83,9 @@ def register_sector_write_tools(mcp: Any, registry: ToolRegistry, config: Any, c
         audit_fields=["sector", "codes"],
         worker_backed=True,
         timeout=30,
+        read_only=False,
+        destructive=True,
+        idempotent=True,
     )
     def qmt_xtdata_sector_remove_codes(sector: str, codes: list[str]) -> dict[str, Any]:
         clean = require_managed_sector(sector, prefixes)
@@ -89,6 +101,9 @@ def register_sector_write_tools(mcp: Any, registry: ToolRegistry, config: Any, c
         audit_fields=["sector", "confirm"],
         worker_backed=True,
         timeout=30,
+        read_only=False,
+        destructive=True,
+        idempotent=True,
     )
     def qmt_xtdata_sector_delete(sector: str, confirm: bool = False) -> dict[str, Any]:
         require_confirm(confirm)
@@ -104,6 +119,9 @@ def register_sector_write_tools(mcp: Any, registry: ToolRegistry, config: Any, c
         audit_fields=["sector", "codes", "confirm"],
         worker_backed=True,
         timeout=30,
+        read_only=False,
+        destructive=True,
+        idempotent=True,
     )
     def qmt_xtdata_sector_reset(sector: str, codes: list[str], confirm: bool = False) -> dict[str, Any]:
         require_confirm(confirm)

@@ -78,6 +78,25 @@ refresh, dynamic registration, or JWT/JWKS validation. A production OAuth
 authorization server or gateway must issue and validate the access token. See
 `docs/MCP-CLIENTS.md` for Codex, Claude Code, WorkBuddy, and OAuth setup.
 
+## Tool Profiles
+
+Every listed tool has input/output schemas, standard behavior hints, exact
+`structuredContent`, and an equivalent JSON text block. Select a startup-static
+surface with `QMT_MCP_TOOL_PROFILE`:
+
+| Profile | Surface |
+|---|---|
+| `full` | All otherwise enabled tools; default |
+| `readonly` | Read-only tools only |
+| `market` | Core and xtdata |
+| `account` | Core, xttrade query, and portfolio |
+| `core` | Core health and capabilities only |
+| `custom` | Core plus `QMT_MCP_TOOL_ALLOWLIST` matches |
+
+`QMT_MCP_TOOL_ALLOWLIST` and `QMT_MCP_TOOL_DENYLIST` are comma-separated shell
+globs. Core tools cannot be hidden. Restart after changing the policy and inspect
+`qmt_capabilities.tool_visibility` to confirm the effective counts.
+
 ## Tool Families
 
 The standard registry has 37 tools:

@@ -50,6 +50,7 @@ never needs to know the raw QMT code:
 | Database persistence (PostgreSQL, optional) | ✅ ready | market-data warehouse, read/write-through, off by default |
 | `qmtctl` CLI | ✅ ready | compiled Go CLI client for health/search/quotes/account queries |
 | MCP protocol | ✅ dual-era | prefers stable `2026-07-28`; the same `/mcp` endpoint accepts 2025 clients |
+| MCP contracts / profiles | ✅ ready | structured results and behavior hints; full/readonly/market/account/core/custom surfaces |
 
 > **Trading/account permission**: connecting `xtquant` to the trading interface
 > (orders **and** account queries) requires the broker to enable "programmatic
@@ -106,6 +107,27 @@ All tools are **read-only**, authenticated, audited, and return structured JSON
 > and the broker must have granted programmatic-trading permission for the success
 > paths (otherwise `not_authorized`, gracefully). **Strictly read-only, no order/cancel/transfer**.
 > Success paths await a permissioned account (PRs welcome).
+
+### Tool contracts and profiles
+
+Every visible tool publishes a title, input/output JSON Schema, and read-only,
+destructive, idempotent, and open-world behavior hints. Modern clients consume
+`structuredContent`; legacy clients retain an equivalent JSON text block.
+Schema validation does not add or remove business fields.
+
+The default `full` profile preserves the complete surface. Narrow one agent's
+context and callable capabilities in `appliance/.env`:
+
+```env
+QMT_MCP_TOOL_PROFILE=market
+QMT_MCP_TOOL_ALLOWLIST=qmt_xtdata_snapshot,qmt_xtdata_option_*
+QMT_MCP_TOOL_DENYLIST=qmt_xtdata_download_*
+```
+
+Profiles are `full`, `readonly`, `market`, `account`, `core`, and `custom`;
+`custom` requires an allowlist. The profile and shell globs are fixed at process
+startup, so restart the container after changing them. `qmt_health` and
+`qmt_capabilities` always remain visible.
 
 ## Quick start
 

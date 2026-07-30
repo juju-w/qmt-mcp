@@ -20,6 +20,13 @@ from starlette.testclient import TestClient  # noqa: E402
 from qmt_mcp_core.app import create_app  # noqa: E402
 from qmt_mcp_core.config import CoreConfig  # noqa: E402
 
+MODERN_VERSION = "2026-07-28"
+MODERN_META = {
+    "io.modelcontextprotocol/protocolVersion": MODERN_VERSION,
+    "io.modelcontextprotocol/clientInfo": {"name": "integration-test", "version": "1.0.0"},
+    "io.modelcontextprotocol/clientCapabilities": {},
+}
+
 
 def _config(tmp_path, token: str, **overrides) -> CoreConfig:
     values = dict(
@@ -82,6 +89,44 @@ def _response_json(response) -> dict:
         if line.startswith("data:"):
             return json.loads(line.removeprefix("data:").strip())
     raise AssertionError("SSE response did not contain a data event")
+
+
+def _modern_request(method: str, request_id: int, params: dict | None = None) -> tuple[dict, dict]:
+    request_params = dict(params or {})
+    request_params["_meta"] = MODERN_META
+    headers = {
+        "accept": "application/json, text/event-stream",
+        "mcp-protocol-version": MODERN_VERSION,
+        "mcp-method": method,
+    }
+    if method == "tools/call":
+        headers["mcp-name"] = request_params["name"]
+    return (
+        {"jsonrpc": "2.0", "id": request_id, "method": method, "params": request_params},
+        headers,
+    )
+
+
+def _assert_complete_tool_contract(tool: dict) -> None:
+    assert tool["title"]
+    assert tool["description"]
+    assert tool["inputSchema"]["type"] == "object"
+    assert tool["outputSchema"]["type"] == "object"
+    assert "ok" in tool["outputSchema"]["required"]
+    assert tool["outputSchema"]["properties"]["ok"]["type"] == "boolean"
+    assert tool["outputSchema"]["additionalProperties"] is True
+    assert set(tool["annotations"]) >= {
+        "readOnlyHint",
+        "destructiveHint",
+        "idempotentHint",
+        "openWorldHint",
+    }
+
+
+def _assert_equivalent_result(result: dict, *, ok: bool) -> None:
+    assert result["structuredContent"]["ok"] is ok
+    assert json.loads(result["content"][0]["text"]) == result["structuredContent"]
+    assert result["isError"] is (not ok)
 
 
 def test_healthz_requires_token(fake_xtquant, tmp_path):
@@ -148,11 +193,7 @@ def test_modern_discover_is_stateless_and_cache_hinted(fake_xtquant, tmp_path):
     app, _cfg, _health, _reg = create_app(
         _config(tmp_path, "", host="127.0.0.1", allow_unauth_loopback=True, enable_xtdata=False)
     )
-    request_meta = {
-        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-        "io.modelcontextprotocol/clientInfo": {"name": "integration-test", "version": "1.0.0"},
-        "io.modelcontextprotocol/clientCapabilities": {},
-    }
+    request_meta = MODERN_META
     headers = {
         "accept": "application/json, text/event-stream",
         "mcp-protocol-version": "2026-07-28",
@@ -174,6 +215,78 @@ def test_modern_discover_is_stateless_and_cache_hinted(fake_xtquant, tmp_path):
     assert result["supportedVersions"] == ["2026-07-28"]
     assert result["ttlMs"] == 0
     assert result["cacheScope"] == "private"
+
+
+def test_modern_tool_contracts_and_structured_results(fake_xtquant, tmp_path):
+    app, _cfg, _health, registry = create_app(
+        _config(tmp_path, "", host="127.0.0.1", allow_unauth_loopback=True, enable_xtdata=True)
+    )
+    list_payload, list_headers = _modern_request("tools/list", 10)
+    success_payload, success_headers = _modern_request(
+        "tools/call",
+        11,
+        {"name": "qmt_capabilities", "arguments": {}},
+    )
+    error_payload, error_headers = _modern_request(
+        "tools/call",
+        12,
+        {"name": "qmt_xtdata_snapshot", "arguments": {"codes": []}},
+    )
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        listed = client.post("/mcp", json=list_payload, headers=list_headers)
+        success = client.post("/mcp", json=success_payload, headers=success_headers)
+        refused = client.post("/mcp", json=error_payload, headers=error_headers)
+
+    assert listed.status_code == 200
+    tools = _response_json(listed)["result"]["tools"]
+    assert tools
+    assert registry.tool_names() == registry.tool_names(visible_only=False)
+    for tool in tools:
+        _assert_complete_tool_contract(tool)
+    by_name = {tool["name"]: tool for tool in tools}
+    assert by_name["qmt_health"]["annotations"]["openWorldHint"] is False
+    assert by_name["qmt_xtdata_snapshot"]["annotations"]["readOnlyHint"] is True
+    assert by_name["qmt_xtdata_download_history"]["annotations"]["readOnlyHint"] is False
+
+    assert success.status_code == 200
+    success_result = _response_json(success)["result"]
+    _assert_equivalent_result(success_result, ok=True)
+    assert success_result["structuredContent"]["tool_visibility"]["profile"] == "full"
+
+    assert refused.status_code == 200
+    error_result = _response_json(refused)["result"]
+    _assert_equivalent_result(error_result, ok=False)
+    assert error_result["structuredContent"]["error_type"] == "validation"
+
+
+def test_core_profile_hides_and_rejects_non_core_tools(fake_xtquant, tmp_path):
+    app, _cfg, _health, registry = create_app(
+        _config(
+            tmp_path,
+            "",
+            host="127.0.0.1",
+            allow_unauth_loopback=True,
+            enable_xtdata=True,
+            tool_profile="core",
+        )
+    )
+    list_payload, list_headers = _modern_request("tools/list", 20)
+    call_payload, call_headers = _modern_request(
+        "tools/call",
+        21,
+        {"name": "qmt_xtdata_snapshot", "arguments": {"codes": ["510300.SH"]}},
+    )
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        listed = client.post("/mcp", json=list_payload, headers=list_headers)
+        hidden_call = client.post("/mcp", json=call_payload, headers=call_headers)
+
+    names = {tool["name"] for tool in _response_json(listed)["result"]["tools"]}
+    assert names == {"qmt_health", "qmt_capabilities"}
+    assert registry.visibility_summary()["hidden_count"] > 0
+    hidden_doc = _response_json(hidden_call)
+    assert hidden_doc.get("error") or hidden_doc["result"]["isError"] is True
 
 
 def test_legacy_initialize_and_session_share_modern_endpoint(fake_xtquant, tmp_path):
@@ -220,3 +333,18 @@ def test_legacy_initialize_and_session_share_modern_endpoint(fake_xtquant, tmp_p
             "qmt_health",
             "qmt_capabilities",
         }
+        for tool in _response_json(listed)["result"]["tools"]:
+            _assert_complete_tool_contract(tool)
+
+        called = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": "qmt_capabilities", "arguments": {}},
+            },
+            headers=session_headers,
+        )
+        assert called.status_code == 200
+        _assert_equivalent_result(_response_json(called)["result"], ok=True)

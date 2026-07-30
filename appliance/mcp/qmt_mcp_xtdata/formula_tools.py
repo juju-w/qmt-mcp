@@ -92,6 +92,9 @@ def register_formula_tools(mcp: Any, registry: ToolRegistry, config: Any, call_x
         audit_fields=["formula_name", "result_path"],
         worker_backed=True,
         timeout=300,
+        read_only=False,
+        destructive=True,
+        idempotent=False,
     )
     def qmt_xtdata_formula_generate_factor(
         formula_name: str, result_path: str = "", params: dict[str, Any] | None = None
@@ -109,6 +112,9 @@ def register_formula_tools(mcp: Any, registry: ToolRegistry, config: Any, call_x
         audit_fields=["formula_name", "code", "period"],
         worker_backed=True,
         timeout=30,
+        read_only=False,
+        destructive=False,
+        idempotent=False,
     )
     def qmt_xtdata_formula_subscribe(formula_name: str, code: str, period: str = "tick") -> dict[str, Any]:
         formula = policy.require_formula(formula_name)
@@ -135,6 +141,9 @@ def register_formula_tools(mcp: Any, registry: ToolRegistry, config: Any, call_x
         audit_fields=["subscription_id"],
         worker_backed=True,
         timeout=30,
+        read_only=False,
+        destructive=True,
+        idempotent=True,
     )
     def qmt_xtdata_formula_unsubscribe(subscription_id: str) -> dict[str, Any]:
         raw = call_xtdata("unsubscribe_formula", int(subscription_id))

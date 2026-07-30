@@ -48,8 +48,18 @@ MCP resources.
   session step-up, redacted status, selective logout, concurrent writers, and
   explicit bearer precedence.
 
-## Pending remote evidence
+## Remote evidence
 
-T029 and T030 remain open until the pull request passes GitHub secret scanning
-and the native Linux amd64 appliance image build. The final check and release
-links will be recorded here after CI completes.
+Pull request [#13](https://github.com/juju-w/qmt-mcp/pull/13) CI run
+[30571714479](https://github.com/juju-w/qmt-mcp/actions/runs/30571714479)
+passed all six jobs:
+
+- Conventional commit policy.
+- Python lint and dependency-light unit tests.
+- Go test, vet, and build.
+- MCP 2026-07-28 and 2025-11-25 conformance.
+- gitleaks secret scan.
+- Native Linux amd64 appliance build and container smoke test (6m 1s).
+
+This closes T029 and T030. The evidence-only follow-up commit must pass the same
+required checks before merge.

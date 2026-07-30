@@ -50,9 +50,9 @@
 - [x] T022 Run Go test, vet, and builds for qmtctl and its conformance adapter.
 - [x] T023 Run release-policy tests, actionlint, `git diff --check`, and secret
   review.
-- [ ] T024 Build/smoke the linux/amd64 appliance dependency layer.
+- [x] T024 Build/smoke the linux/amd64 appliance dependency layer.
 - [x] T025 Record command evidence and any environment limitations in
   `specs/019-mcp-protocol-foundation/VERIFICATION.md`.
-- [ ] T026 Mark completed tasks only after their verification evidence exists.
+- [x] T026 Mark completed tasks only after their verification evidence exists.
 - [x] T027 Add a cached native linux/amd64 appliance build to PR/main CI and
   reuse that cache in release.

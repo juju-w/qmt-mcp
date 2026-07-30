@@ -72,7 +72,10 @@ docker buildx build --builder orbstack --platform linux/amd64 \
 
 The local arm64 builder reached the Wine provisioning layer, where the Windows
 Python installer exited 139 under amd64 emulation. The NAS was unreachable from
-this network. The committed PR/main image job therefore runs the complete
-Dockerfile on GitHub's native linux/amd64 runner, including Wine Windows Python
-lock installation, SDK import, and application smoke. Its `appliance-ci` GHA
-cache is also the release workflow's first cache source.
+this network.
+
+PR #11 then built the complete Dockerfile successfully on GitHub's native
+linux/amd64 runner in 5m06s. That run covered Wine Windows Python installation,
+the hash-verified lock, SDK imports, and the application smoke. It exported the
+`appliance-ci` GHA cache, which is also the release workflow's first cache
+source.

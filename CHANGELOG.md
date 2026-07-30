@@ -14,7 +14,9 @@ project constitution's quality gates.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Fixed
+- Manual retries can publish releases for older tags whose commits contain
+  historical workflow files without requiring a broad personal access token.
 
 ## [0.4.0] - 2026-07-30
 

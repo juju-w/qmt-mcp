@@ -5,8 +5,10 @@ Date: 2026-07-31
 ## Local evidence
 
 - Python lint and formatting: `ruff check` and `ruff format --check` passed.
-- Python unit suite: 192 passed, 1 skipped because no database environment was
-  configured, and 20 integration tests were deselected.
+- Python dependency-light CI environment: 192 passed and 3 skipped (the
+  database and two runtime-only integration modules).
+- Python full-runtime unit selection: 192 passed, 1 database test skipped, and
+  20 integration tests deselected.
 - Python integration suite: 20 passed and 193 tests were deselected.
 - Go: `go test -race ./...`, `go vet ./...`, `go build ./...`, and the
   conformance client build passed.

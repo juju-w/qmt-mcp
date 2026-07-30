@@ -6,18 +6,21 @@ import json
 import time
 from urllib.request import Request
 
-import anyio
-import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
-from starlette.testclient import TestClient
 
-from qmt_mcp_core import auth as auth_module
-from qmt_mcp_core.app import create_app
-from qmt_mcp_core.auth import JwksCache, JwtTokenVerifier
-from qmt_mcp_core.config import CoreConfig
+pytest.importorskip("mcp")
 
 pytestmark = pytest.mark.integration
+
+import anyio  # noqa: E402
+import jwt  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
+from starlette.testclient import TestClient  # noqa: E402
+
+from qmt_mcp_core import auth as auth_module  # noqa: E402
+from qmt_mcp_core.app import create_app  # noqa: E402
+from qmt_mcp_core.auth import JwksCache, JwtTokenVerifier  # noqa: E402
+from qmt_mcp_core.config import CoreConfig  # noqa: E402
 
 ISSUER = "https://auth.example.com"
 RESOURCE = "https://qmt.example.com/mcp"

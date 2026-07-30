@@ -49,6 +49,14 @@ WWW-Authenticate: Bearer resource_metadata="https://qmt.example.com/.well-known/
 
 这对接的是 MCP 2025 之后的授权发现模型：MCP server 作为 resource server，authorization server 负责发 token，客户端通过 Protected Resource Metadata 找到授权服务器。生产环境应放在 HTTPS 后面，并让授权服务器签发 audience/resource 绑定到该 MCP endpoint 的 token。
 
+当前边界要特别注意：
+
+- 服务端已支持 Protected Resource Metadata 和 `WWW-Authenticate` discovery。
+- `qmtctl` 已支持 `auth discover`，也能发送已有 OAuth access token。
+- QMT-MCP 本身还没有 authorization code、动态客户端注册、token refresh 或
+  JWT/JWKS 验证；正式 OAuth access token 应由前置网关验证并转成当前服务接受的
+  bearer，完整内置 OAuth 仍是后续功能。
+
 ## Codex
 
 Codex CLI 和 Codex Desktop 共用 `~/.codex/config.toml` 里的 MCP 配置。推荐不要把 token 明文写进配置，而是让 Codex 从环境变量读取：
@@ -169,6 +177,14 @@ claude mcp add --transport http qmt http://<host>:18765/mcp \
 cd cli/qmtctl && go build -o qmtctl .
 QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token> ./qmtctl health
 QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token> ./qmtctl tools
+```
+
+检查 OAuth discovery 或使用网关签发的 access token：
+
+```bash
+QMT_MCP_URL=https://qmt.example.com/mcp ./qmtctl auth discover --json
+QMT_MCP_URL=https://qmt.example.com/mcp \
+  QMT_MCP_ACCESS_TOKEN=<access-token> ./qmtctl health
 ```
 
 ## 常见问题

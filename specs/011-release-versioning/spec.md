@@ -26,10 +26,16 @@ and get a reproducible base image.
 **Acceptance**: A GitHub Release contains qmtctl archives for Linux, macOS, and
 Windows on amd64 and arm64 plus `SHA256SUMS`.
 
-### US4 - Reproducible Python deps (P2 / constitution III)
-**Acceptance**: The in-image MCP deps are declared in `requirements.in`; a locked
-`requirements.txt` is generated from the actual Wine build (`pip freeze`) and used
-by the Dockerfile, replacing the unpinned `pip install fastmcp uvicorn ...`.
+### US4 - Declared Python deps and lock path (P2 / constitution III)
+**Acceptance**: The Dockerfile installs the in-image MCP deps from
+`requirements.in`; generating and switching to an amd64 Wine-verified
+`requirements.txt` remains an explicit known gap rather than an undocumented
+inline package list.
+
+### US5 - Reuse heavy image layers and mirror domestically (P2)
+**Acceptance**: Source-only releases reuse Wine/Python provisioning from a
+persistent registry cache. When mainland registry settings are present, CI
+copies the GHCR digest to that registry without a second Docker build.
 
 ## Functional Requirements
 
@@ -49,8 +55,21 @@ by the Dockerfile, replacing the unpinned `pip install fastmcp uvicorn ...`.
 - **FR-007**: Release retries are idempotent: an existing tag on HEAD reuses its
   version and rebuilds missing image/assets instead of bumping again.
 - **FR-008**: `requirements.in` declares MCP deps; the lockfile generation path
-  remains documented and verified on amd64.
+  remains documented and MUST be verified on amd64 before the Dockerfile switches
+  to the generated lock.
 - **FR-009**: Release notes/changelog never contain secrets.
+- **FR-010**: The Dockerfile MUST place stable system/Wine/Python dependency
+  layers before frequently changing application source and retain a source-level
+  smoke test after the copy.
+- **FR-011**: BuildKit MUST import the persistent GHCR registry cache and retain
+  the previous GHA cache as a migration fallback.
+- **FR-012**: An optional mainland registry mirror MUST receive the exact GHCR
+  digest through OCI manifest/layer copying, never a second build.
+- **FR-013**: A manual run MUST accept an existing `vX.Y.Z` tag for idempotent
+  rebuild/republication using the current workflow implementation and MUST NOT
+  move `latest` backward when retrying an older tag.
+- **FR-014**: The release job MUST explicitly receive `contents: write` and an
+  explicit release token input.
 
 ## Success Criteria
 
@@ -60,6 +79,10 @@ by the Dockerfile, replacing the unpinned `pip install fastmcp uvicorn ...`.
   SemVer increments, release-commit exclusion, and changelog finalization.
 - **SC-003**: A merged Conventional Commit produces exactly one release commit,
   one tag, one GHCR version, six qmtctl packages, checksums, and one Release.
+- **SC-004**: After one warm build, an MCP source-only change does not execute
+  the Wine/Python dependency-provisioning Docker layer.
+- **SC-005**: If a mainland mirror is configured, its version tag resolves to
+  the same manifest digest published to GHCR.
 
 ## Out of Scope / Deferred
 
@@ -68,5 +91,6 @@ by the Dockerfile, replacing the unpinned `pip install fastmcp uvicorn ...`.
 
 ## Assumptions / Dependencies
 
-- GHCR is the registry; the publishing identity is the repo's `GITHUB_TOKEN`.
+- GHCR is authoritative. A mainland mirror is optional and configured only with
+  repository variables/secrets.
 - The amd64 image build (001) is the artifact; CI here only orchestrates it.

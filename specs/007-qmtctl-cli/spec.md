@@ -1,6 +1,6 @@
 # Feature Specification: qmtctl CLI Client
 
-**Status**: Draft
+**Status**: Complete
 **Depends on**: 002 (MCP core streamable-http), 003 (market data), 006 (instrument search)
 
 ## Summary
@@ -24,6 +24,7 @@ Default environment:
 ```text
 QMT_MCP_URL=http://127.0.0.1:8765/mcp
 QMT_MCP_TOKEN=...
+QMT_MCP_ACCESS_TOKEN=...  # OAuth/gateway access token; takes precedence
 ```
 
 All business commands call MCP tools over streamable HTTP. `/healthz` may be
@@ -33,6 +34,8 @@ used directly only for lightweight health checks.
 
 ```bash
 qmtctl health
+qmtctl version
+qmtctl auth discover
 qmtctl tools
 qmtctl search 天岳
 qmtctl resolve 纳指 --rank liquidity
@@ -48,6 +51,7 @@ Global flags:
 ```text
 --url
 --token
+--access-token
 --json
 --timeout
 --verbose
@@ -68,12 +72,21 @@ Global flags:
 - **FR-006**: Errors MUST preserve MCP error type/message and exit with
   non-zero status.
 - **FR-007**: Secrets MUST NOT be printed in normal or verbose logs.
+- **FR-008**: The CLI MUST discover RFC 9728/MCP protected-resource metadata
+  without sending bearer credentials to the public metadata endpoint.
+- **FR-009**: The CLI MUST accept an existing OAuth access token through
+  `QMT_MCP_ACCESS_TOKEN` or `--access-token`, with explicit precedence over the
+  legacy static token.
+- **FR-010**: Release binaries MUST report their injected SemVer through
+  `qmtctl version` and the MCP initialize handshake.
 
 ## Out of Scope
 
 - Direct local Wine/QMT/xtquant integration.
 - Order placement or trading commands.
 - Replacing MCP as the main integration surface.
+- Browser authorization, token exchange/refresh, dynamic client registration,
+  or server-side JWT/JWKS validation.
 
 ## Success Criteria
 
@@ -83,3 +96,5 @@ Global flags:
   structured payload as the MCP tool.
 - **SC-003**: `qmtctl smoke` returns a useful diagnosis for auth failure,
   MCP-down, xtdata-not-ready, and successful xtdata-ready states.
+- **SC-004**: `qmtctl auth discover --json` returns resource, authorization
+  servers, and scopes without leaking the configured access token.

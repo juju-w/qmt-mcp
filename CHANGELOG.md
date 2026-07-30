@@ -14,7 +14,25 @@ project constitution's quality gates.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+- qmtctl can inspect OAuth protected-resource metadata with `qmtctl auth
+  discover` and accepts bearer access tokens through `--access-token` or
+  `QMT_MCP_ACCESS_TOKEN`.
+- qmtctl exposes `version`; release binaries report the SemVer embedded during
+  cross-compilation and send it in the MCP initialize handshake.
+- Releases can optionally mirror the already-built GHCR image digest to a
+  mainland China registry without rebuilding it.
+
+### Changed
+- The appliance Dockerfile keeps Wine/Python dependency provisioning ahead of
+  frequently changing MCP source, so source-only releases reuse the heavy layer.
+- Image builds use a persistent GHCR BuildKit cache with the previous GitHub
+  Actions cache as a migration fallback.
+- Manual release runs can rebuild and republish an existing version tag.
+
+### Fixed
+- GitHub Release creation now requests job-level write permission and passes the
+  release token explicitly instead of relying on an action default.
 
 ## [0.3.1] - 2026-07-30
 

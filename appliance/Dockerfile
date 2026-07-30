@@ -69,15 +69,9 @@ RUN set -eux; \
 ENV LANG=zh_CN.GBK \
     LC_ALL=zh_CN.GBK
 
-# ---- helper scripts + MCP launcher ----
-COPY scripts/ /usr/local/bin/
-RUN chmod +x /usr/local/bin/*.sh /usr/local/bin/detect-broker.py
-
-COPY mcp/ /opt/qmt-mcp/
-
-# ---- download the Windows Python installer (generic; not broker-specific) ----
-RUN mkdir -p /opt/installers \
- && curl -fL --retry 3 "$PY_URL" -o /opt/installers/python-amd64.exe
+# Copy only the dependency declaration before the expensive Wine provisioning.
+# Application source is copied later, so ordinary MCP changes keep this layer.
+COPY mcp/requirements.in /tmp/qmt-mcp-requirements.in
 
 # ---- pre-create wineuser (uid/gid 1000) to match runtime USER_UID/USER_GID ----
 RUN groupadd --gid 1000 wineuser \
@@ -103,33 +97,48 @@ RUN install -d -o wineuser -g wineuser /home/wineuser/.config/autostart \
       'Terminal=false' \
       'X-GNOME-Autostart-enabled=true' \
       > /home/wineuser/.config/autostart/qmt-client.desktop \
- && chown -R wineuser:wineuser /opt/qmt-mcp /home/wineuser/.config /opt/installers
+ && chown -R wineuser:wineuser /home/wineuser/.config
 
 # ---- Wine-side provisioning as wineuser (prefix + Python + fonts + MCP deps) ----
 # NOTE: no xtquant here — it is provided by the broker pack at runtime.
+# Keep this layer independent from application source. It is the slowest layer
+# and should rebuild only when the base image, Python, fonts, or requirements
+# change.
 USER wineuser
 WORKDIR /home/wineuser
 RUN set -eux; \
     export HOME=/home/wineuser; \
+    curl -fL --retry 3 "$PY_URL" -o /tmp/python-amd64.exe; \
     xvfb-run -a wineboot --init; wineserver -w; \
-    xvfb-run -a wine /opt/installers/python-amd64.exe \
+    xvfb-run -a wine /tmp/python-amd64.exe \
         /quiet InstallAllUsers=0 PrependPath=1 Include_test=0 TargetDir="$PY_WIN_DIR"; \
+    rm -f /tmp/python-amd64.exe; \
     wineserver -w; \
     SITE="$WINEPREFIX/drive_c/Python312/Lib/site-packages"; \
     test -d "$SITE"; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip config set \
         global.index-url https://pypi.tuna.tsinghua.edu.cn/simple; \
-    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip install -q fastmcp uvicorn numpy pandas asyncpg; \
+    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip install -q --no-cache-dir \
+        -r 'Z:\tmp\qmt-mcp-requirements.in'; \
     mkdir -p "$WINEPREFIX/drive_c/windows/Fonts"; \
     cp /usr/share/fonts/opentype/noto/*CJK*.ttc "$WINEPREFIX/drive_c/windows/Fonts/" 2>/dev/null || true; \
     cp /usr/share/fonts/truetype/wqy/*.ttc      "$WINEPREFIX/drive_c/windows/Fonts/" 2>/dev/null || true; \
-    # build-time smoke: Python + MCP core (NO xtquant — comes from pack)
+    # Dependency smoke only. The application smoke runs after its source copy.
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" --version; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import fastmcp, uvicorn, numpy, pandas; print('fastmcp', fastmcp.__version__)"; \
+    wineserver -k || true
+
+# ---- frequently changing application source ----
+USER root
+COPY --chmod=0755 scripts/ /usr/local/bin/
+COPY --chown=wineuser:wineuser mcp/ /opt/qmt-mcp/
+
+# Build-time application smoke (NO xtquant — it comes from the broker pack).
+# Source changes rerun only this short check, not Wine/Python provisioning.
+USER wineuser
+RUN set -eux; \
+    export HOME=/home/wineuser; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import sys; sys.path.insert(0, r'Z:\\opt\\qmt-mcp'); import qmt_mcp; assert qmt_mcp.filter_trade_tools() == []; print('mcp core import OK')"; \
-    # NOTE: os._exit(0) after main() — the WorkerPool's ThreadPoolExecutor uses
-    # non-daemon threads, so a normal return makes the interpreter hang on thread
-    # join under Wine. timeout is a hard backstop so the build can never wedge.
     QMT_MCP_TOKEN=smoke QMT_MCP_ENABLE_XTDATA=0 QMT_MCP_AUDIT_PATH='C:\users\wineuser\Temp\qmt-mcp-audit-smoke.jsonl' \
       timeout 180 xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import sys; sys.path.insert(0, r'Z:\\opt\\qmt-mcp'); import qmt_mcp_core.smoke as smoke; smoke.main(); import os; os._exit(0)"; \
     wineserver -k || true

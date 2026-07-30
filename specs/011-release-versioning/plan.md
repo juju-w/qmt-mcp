@@ -21,7 +21,7 @@ local six-target cross-build, and the real GitHub release run after merge.
 
 | Principle | Gate | Status |
 |---|---|---|
-| III. Reproducible / Native / Pinned | Versioned images + declared deps/lockfile path | PASS |
+| III. Reproducible / Native / Pinned | Versioned images + declared deps; amd64 lock generation remains | PARTIAL |
 | VI. Security by Default | Release notes secret-free; uses scoped `GITHUB_TOKEN` | PASS |
 | VII. Spec-Driven | Updated 011 spec/plan/tasks describe automatic delivery | PASS |
 
@@ -34,11 +34,18 @@ CHANGELOG.md                     # NEW: Keep-a-Changelog
 .github/workflows/release.yml    # successful main CI -> version/tag/artifacts/Release
 .github/scripts/release_policy.py
 appliance/mcp/requirements.in # NEW: declared MCP runtime deps (lock generated on build)
+docs/RELEASE.md               # cache, China mirror, retry, and permissions
 ```
 
 **Structure Decision**: Root `VERSION`/`CHANGELOG` remain authoritative. CI stays
 fast and secret-free; release runs only after successful main CI. Release policy
 is testable Python instead of duplicated, opaque shell regexes.
+
+The image is built once to GHCR. A `mode=max` registry cache preserves
+intermediate Wine/Python layers beyond GitHub cache eviction, while the old GHA
+cache remains an import-only migration fallback. An optional ACR/TCR/SWR target
+is populated by copying the built digest with `buildx imagetools`; it never
+executes the Dockerfile again.
 
 ## Complexity Tracking
 

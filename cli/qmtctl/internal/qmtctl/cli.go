@@ -14,6 +14,8 @@ import (
 
 const defaultURL = "http://127.0.0.1:8765/mcp"
 
+var Version = "dev"
+
 type globalOptions struct {
 	url     string
 	token   string
@@ -29,7 +31,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	opts := globalOptions{
 		url:     getenvDefault("QMT_MCP_URL", defaultURL),
-		token:   os.Getenv("QMT_MCP_TOKEN"),
+		token:   firstNonEmpty(os.Getenv("QMT_MCP_ACCESS_TOKEN"), os.Getenv("QMT_MCP_TOKEN")),
 		timeout: 10 * time.Second,
 	}
 	cmdArgs, err := parseGlobals(args, &opts)
@@ -53,6 +55,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 
 func dispatch(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
 	switch args[0] {
+	case "version":
+		return runVersion(opts, stdout)
+	case "auth":
+		return runAuth(ctx, client, opts, args[1:], stdout)
 	case "health":
 		return runHealth(ctx, client, opts, stdout)
 	case "tools":
@@ -89,6 +95,29 @@ func dispatch(ctx context.Context, client *Client, opts globalOptions, args []st
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func runVersion(opts globalOptions, stdout io.Writer) error {
+	if opts.jsonOut {
+		return writeJSON(stdout, map[string]string{"version": Version})
+	}
+	_, err := fmt.Fprintf(stdout, "qmtctl %s\n", Version)
+	return err
+}
+
+func runAuth(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+	if len(args) == 0 || args[0] == "discover" || args[0] == "metadata" {
+		doc, err := client.OAuthMetadata(ctx)
+		if err != nil {
+			return err
+		}
+		if opts.jsonOut {
+			return writeJSON(stdout, doc)
+		}
+		printMapSummary(stdout, doc)
+		return nil
+	}
+	return fmt.Errorf("unknown auth subcommand %q", args[0])
 }
 
 func runHealth(ctx context.Context, client *Client, opts globalOptions, stdout io.Writer) error {
@@ -927,7 +956,7 @@ func parseGlobals(args []string, opts *globalOptions) ([]string, error) {
 			opts.jsonOut = true
 		case arg == "--verbose":
 			opts.verbose = true
-		case arg == "--url" || arg == "--token" || arg == "--timeout":
+		case arg == "--url" || arg == "--token" || arg == "--access-token" || arg == "--timeout":
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("%s requires a value", arg)
 			}
@@ -935,7 +964,10 @@ func parseGlobals(args []string, opts *globalOptions) ([]string, error) {
 			if err := setGlobalValue(opts, arg, args[i]); err != nil {
 				return nil, err
 			}
-		case strings.HasPrefix(arg, "--url=") || strings.HasPrefix(arg, "--token=") || strings.HasPrefix(arg, "--timeout="):
+		case strings.HasPrefix(arg, "--url=") ||
+			strings.HasPrefix(arg, "--token=") ||
+			strings.HasPrefix(arg, "--access-token=") ||
+			strings.HasPrefix(arg, "--timeout="):
 			parts := strings.SplitN(arg, "=", 2)
 			if err := setGlobalValue(opts, parts[0], parts[1]); err != nil {
 				return nil, err
@@ -951,7 +983,7 @@ func setGlobalValue(opts *globalOptions, name, value string) error {
 	switch name {
 	case "--url":
 		opts.url = value
-	case "--token":
+	case "--token", "--access-token":
 		opts.token = value
 	case "--timeout":
 		d, err := parseDuration(value)
@@ -969,6 +1001,7 @@ func newFlagSet(name string, opts *globalOptions) *flag.FlagSet {
 	fs.BoolVar(&opts.jsonOut, "json", opts.jsonOut, "write JSON")
 	fs.StringVar(&opts.url, "url", opts.url, "MCP URL")
 	fs.StringVar(&opts.token, "token", opts.token, "MCP token")
+	fs.StringVar(&opts.token, "access-token", opts.token, "OAuth access token")
 	fs.DurationVar(&opts.timeout, "timeout", opts.timeout, "timeout")
 	fs.BoolVar(&opts.verbose, "verbose", opts.verbose, "verbose output")
 	return fs
@@ -1087,8 +1120,8 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN] [--json] [--timeout 10s] <command>")
-	fmt.Fprintln(w, "commands: health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, sector, formula, smoke")
+	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN|--access-token TOKEN] [--json] [--timeout 10s] <command>")
+	fmt.Fprintln(w, "commands: version, auth, health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, sector, formula, smoke")
 }
 
 func getenvDefault(name, fallback string) string {
@@ -1096,4 +1129,13 @@ func getenvDefault(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

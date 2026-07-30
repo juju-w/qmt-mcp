@@ -33,6 +33,66 @@ func TestHealthUsesBearerTokenAndJSON(t *testing.T) {
 	}
 }
 
+func TestVersionReportsInjectedVersion(t *testing.T) {
+	previous := Version
+	Version = "1.2.3"
+	t.Cleanup(func() { Version = previous })
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"version"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if stdout.String() != "qmtctl 1.2.3\n" {
+		t.Fatalf("unexpected stdout: %q", stdout.String())
+	}
+}
+
+func TestHealthUsesOAuthAccessTokenEnvironment(t *testing.T) {
+	t.Setenv("QMT_MCP_TOKEN", "static-token")
+	t.Setenv("QMT_MCP_ACCESS_TOKEN", "oauth-access-token")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("authorization"); got != "Bearer oauth-access-token" {
+			t.Fatalf("authorization header = %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL + "/mcp", "health"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+}
+
+func TestAuthDiscoverUsesPathAwareMetadataWithoutBearer(t *testing.T) {
+	t.Setenv("QMT_MCP_ACCESS_TOKEN", "must-not-be-sent")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/oauth-protected-resource/mcp" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		if got := r.Header.Get("authorization"); got != "" {
+			t.Fatalf("metadata request leaked authorization header %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"resource":              serverURL(r) + "/mcp",
+			"authorization_servers": []string{"https://auth.example.com"},
+			"scopes_supported":      []string{"qmt:read"},
+		})
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL + "/mcp", "--json", "auth", "discover"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"authorization_servers"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
 func TestSearchCallsExpectedMCPTool(t *testing.T) {
 	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -462,4 +522,8 @@ func toolResult(payload map[string]any) map[string]any {
 	return map[string]any{
 		"content": []any{map[string]any{"type": "text", "text": string(raw)}},
 	}
+}
+
+func serverURL(r *http.Request) string {
+	return "http://" + r.Host
 }

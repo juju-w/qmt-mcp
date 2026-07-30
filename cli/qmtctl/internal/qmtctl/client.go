@@ -103,6 +103,45 @@ func (c *Client) Health(ctx context.Context) (map[string]any, error) {
 	return doc, nil
 }
 
+func (c *Client) OAuthMetadata(ctx context.Context) (map[string]any, error) {
+	var lastErr error
+	for _, metadataURL := range oauthMetadataURLs(c.baseURL) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("accept", "application/json")
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return nil, &AppError{Kind: "network", Message: err.Error()}
+		}
+		body, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if resp.StatusCode == http.StatusNotFound {
+			lastErr = errorFromBody(resp.StatusCode, body)
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, errorFromBody(resp.StatusCode, body)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(body, &doc); err != nil {
+			return nil, &AppError{Kind: "protocol", Message: "OAuth metadata endpoint returned invalid JSON"}
+		}
+		if resource, _ := doc["resource"].(string); strings.TrimSpace(resource) == "" {
+			return nil, &AppError{Kind: "protocol", Message: "OAuth metadata did not include resource"}
+		}
+		return doc, nil
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, &AppError{Kind: "protocol", Message: "cannot derive OAuth metadata URL"}
+}
+
 func (c *Client) ListTools(ctx context.Context) (map[string]any, error) {
 	if err := c.ensureInitialized(ctx); err != nil {
 		return nil, err
@@ -138,7 +177,7 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 			"capabilities":    map[string]any{},
 			"clientInfo": map[string]any{
 				"name":    "qmtctl",
-				"version": "0.1.0",
+				"version": Version,
 			},
 		}
 		var out map[string]any
@@ -292,6 +331,29 @@ func healthURL(base string) string {
 		u.Path = path.Join(u.Path, "healthz")
 	}
 	return u.String()
+}
+
+func oauthMetadataURLs(base string) []string {
+	u, err := url.Parse(base)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return []string{strings.TrimRight(base, "/") + "/.well-known/oauth-protected-resource"}
+	}
+	resourcePath := strings.Trim(u.Path, "/")
+	u.RawPath = ""
+	u.RawQuery = ""
+	u.Fragment = ""
+
+	var urls []string
+	if resourcePath != "" {
+		u.Path = "/.well-known/oauth-protected-resource/" + resourcePath
+		urls = append(urls, u.String())
+	}
+	u.Path = "/.well-known/oauth-protected-resource"
+	root := u.String()
+	if len(urls) == 0 || urls[len(urls)-1] != root {
+		urls = append(urls, root)
+	}
+	return urls
 }
 
 func normalizeRPCBody(contentType string, body []byte) []byte {

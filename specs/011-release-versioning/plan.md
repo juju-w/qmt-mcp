@@ -4,16 +4,17 @@
 
 ## Summary
 
-Add versioning metadata + a tag-triggered release workflow. Image build is
-amd64-only (reused from 001), orchestrated by GitHub Actions on `v*` tags. Declare
-MCP deps for a generated lockfile to close the 008 pinning deferral.
+Upgrade versioning from manual tags to CI-gated automatic releases. CI validates
+Conventional Commits; successful `main` CI computes SemVer, updates version and
+changelog metadata, pushes a release commit/tag, then publishes the amd64 image
+and six qmtctl packages in one retryable workflow.
 
 ## Technical Context
 
-**Language/Version**: YAML workflow, Markdown, a plain `VERSION` file, a
-`requirements.in`. Go cross-build only when 007 exists.
-**Testing**: YAML parse + SemVer/format checks here; the actual image push and
-binary build require GitHub + amd64 (out of local scope).
+**Language/Version**: GitHub Actions YAML, Python 3.12 release-policy helper,
+Markdown, plain `VERSION`, Go 1.22 cross-build.
+**Testing**: release-policy unit tests, YAML/action lint, existing Python/Go CI,
+local six-target cross-build, and the real GitHub release run after merge.
 **Constraints**: no secrets in notes; reproducible/pinned (III); amd64-only image.
 
 ## Constitution Check
@@ -22,19 +23,22 @@ binary build require GitHub + amd64 (out of local scope).
 |---|---|---|
 | III. Reproducible / Native / Pinned | Versioned images + declared deps/lockfile path | PASS |
 | VI. Security by Default | Release notes secret-free; uses scoped `GITHUB_TOKEN` | PASS |
-| VII. Spec-Driven | Versioning gates mirror the constitution's breaking-change rule | PASS |
+| VII. Spec-Driven | Updated 011 spec/plan/tasks describe automatic delivery | PASS |
 
 ## Project Structure
 
 ```text
 VERSION                          # NEW: single version source of truth
 CHANGELOG.md                     # NEW: Keep-a-Changelog
-.github/workflows/release.yml    # NEW: tag -> GHCR image + Release (+ optional CLI)
+.github/workflows/ci.yml         # PR/main checks + commit policy
+.github/workflows/release.yml    # successful main CI -> version/tag/artifacts/Release
+.github/scripts/release_policy.py
 appliance/mcp/requirements.in # NEW: declared MCP runtime deps (lock generated on build)
 ```
 
-**Structure Decision**: Root `VERSION`/`CHANGELOG` (discoverable); release workflow
-separate from `ci.yml` so PR CI stays fast and release runs only on tags.
+**Structure Decision**: Root `VERSION`/`CHANGELOG` remain authoritative. CI stays
+fast and secret-free; release runs only after successful main CI. Release policy
+is testable Python instead of duplicated, opaque shell regexes.
 
 ## Complexity Tracking
 

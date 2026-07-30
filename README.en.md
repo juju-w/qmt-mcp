@@ -168,6 +168,20 @@ Principles in [`constitution.md`](.specify/memory/constitution.md); AI-agent map
 [`AGENT.md`](AGENT.md); tests in
 [`appliance/mcp/tests/README.md`](appliance/mcp/tests/README.md).
 
+## Versioning and automated releases
+
+Commits and PR titles use `type(scope): description`, for example
+`feat(xtdata): add option filters` or `fix(cli): preserve session headers`.
+After CI succeeds on `main`, Conventional Commits determine the next SemVer. The
+workflow updates `VERSION` and `CHANGELOG.md`, creates the release commit and tag,
+then publishes:
+
+- `ghcr.io/juju-w/qmt-mcp:X.Y.Z` and `latest` (appliance: linux/amd64 only)
+- qmtctl for Linux, macOS, and Windows on amd64 and arm64
+- `SHA256SUMS` and one GitHub Release
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the accepted types and bump rules.
+
 ## Contributing / Help wanted 🙋
 
 The biggest ask is **feature 04 (read-only account queries via `xttrade`)**:

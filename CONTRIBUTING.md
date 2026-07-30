@@ -56,10 +56,36 @@ image build). Add unit tests for new pure-logic code; keep them dependency-light
 
 ## Commits & PRs
 
-- Use clear, scoped messages; prefix with the feature where useful, e.g.
-  `feat(008): ...`, `fix: ...`, `docs: ...`.
+- Every commit and PR title must use Conventional Commit format:
+  `type(scope): description`.
+- Allowed types are `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`,
+  `ci`, `chore`, `style`, and `revert`. Scopes are optional, lowercase, and
+  should identify the affected surface, such as `xtdata`, `cli`, `release`, or
+  a feature number.
+- Examples: `feat(xtdata): add option-chain filters`,
+  `fix(cli): preserve MCP session headers`, and
+  `ci(release): validate packaged checksums`.
+- Use `!` or a `BREAKING CHANGE:` footer for incompatible contracts, for example
+  `feat(mcp)!: replace the quote response schema`.
 - Keep PRs focused; describe what changed and how you verified it.
-- CI (lint + format + unit tests + secret scan) must be green.
+- CI validates the PR title and every non-merge commit in the PR, in addition to
+  lint, format, unit tests, Go checks, and the secret scan.
+
+## Automated releases
+
+After CI succeeds on `main`, the release workflow analyzes Conventional Commits
+since the latest `vX.Y.Z` tag:
+
+- `feat` creates a minor release.
+- A breaking `!` or `BREAKING CHANGE:` creates a major release.
+- Other allowed types create a patch release.
+- `chore(release)` is ignored when determining the next version.
+
+The workflow updates `VERSION` and `CHANGELOG.md`, pushes
+`chore(release): vX.Y.Z [skip ci]`, tags that commit, publishes the
+`linux/amd64` appliance image to GHCR, packages `qmtctl` for Linux, macOS, and
+Windows on amd64 and arm64, writes `SHA256SUMS`, and creates one GitHub Release.
+Do not bump `VERSION` or create routine release tags manually.
 
 ## Reporting security issues
 

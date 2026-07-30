@@ -6,13 +6,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Versioning policy
 
-Pre-1.0: the broker-pack contract and exposed MCP tool surface are still evolving;
-minor versions may include breaking changes (noted explicitly). After 1.0, a
-**breaking change to the broker-pack contract or the exposed tool surface** is a
-major bump and ships with a migration note (per the project constitution's quality
-gates).
+This project follows Conventional Commits and Semantic Versioning: `feat` bumps
+minor, other accepted non-breaking types bump patch, and `!` or a
+`BREAKING CHANGE:` footer bumps major. A breaking change to the broker-pack
+contract or exposed MCP tool surface also requires a migration note under the
+project constitution's quality gates.
 
 ## [Unreleased]
+
+### Changed
+- CI now enforces Conventional Commit subjects and PR titles without duplicate
+  branch/PR runs. A successful `main` CI run automatically updates `VERSION` and
+  this changelog, tags the release, builds the GHCR appliance image, packages
+  qmtctl for six OS/architecture targets, publishes checksums, and creates the
+  GitHub Release.
 
 ### Added
 - **013 — Quote subscription cache**: `qmt_xtdata_quote_subscribe` /
@@ -72,9 +79,6 @@ gates).
   tools, xtdata search/resolve/snapshot/bars/cache/smoke commands, read-only
   xttrade account-query wrappers, NAS appliance smoke verification, and release
   binaries for Linux/macOS/Windows on amd64+arm64.
-
-### Planned
-- **011 — Release & versioning**: this scaffolding.
 
 ### Known gaps
 - In-image pip deps are declared in `appliance/mcp/requirements.in`; the locked

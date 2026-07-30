@@ -79,5 +79,5 @@
   conformance.
 - [x] T031 Run release policy, actionlint, compose, skill validation,
   diff/secret review, and native linux/amd64 image smoke.
-- [ ] T032 Record evidence in `VERIFICATION.md`, close tasks accurately, and
+- [x] T032 Record evidence in `VERIFICATION.md`, close tasks accurately, and
   deliver through PR, main CI, and automated release.

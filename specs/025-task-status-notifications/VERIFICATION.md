@@ -85,4 +85,24 @@ executable gate.
 
 ## Remote gates
 
-PR CI, main CI, and automated release evidence remain pending delivery.
+PR CI run
+[`30585457509`](https://github.com/juju-w/qmt-mcp/actions/runs/30585457509)
+passed all six required jobs. PR
+[#17](https://github.com/juju-w/qmt-mcp/pull/17) merged in commit `fad84db`;
+the releasable feature commit is
+`ff35e1a feat(mcp): add task status notifications`.
+
+Main CI run
+[`30585636304`](https://github.com/juju-w/qmt-mcp/actions/runs/30585636304)
+passed all six required jobs. Automated release run
+[`30586037926`](https://github.com/juju-w/qmt-mcp/actions/runs/30586037926)
+published
+[`v0.11.0`](https://github.com/juju-w/qmt-mcp/releases/tag/v0.11.0)
+from release commit `5bb05f8`, with six qmtctl platform archives and
+`SHA256SUMS`.
+
+Both `ghcr.io/juju-w/qmt-mcp:0.11.0` and `latest` resolve to OCI index digest
+`sha256:a9295ea935a3a75409c5594e14a5e665b44ddffd551854b8eaeb890946ffbd3f`.
+Its runnable platform manifest is native `linux/amd64`. The optional China
+registry mirror was correctly skipped because its repository variables and
+credentials were not configured.

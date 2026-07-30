@@ -21,6 +21,11 @@ WorkBuddy 等标准 HTTP 客户端通常无需额外配置。
 端继续获得同步工具结果。因此工具还没升级的 Codex、Claude Code、WorkBuddy
 不需要改配置，也不会被服务端强行切换执行语义。
 
+新版 Tasks 还支持任务内多轮输入。任务可进入 `input_required`，并在
+`inputRequests` 中嵌入标准 MCP `{method, params}` 请求；客户端用
+`tasks/update.inputResponses` 按相同键回答。这个能力同样只在上述稳定版
+Tasks 路径启用，不影响旧客户端。
+
 最小连通性检查：
 
 ```bash
@@ -124,6 +129,38 @@ Tasks 用于下载历史数据、批量下载财务数据、批量公式、因�
 扩展取决于各自版本；未声明时服务端自动同步回退。不要仅因为客户端能连接
 `2026-07-28` 就假定它已经支持 Tasks。
 
+### 任务输入
+
+任务等待输入时，`tasks/get` 返回：
+
+```json
+{
+  "status": "input_required",
+  "inputRequests": {
+    "confirmation": {
+      "method": "elicitation/create",
+      "params": {
+        "mode": "form",
+        "message": "Confirm operation",
+        "requestedSchema": {
+          "type": "object",
+          "properties": {"confirm": {"type": "boolean"}},
+          "required": ["confirm"]
+        }
+      }
+    }
+  }
+}
+```
+
+客户端可以只回答部分键；服务端会继续返回剩余请求。未知、重复和已满足键在
+鉴权后幂等忽略。等待问题的快照会持久化，回答值不会写入任务数据库、日志或
+审计。服务重启不会重放执行，而是将等待中的任务标为失败。
+
+客户端必须把确认交给用户或调用方，不应自动构造 `accept`。当前生产工具尚未
+新增需要输入的流程；这套运行时用于后续经过单独安全设计的工具，并由 CI 隔离
+fixture 验证。
+
 ## qmtctl
 
 qmtctl 优先使用 `2026-07-28`，对旧服务自动回退到 2025 initialize/session。
@@ -138,10 +175,18 @@ qmtctl --task-mode detach --json cache refresh --force
 qmtctl task get tsk_<id>
 qmtctl task wait tsk_<id>
 qmtctl task cancel tsk_<id>
+qmtctl task update tsk_<id> \
+  --responses-json \
+  '{"confirmation":{"action":"accept","content":{"confirm":true}}}'
 ```
 
 `--timeout` 控制单次 HTTP 请求，`--task-timeout` 控制完整等待周期。需要验证
 旧客户端路径时使用 `--task-mode sync`。
+
+默认等待如果遇到 `input_required`，qmtctl 会停止轮询并返回
+`task_input_required`；JSON 错误数据包含 `taskId` 和完整
+`inputRequests`。`--responses-json` 必须是最多 16 项、最大 64 KiB 的 JSON
+对象。qmtctl 不读取 stdin 猜测答案，也不会自动接受确认。
 
 静态 token：
 
@@ -287,6 +332,7 @@ resource metadata；否则使用静态 header。只支持旧 SSE transport 的�
 | OAuth 登录后工具很少 | 查看 token scope，再检查 startup Profile、allow/deny 与 feature gate；它们取交集。 |
 | qmtctl 没复用登录 | `auth status` 检查 resource 是否完全相同；显式 token 会覆盖保存的会话。 |
 | 长命令立即返回 task ID | qmtctl 使用了 `--task-mode detach`；用 `task wait <id>` 恢复，或改回默认 `wait`。 |
+| `task_input_required` | 审阅错误数据中的 `inputRequests`，显式运行 `task update <id> --responses-json ...`，再 `task wait`；不要自动接受确认。 |
 | `server does not support MCP Tasks` | 服务端或当前协议未广告扩展；普通命令可用 `--task-mode sync`，显式 `task` 命令需升级服务端。 |
 | `task ... returned insufficient/invalid params` | 检查 task ID、OAuth 身份和创建时所需 scope；服务端会故意隐藏未知与越权的区别。 |
 | 客户端只显示部分工具 | 客户端需支持标准 `nextCursor`；先用 `qmtctl tools --json` 验证完整目录，再升级客户端。 |

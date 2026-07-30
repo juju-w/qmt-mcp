@@ -113,11 +113,21 @@ qmtctl --task-mode detach --json cache refresh --force
 qmtctl task get tsk_<id>
 qmtctl task wait tsk_<id>
 qmtctl task cancel tsk_<id>
-qmtctl task update tsk_<id> --responses-json '{"approval":"yes"}'
+qmtctl task update tsk_<id> \
+  --responses-json \
+  '{"confirmation":{"action":"accept","content":{"confirm":true}}}'
 ```
 
-`task update` is present for the stable protocol; structured multi-round input
-is introduced separately and a task not waiting for input rejects the update.
+Stable task input uses keyed standard MCP requests. If automatic wait reaches
+`input_required`, qmtctl stops and returns a `task_input_required` error whose
+data contains the task ID and pending `inputRequests`. Review those requests,
+submit an explicit keyed response, then run `task wait` again. qmtctl never
+auto-accepts a confirmation.
+
+`--responses-json` must be a JSON object with at most 16 entries and 64 KiB.
+Partial responses leave only unanswered keys pending. Unknown, duplicate,
+already-satisfied, and terminal-task keys are acknowledged and ignored by the
+server after authorization.
 
 `--timeout` bounds each HTTP exchange. `--task-timeout`, or
 `QMTCTL_TASK_TIMEOUT`, bounds the full wait lifecycle and defaults to 10
@@ -138,6 +148,7 @@ qmtctl tools
 qmtctl task get tsk_<id>
 qmtctl task wait tsk_<id>
 qmtctl task cancel tsk_<id>
+qmtctl task update tsk_<id> --responses-json '<keyed-json-object>'
 qmtctl search 天岳
 qmtctl resolve 纳指 --rank liquidity --json
 qmtctl snapshot 510300.SH

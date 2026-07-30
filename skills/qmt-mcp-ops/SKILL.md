@@ -144,6 +144,24 @@ refresh. Configure them with `QMT_MCP_TASKS_ENABLED`,
 `QMT_MCP_TASK_POLL_INTERVAL_MS`, `QMT_MCP_TASK_MAX_RETAINED`, and
 `QMT_MCP_TASK_TOOLS`.
 
+A task may pause with `status=input_required` and a keyed map of standard MCP
+requests. Inspect the request `method` and `params`, then submit only deliberate
+answers:
+
+```bash
+qmtctl --json task get tsk_<id>
+qmtctl task update tsk_<id> \
+  --responses-json \
+  '{"confirmation":{"action":"accept","content":{"confirm":true}}}'
+qmtctl task wait tsk_<id>
+```
+
+Partial batches leave unanswered keys pending. Never invent, infer, or
+auto-accept a confirmation. Pending prompts are stored, but answer values stay
+in the live task process and are not written to SQLite, logs, or audit records.
+If the process restarts, waiting work fails explicitly instead of replaying
+answers.
+
 ## Tool Families
 
 The standard registry has 37 tools:
@@ -240,6 +258,7 @@ Use `qmtctl <family> --help` for exact arguments. Representative calls:
 qmtctl snapshot --cache-only 510300.SH
 qmtctl --task-mode detach --json cache refresh --force
 qmtctl task wait tsk_<id>
+qmtctl --json task get tsk_<id>
 qmtctl subscription add --id strategy1 510300.SH,510500.SH
 qmtctl portfolio risk --account 123456789 --max-single-weight 0.3
 qmtctl option vix-inputs --family 300ETF
@@ -261,6 +280,7 @@ qmtctl smoke --code 510300.SH
 | OAuth discovery works but calls return 401 | Check JWT signature/`kid`, issuer, audience, expiry, client id, and algorithm |
 | OAuth call returns 403 | Token lacks the family or `qmt:manage` scope named by the challenge |
 | Long command prints a task handle | Detach mode is active; run `qmtctl task wait <id>` or use the default wait mode |
+| `task_input_required` | Review `inputRequests`, submit an explicit keyed `task update`, then wait again; never auto-accept |
 | Explicit task command says unsupported | Server/protocol did not advertise Tasks; use ordinary commands with `--task-mode sync` or upgrade the server |
 | Task ID becomes invalid after OAuth change | Resume with the same principal and original tool scopes; unknown and unauthorized IDs intentionally share `-32602` |
 | Chinese path decoding fails | Image or prefix is missing `zh_CN.GBK` |

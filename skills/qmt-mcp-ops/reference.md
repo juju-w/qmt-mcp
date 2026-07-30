@@ -94,7 +94,9 @@ proxy owns compression.
 
 The store excludes tool arguments, credentials, authorization headers, and raw
 principal identifiers. Supported 2025 clients and modern clients that do not
-declare Tasks continue synchronous calls.
+declare Tasks continue synchronous calls. Stable declaring clients may observe
+`input_required`: pending standard MCP request snapshots are durable, while
+answer values are transient and are not stored or logged.
 
 ### Feature gates
 
@@ -148,10 +150,15 @@ qmtctl --task-mode detach --json cache refresh --force
 qmtctl task get tsk_<id>
 qmtctl task wait tsk_<id>
 qmtctl task cancel tsk_<id>
+qmtctl task update tsk_<id> \
+  --responses-json \
+  '{"confirmation":{"action":"accept","content":{"confirm":true}}}'
 ```
 
 `--timeout` applies to one HTTP exchange. `--task-timeout` applies to the
-complete wait lifecycle.
+complete wait lifecycle. qmtctl stops on `input_required`, returns the task ID
+and pending requests, and never auto-accepts. Response JSON is bounded to 16
+keys and 64 KiB.
 
 ## Broker Pack
 

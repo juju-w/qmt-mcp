@@ -151,7 +151,9 @@ jobs:
             tasks-request-state-removal \
             tasks-request-headers \
             tasks-dispatch-and-envelope \
-            tasks-required-task-error; do
+            tasks-required-task-error \
+            tasks-mrtr-input \
+            tasks-mrtr-composition; do
             npx --yes "$CONFORMANCE_PACKAGE" server \
               --url http://127.0.0.1:18766/mcp \
               --spec-version 2026-07-28 \

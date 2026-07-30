@@ -597,11 +597,23 @@ def create_app(config: CoreConfig | None = None):
         )
         task_store.recover_interrupted()
         task_tools = list(config.task_tools)
+        mrtr_before_task_tools = []
         if config.task_conformance_fixtures:
-            task_tools.extend(("slow_compute", "failing_job", "protocol_error_job", "confirm_delete"))
+            task_tools.extend(
+                (
+                    "slow_compute",
+                    "failing_job",
+                    "protocol_error_job",
+                    "confirm_delete",
+                    "multi_input",
+                    "test_tool_with_task",
+                )
+            )
+            mrtr_before_task_tools.append("test_tool_with_task")
         tasks_extension = TasksExtension(
             task_store,
             task_tools=task_tools,
+            mrtr_before_task_tools=mrtr_before_task_tools,
             conformance_fixtures=config.task_conformance_fixtures,
         )
         extensions.append(tasks_extension)

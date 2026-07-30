@@ -223,9 +223,41 @@ class TaskStore:
         return self._transition(
             task_id,
             "input_required",
+            source_statuses=("working",),
             status_message=status_message,
             input_requests_json=_compact_json(input_requests),
         )
+
+    def replace_input_requests(
+        self,
+        task_id: str,
+        input_requests: dict[str, Any],
+        *,
+        status_message: str | None = None,
+    ) -> bool:
+        """Replace a waiting task's pending snapshot without resuming it."""
+
+        if not input_requests or not self.valid_task_id(task_id):
+            return False
+        safe_message = (status_message or "")[:MAX_STATUS_MESSAGE] or None
+        now = _utc_timestamp(self._clock_ms())
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE tasks SET
+                    status_message = ?,
+                    updated_at = ?,
+                    input_requests_json = ?
+                WHERE task_id = ? AND status = 'input_required'
+                """,
+                (
+                    safe_message,
+                    now,
+                    _compact_json(input_requests),
+                    task_id,
+                ),
+            )
+        return cursor.rowcount == 1
 
     def resume(self, task_id: str, *, status_message: str | None = None) -> bool:
         return self._transition(

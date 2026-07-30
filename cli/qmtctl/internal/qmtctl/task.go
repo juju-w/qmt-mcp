@@ -9,6 +9,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+const (
+	maxTaskInputItems      = 16
+	maxTaskInputKeyBytes   = 128
+	maxTaskInputBatchBytes = 65_536
+)
+
 type TaskGetParams struct {
 	mcp.ParamsBase
 	TaskID string `json:"taskId"`
@@ -26,8 +32,42 @@ type TaskRPCError struct {
 	Data    json.RawMessage `json:"data,omitempty"`
 }
 
+type TaskInputRequiredError struct {
+	TaskID        string
+	InputRequests json.RawMessage
+}
+
+func (e *TaskInputRequiredError) Error() string {
+	return fmt.Sprintf(
+		"task %s requires input; review data and run qmtctl task update --responses-json",
+		e.TaskID,
+	)
+}
+
 func (e *TaskRPCError) Error() string {
 	return fmt.Sprintf("MCP %d: %s", e.Code, e.Message)
+}
+
+func parseTaskInputResponses(raw string) (map[string]any, error) {
+	if len([]byte(raw)) > maxTaskInputBatchBytes {
+		return nil, fmt.Errorf("--responses-json exceeds %d bytes", maxTaskInputBatchBytes)
+	}
+	var responses map[string]any
+	if err := json.Unmarshal([]byte(raw), &responses); err != nil {
+		return nil, fmt.Errorf("invalid --responses-json: %w", err)
+	}
+	if responses == nil {
+		return nil, fmt.Errorf("--responses-json must be a JSON object")
+	}
+	if len(responses) > maxTaskInputItems {
+		return nil, fmt.Errorf("--responses-json exceeds %d entries", maxTaskInputItems)
+	}
+	for key := range responses {
+		if key == "" || len([]byte(key)) > maxTaskInputKeyBytes {
+			return nil, fmt.Errorf("--responses-json contains an invalid request ID")
+		}
+	}
+	return responses, nil
 }
 
 type TaskInfo struct {

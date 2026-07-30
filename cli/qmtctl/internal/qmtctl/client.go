@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,6 +47,7 @@ type AppError struct {
 	Kind    string `json:"error_type"`
 	Message string `json:"message"`
 	Status  int    `json:"status,omitempty"`
+	Data    any    `json:"data,omitempty"`
 }
 
 const maxToolListPages = 1000
@@ -343,6 +345,17 @@ func sdkError(err error) error {
 	if err == nil {
 		return nil
 	}
+	var inputRequired *TaskInputRequiredError
+	if errors.As(err, &inputRequired) {
+		return &AppError{
+			Kind:    "task_input_required",
+			Message: inputRequired.Error(),
+			Data: map[string]any{
+				"taskId":        inputRequired.TaskID,
+				"inputRequests": decodeBrief(inputRequired.InputRequests),
+			},
+		}
+	}
 	return &AppError{Kind: "mcp", Message: err.Error()}
 }
 
@@ -478,11 +491,9 @@ func (t *taskRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			Message: fmt.Sprintf("Task %s was cancelled", terminal.TaskID),
 		}
 	case "input_required":
-		envelope.Result = nil
-		envelope.Error = &TaskRPCError{
-			Code:    -32603,
-			Message: fmt.Sprintf("Task %s requires input; use qmtctl task update", terminal.TaskID),
-			Data:    json.RawMessage(fmt.Sprintf(`{"taskId":%q}`, terminal.TaskID)),
+		return nil, &TaskInputRequiredError{
+			TaskID:        terminal.TaskID,
+			InputRequests: terminal.InputRequests,
 		}
 	default:
 		envelope.Result = nil

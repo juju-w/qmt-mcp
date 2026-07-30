@@ -383,10 +383,35 @@ def test_oauth_tasks_bind_stable_principal_and_original_scopes(fake_xtquant, tmp
             json=get_payload,
             headers={**get_headers, "authorization": f"Bearer {reduced}"},
         )
+        update_payload, update_headers = _task_request(
+            "tasks/update",
+            3,
+            {
+                "taskId": task_id,
+                "inputResponses": {"unknown": {"action": "cancel"}},
+            },
+        )
+        owner_update = client.post(
+            "/mcp",
+            json=update_payload,
+            headers={**update_headers, "authorization": f"Bearer {refreshed}"},
+        )
+        hidden_update_owner = client.post(
+            "/mcp",
+            json=update_payload,
+            headers={**update_headers, "authorization": f"Bearer {other_subject}"},
+        )
+        hidden_update_scope = client.post(
+            "/mcp",
+            json=update_payload,
+            headers={**update_headers, "authorization": f"Bearer {reduced}"},
+        )
 
     assert resumed.status_code == 200
     assert _response_json(resumed)["result"]["taskId"] == task_id
-    for hidden in (hidden_owner, hidden_scope):
+    assert owner_update.status_code == 200
+    assert _response_json(owner_update)["result"]["resultType"] == "complete"
+    for hidden in (hidden_owner, hidden_scope, hidden_update_owner, hidden_update_scope):
         assert hidden.status_code == 400
         document = _response_json(hidden)
         assert document["error"]["code"] == -32602

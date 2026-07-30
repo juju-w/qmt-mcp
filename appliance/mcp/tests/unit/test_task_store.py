@@ -109,10 +109,22 @@ def test_malformed_ids_and_input_resume_are_bounded(tmp_path):
     assert store.get("") is None
     assert store.get("tsk_" + "x" * 1000) is None
     task = store.create(owner_digest=OWNER, tool_name="qmt_waiting", required_scopes=())
-    assert store.request_input(task.task_id, {"confirmation": {"type": "boolean"}})
+    requests = {
+        "first": {"method": "elicitation/create", "params": {"mode": "form"}},
+        "second": {"method": "elicitation/create", "params": {"mode": "form"}},
+    }
+    assert store.request_input(task.task_id, requests)
     waiting = store.get(task.task_id)
     assert waiting.status == "input_required"
     assert "inputRequests" in waiting.to_wire()
     assert "inputRequests" not in waiting.to_wire(created=True)
+    assert not store.request_input(task.task_id, {"third": {"method": "elicitation/create"}})
+    assert store.replace_input_requests(task.task_id, {"second": requests["second"]})
+    partial = store.get(task.task_id)
+    assert partial.status == "input_required"
+    assert set(partial.input_requests) == {"second"}
+    assert not store.replace_input_requests(task.task_id, {})
     assert store.resume(task.task_id)
-    assert store.get(task.task_id).status == "working"
+    resumed = store.get(task.task_id)
+    assert resumed.status == "working"
+    assert resumed.input_requests is None

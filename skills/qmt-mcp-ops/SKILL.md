@@ -193,6 +193,8 @@ Global flags: `--url`, `--token`, `--json`, `--timeout`, `--verbose`.
 
 ## Additional resources
 
+- **First-time or remote deployment**, or the container won't start / stays unhealthy: see the
+  `deploying-qmt-mcp-appliance` skill (CRLF-baked images, missing xtquant, RDP-login startup)
 - For detailed tool parameters and architecture decisions, see [reference.md](reference.md)
 - Broker pack guide: `appliance/docs/BROKER-PACK.md`
 - Deploy & hardening: `appliance/docs/DEPLOY.md`

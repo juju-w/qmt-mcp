@@ -1,0 +1,10 @@
+# Shell scripts and the Python helper are COPYed into the Linux image and run as
+# the container entrypoint. A CRLF checkout (git core.autocrlf=true on Windows)
+# bakes `#!/usr/bin/env bash\r` into the image, and the container dies with
+#   /usr/bin/env: 'bash\r': No such file or directory
+# Force LF regardless of the developer's platform or autocrlf setting.
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf

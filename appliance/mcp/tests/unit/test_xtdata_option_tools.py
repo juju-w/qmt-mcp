@@ -7,6 +7,7 @@ from qmt_mcp_core.config import CoreConfig
 from qmt_mcp_core.health import HealthState
 from qmt_mcp_core.registry import ToolRegistry
 from qmt_mcp_core.workers import WorkerPool
+from qmt_mcp_xtdata import option_tools
 from qmt_mcp_xtdata.option_tools import register_option_tools
 
 
@@ -37,7 +38,9 @@ def make_config(tmp_path: Path) -> CoreConfig:
     )
 
 
-def registry_with_options(tmp_path: Path):
+def registry_with_options(tmp_path: Path, monkeypatch, as_of: str = "20260601"):
+    monkeypatch.setattr(option_tools, "_today_yyyymmdd", lambda: as_of)
+
     def call(name, *args):
         if name == "get_option_undl_data":
             return ["510300.SH"]
@@ -81,8 +84,8 @@ def registry_with_options(tmp_path: Path):
     return registry
 
 
-def test_option_chain_and_quotes(tmp_path):
-    registry = registry_with_options(tmp_path)
+def test_option_chain_and_quotes(tmp_path, monkeypatch):
+    registry = registry_with_options(tmp_path, monkeypatch)
     chain = registry._tools["qmt_xtdata_option_chain"]["callable"](family="300ETF")
     assert chain["ok"] is True
     assert len(chain["codes"]) == 2
@@ -92,10 +95,19 @@ def test_option_chain_and_quotes(tmp_path):
     assert quotes["quotes"][0]["mid_price"] == 0.1
 
 
-def test_volatility_index_inputs(tmp_path):
-    registry = registry_with_options(tmp_path)
+def test_volatility_index_inputs(tmp_path, monkeypatch):
+    registry = registry_with_options(tmp_path, monkeypatch)
     result = registry._tools["qmt_xtdata_volatility_index_inputs"]["callable"](family="300ETF")
     assert result["ok"] is True
     assert result["underlying_code"] == "510300.SH"
     assert result["diagnostics"]["publishes_index_value"] is False
     assert len(result["rows"]) == 2
+
+
+def test_option_chain_excludes_expired_contracts(tmp_path, monkeypatch):
+    registry = registry_with_options(tmp_path, monkeypatch, as_of="20260730")
+    chain = registry._tools["qmt_xtdata_option_chain"]["callable"](family="300ETF")
+
+    assert chain["ok"] is True
+    assert chain["codes"] == []
+    assert chain["details"] == []

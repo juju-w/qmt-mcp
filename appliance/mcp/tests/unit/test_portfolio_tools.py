@@ -13,7 +13,7 @@ from qmt_mcp_xttrade.accounts import Allowlist
 
 
 class DummyMCP:
-    def tool(self):
+    def tool(self, **_metadata):
         def decorator(func):
             return func
 

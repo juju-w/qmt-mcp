@@ -11,7 +11,7 @@ from qmt_mcp_xtdata.formula_tools import register_formula_tools
 
 
 class DummyMCP:
-    def tool(self):
+    def tool(self, **_metadata):
         def decorator(func):
             return func
 
@@ -88,3 +88,14 @@ def test_formula_refuses_unallowlisted(tmp_path):
     result = registry._tools["qmt_xtdata_formula_call"]["callable"](formula_name="OTHER", code="510300.SH")
     assert result["ok"] is False
     assert result["error_type"] == "validation"
+
+
+def test_formula_mutation_annotations(tmp_path):
+    registry, _ = registry_with_formula(tmp_path)
+    generated = registry._tools["qmt_xtdata_formula_generate_factor"]["behavior"]
+    subscribed = registry._tools["qmt_xtdata_formula_subscribe"]["behavior"]
+    assert generated.read_only is False
+    assert generated.destructive is True
+    assert generated.idempotent is False
+    assert subscribed.read_only is False
+    assert subscribed.idempotent is False

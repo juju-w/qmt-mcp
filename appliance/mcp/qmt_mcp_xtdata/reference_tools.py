@@ -74,6 +74,9 @@ def register_reference_tools(mcp: Any, registry: ToolRegistry, call_xtdata) -> N
         audit_fields=["code", "tables", "start_time", "end_time"],
         worker_backed=True,
         timeout=180,
+        read_only=False,
+        destructive=False,
+        idempotent=True,
     )
     def qmt_xtdata_download_financial_data(
         code: str, tables: list[str] | None = None, start_time: str = "", end_time: str = ""
@@ -122,6 +125,9 @@ def register_reference_tools(mcp: Any, registry: ToolRegistry, call_xtdata) -> N
         audit_fields=[],
         worker_backed=True,
         timeout=120,
+        read_only=False,
+        destructive=False,
+        idempotent=True,
     )
     def qmt_xtdata_download_cb_data() -> dict[str, Any]:
         return ok_envelope(**download_status(call_xtdata("download_cb_data")))
@@ -148,6 +154,9 @@ def register_reference_tools(mcp: Any, registry: ToolRegistry, call_xtdata) -> N
         audit_fields=[],
         worker_backed=True,
         timeout=120,
+        read_only=False,
+        destructive=False,
+        idempotent=True,
     )
     def qmt_xtdata_download_etf_info() -> dict[str, Any]:
         return ok_envelope(**download_status(call_xtdata("download_etf_info")))

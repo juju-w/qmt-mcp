@@ -16,6 +16,7 @@ from .errors import McpCoreError, error_envelope
 from .health import HealthState
 from .readiness import ReadinessProbe
 from .registry import ToolRegistry
+from .tool_contracts import ToolVisibilityPolicy
 from .workers import WorkerPool
 
 
@@ -206,7 +207,9 @@ def register_core_tools(mcp: MCPServer, registry: ToolRegistry, health: HealthSt
         description="Return enabled, disabled, not-ready, and not-authorized MCP tool family states.",
     )
     def qmt_capabilities() -> dict[str, Any]:
-        return health.capabilities()
+        payload = health.capabilities()
+        payload["tool_visibility"] = registry.visibility_summary()
+        return payload
 
 
 def _make_warehouse(config: CoreConfig, health: HealthState):
@@ -337,7 +340,8 @@ def create_app(config: CoreConfig | None = None):
         },
     )
     workers = WorkerPool(config.worker_limit)
-    registry = ToolRegistry(health, audit, workers)
+    visibility = ToolVisibilityPolicy(config.tool_profile, config.tool_allowlist, config.tool_denylist)
+    registry = ToolRegistry(health, audit, workers, visibility)
     register_core_tools(mcp, registry, health)
     warehouse = _make_warehouse(config, health)
     register_optional_xtdata(mcp, registry, health, config, warehouse=warehouse)
@@ -369,7 +373,7 @@ def main() -> None:
     log(
         f"broker={config.broker_id} mode={config.mcp_mode} host={config.host}:{config.port} "
         f"transport={config.transport} auth={'on' if config.auth_required else 'loopback-dev'} audit={config.audit_path} "
-        f"tools={registry.tool_names()}"
+        f"tool_profile={config.tool_profile} tools={registry.tool_names()}"
     )
     # Start background readiness probe (always when xtdata is enabled) and the
     # trader connector. The connector runs when explicitly enabled OR when the

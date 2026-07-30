@@ -12,7 +12,7 @@ from qmt_mcp_xtdata.option_tools import register_option_tools
 
 
 class DummyMCP:
-    def tool(self):
+    def tool(self, **_metadata):
         def decorator(func):
             return func
 

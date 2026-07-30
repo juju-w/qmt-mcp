@@ -41,6 +41,17 @@ Generate a static token with `openssl rand -hex 32`.
 These variables publish discovery metadata; they do not add an authorization
 server or JWT verifier.
 
+### Tool visibility
+
+| Variable | Default | Description |
+|---|---|---|
+| `QMT_MCP_TOOL_PROFILE` | `full` | `full`, `readonly`, `market`, `account`, `core`, or `custom` |
+| `QMT_MCP_TOOL_ALLOWLIST` | empty | CSV shell globs that further intersect non-core tools |
+| `QMT_MCP_TOOL_DENYLIST` | empty | CSV shell globs removed after profile/allowlist selection |
+
+`custom` requires a non-empty allowlist. Core tools always remain available.
+Visibility is fixed for one server process; restart after changes.
+
 ### Feature gates
 
 | Variable | Default | Description |

@@ -3,7 +3,7 @@ source for architecture, security, testing, Conventional Commits, CI, and
 release rules. The block below only carries the active Speckit context.
 
 <!-- SPECKIT START -->
-Active feature: specs/019-mcp-protocol-foundation
+Active feature: specs/020-tool-contracts-profiles
 Constitution: .specify/memory/constitution.md
 
 Project: broker-agnostic QMT-MCP appliance. Base image (Wine wow64 + Windows

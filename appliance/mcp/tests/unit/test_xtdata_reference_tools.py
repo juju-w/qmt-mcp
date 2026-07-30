@@ -11,7 +11,7 @@ from qmt_mcp_xtdata.reference_tools import register_reference_tools
 
 
 class DummyMCP:
-    def tool(self):
+    def tool(self, **_metadata):
         def decorator(func):
             return func
 
@@ -84,3 +84,14 @@ def test_optional_reference_tools(tmp_path):
     assert registry._tools["qmt_xtdata_cb_info"]["callable"]()["rows"][0]["code"] == "113000.SH"
     assert registry._tools["qmt_xtdata_etf_info"]["callable"](code="510300.SH")["rows"][0]["code"] == "510300.SH"
     assert registry._tools["qmt_xtdata_period_list"]["callable"]()["periods"]
+
+
+def test_reference_download_annotations(tmp_path):
+    registry = registry_with_reference(tmp_path)
+    for name in (
+        "qmt_xtdata_download_financial_data",
+        "qmt_xtdata_download_cb_data",
+        "qmt_xtdata_download_etf_info",
+    ):
+        assert registry._tools[name]["behavior"].read_only is False
+        assert registry._tools[name]["behavior"].idempotent is True

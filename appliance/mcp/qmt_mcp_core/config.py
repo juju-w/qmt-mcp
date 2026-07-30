@@ -100,6 +100,10 @@ class CoreConfig:
     oauth_scopes_supported: tuple[str, ...] = ("qmt:read",)
     oauth_resource: str = ""
     oauth_resource_name: str = "QMT MCP"
+    # 020 startup-static MCP tool visibility.
+    tool_profile: str = "full"
+    tool_allowlist: tuple[str, ...] = ()
+    tool_denylist: tuple[str, ...] = ()
 
     @property
     def db_enabled(self) -> bool:
@@ -126,6 +130,12 @@ class CoreConfig:
                 "QMT_MCP_TOKEN is required when MCP is bound to a non-loopback host",
                 {"host": self.host},
             )
+        try:
+            from .tool_contracts import ToolVisibilityPolicy
+
+            ToolVisibilityPolicy(self.tool_profile, self.tool_allowlist, self.tool_denylist)
+        except ValueError as exc:
+            raise McpCoreError("config", str(exc)) from exc
 
 
 def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
@@ -175,6 +185,9 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         oauth_scopes_supported=_split_scopes(env.get("QMT_MCP_OAUTH_SCOPES", "qmt:read")) or ("qmt:read",),
         oauth_resource=env.get("QMT_MCP_OAUTH_RESOURCE", "").rstrip("/"),
         oauth_resource_name=env.get("QMT_MCP_OAUTH_RESOURCE_NAME", "QMT MCP") or "QMT MCP",
+        tool_profile=(env.get("QMT_MCP_TOOL_PROFILE", "full") or "full").strip().lower(),
+        tool_allowlist=_split_csv(env.get("QMT_MCP_TOOL_ALLOWLIST", "")),
+        tool_denylist=_split_csv(env.get("QMT_MCP_TOOL_DENYLIST", "")),
     )
     cfg.validate_security()
     return cfg

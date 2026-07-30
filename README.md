@@ -47,6 +47,7 @@
 | 数据库持久化（PostgreSQL，可选） | ✅ 可用 | 行情数据仓库，read/write-through，off by default |
 | `qmtctl` CLI | ✅ 可用 | Go 编译命令行客户端，支持行情/搜索/账户查询 |
 | MCP 协议 | ✅ 双线兼容 | 主推稳定版 `2026-07-28`，同一 `/mcp` 自动兼容 2025 客户端 |
+| MCP 工具契约 / Profile | ✅ 可用 | 结构化结果、行为注解；可按 full/readonly/market/account/core/custom 裁剪工具面 |
 
 > **交易/账户权限**：外部 `xtquant` 连交易接口（下单**和**账户查询）需券商开通「程序化交易 /
 > 外部 Python 接口」权限（`m_nPythonConnectNet`）。未开通时只有行情可用。开通通常需满足
@@ -98,6 +99,25 @@
 > 账户白名单 `QMT_TRADE_ACCOUNTS`；且仍需券商开通程序化交易权限才能联调成功路径，未开通时
 > 报 `not_authorized` 优雅降级。**纯只读、无下单/撤单/划转**。
 > 成功路径待有权限的账户验证（欢迎 PR）。
+
+### 工具契约与 Profile
+
+每个可见工具都发布 `title`、输入/输出 JSON Schema 和只读/破坏性/幂等/
+外部访问行为注解。新版客户端直接读取 `structuredContent`；旧客户端仍可读取
+语义相同的 JSON 文本块。业务字段不因 schema 校验被增删。
+
+默认 `full` 保持完整工具面。可在 `appliance/.env` 按 Agent 用途缩小上下文和
+可调用能力：
+
+```env
+QMT_MCP_TOOL_PROFILE=market
+QMT_MCP_TOOL_ALLOWLIST=qmt_xtdata_snapshot,qmt_xtdata_option_*
+QMT_MCP_TOOL_DENYLIST=qmt_xtdata_download_*
+```
+
+支持 `full`、`readonly`、`market`、`account`、`core`、`custom`；`custom`
+必须配置 allowlist。模式和 glob 在进程启动时固定，修改后需重启容器；
+`qmt_health`、`qmt_capabilities` 始终可见。
 
 ## 快速开始
 

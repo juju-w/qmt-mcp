@@ -11,7 +11,7 @@ from qmt_mcp_xtdata import tools
 
 
 class DummyMCP:
-    def tool(self):
+    def tool(self, **_metadata):
         def decorator(func):
             return func
 
@@ -86,3 +86,11 @@ def test_snapshot_cache_only_missing_returns_error(tmp_path, monkeypatch):
     result = snapshot(codes=["510300.SH"], cache_policy="cache_only")
     assert result["ok"] is False
     assert result["error_type"] == "not_ready"
+
+
+def test_quote_mutation_annotations(tmp_path, monkeypatch):
+    registry, _, _ = registry_with_tools(tmp_path, monkeypatch)
+    assert registry._tools["qmt_xtdata_snapshot"]["behavior"].read_only is True
+    assert registry._tools["qmt_xtdata_quote_subscribe"]["behavior"].read_only is False
+    assert registry._tools["qmt_xtdata_quote_unsubscribe"]["behavior"].destructive is True
+    assert registry._tools["qmt_xtdata_download_history"]["behavior"].idempotent is True

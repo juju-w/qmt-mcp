@@ -11,6 +11,13 @@ from typing import Any
 from .audit import JsonlAuditSink, request_id
 from .errors import McpCoreError, error_envelope, from_exception
 from .health import HealthState
+from .tool_contracts import (
+    ToolBehavior,
+    ToolVisibilityPolicy,
+    default_tool_title,
+    mutation_like,
+    register_mcp_tool,
+)
 from .workers import WorkerPool
 
 # Write/trade VERBS that must never be exposed. Matched as substrings of the tool
@@ -33,18 +40,35 @@ WRITE_TOOL_KEYWORDS = (
 
 
 class ToolRegistry:
-    def __init__(self, health: HealthState, audit: JsonlAuditSink, workers: WorkerPool):
+    def __init__(
+        self,
+        health: HealthState,
+        audit: JsonlAuditSink,
+        workers: WorkerPool,
+        visibility: ToolVisibilityPolicy | None = None,
+    ):
         self.health = health
         self.audit = audit
         self.workers = workers
+        self.visibility = visibility or ToolVisibilityPolicy()
         self._tools: dict[str, dict[str, Any]] = {}
 
-    def tool_names(self, family: str | None = None) -> list[str]:
+    def tool_names(self, family: str | None = None, *, visible_only: bool = True) -> list[str]:
         names = []
         for name, meta in self._tools.items():
-            if family is None or meta["family"] == family:
+            if (family is None or meta["family"] == family) and (not visible_only or meta["visible"]):
                 names.append(name)
         return sorted(names)
+
+    def visibility_summary(self) -> dict[str, Any]:
+        visible = sum(1 for meta in self._tools.values() if meta["visible"])
+        return {
+            "profile": self.visibility.profile,
+            "allowlist": list(self.visibility.allowlist),
+            "denylist": list(self.visibility.denylist),
+            "visible_count": visible,
+            "hidden_count": len(self._tools) - visible,
+        }
 
     def assert_no_write_tools(self) -> None:
         leaked = [name for name in self._tools if any(keyword in name.lower() for keyword in WRITE_TOOL_KEYWORDS)]
@@ -61,10 +85,29 @@ class ToolRegistry:
         audit_fields: list[str] | None = None,
         worker_backed: bool = False,
         timeout: float | None = None,
+        title: str | None = None,
+        read_only: bool = True,
+        destructive: bool = False,
+        idempotent: bool = True,
+        open_world: bool | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             if name in self._tools:
                 raise McpCoreError("internal", f"duplicate tool registered: {name}")
+            if read_only and mutation_like(name):
+                raise McpCoreError(
+                    "internal",
+                    "mutation-like tool must not be annotated read-only",
+                    {"tool": name},
+                )
+            tool_title = title or default_tool_title(name)
+            behavior = ToolBehavior(
+                read_only=read_only,
+                destructive=destructive,
+                idempotent=idempotent,
+                open_world=family != "core" if open_world is None else open_world,
+            )
+            visible = self.visibility.visible(name=name, family=family, read_only=read_only)
 
             @functools.wraps(func)
             def wrapped(*args: Any, **kwargs: Any) -> Any:
@@ -114,8 +157,25 @@ class ToolRegistry:
 
             wrapped.__name__ = name
             wrapped.__doc__ = description
-            self._tools[name] = {"family": family, "description": description, "callable": wrapped}
-            mcp.tool()(wrapped)
+            mcp_callable = None
+            if visible:
+                mcp_callable = register_mcp_tool(
+                    mcp,
+                    wrapped=wrapped,
+                    name=name,
+                    title=tool_title,
+                    description=description,
+                    behavior=behavior,
+                )
+            self._tools[name] = {
+                "family": family,
+                "title": tool_title,
+                "description": description,
+                "behavior": behavior,
+                "visible": visible,
+                "callable": wrapped,
+                "mcp_callable": mcp_callable,
+            }
             self.health.update_family_tools(family, self.tool_names(family))
             return wrapped
 

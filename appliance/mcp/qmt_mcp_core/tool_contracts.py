@@ -1,0 +1,160 @@
+"""Dependency-light tool contracts, behavior hints, and visibility policy."""
+
+from __future__ import annotations
+
+import fnmatch
+import functools
+import inspect
+import json
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+VALID_TOOL_PROFILES = frozenset({"full", "readonly", "market", "account", "core", "custom"})
+
+MUTATION_TOOL_PATTERNS = (
+    "qmt_xtdata_quote_subscribe",
+    "qmt_xtdata_quote_unsubscribe",
+    "qmt_xtdata_download_*",
+    "qmt_xtdata_refresh_*",
+    "qmt_xtdata_sector_create*",
+    "qmt_xtdata_sector_add_codes",
+    "qmt_xtdata_sector_remove_codes",
+    "qmt_xtdata_sector_delete",
+    "qmt_xtdata_sector_reset",
+    "qmt_xtdata_formula_generate_factor",
+    "qmt_xtdata_formula_subscribe",
+    "qmt_xtdata_formula_unsubscribe",
+)
+
+
+@dataclass(frozen=True)
+class ToolBehavior:
+    read_only: bool = True
+    destructive: bool = False
+    idempotent: bool = True
+    open_world: bool = True
+
+
+@dataclass(frozen=True)
+class ToolVisibilityPolicy:
+    profile: str = "full"
+    allowlist: tuple[str, ...] = ()
+    denylist: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        normalized = self.profile.strip().lower()
+        object.__setattr__(self, "profile", normalized)
+        if normalized not in VALID_TOOL_PROFILES:
+            raise ValueError(
+                f"invalid tool profile {self.profile!r}; expected one of {', '.join(sorted(VALID_TOOL_PROFILES))}"
+            )
+        if normalized == "custom" and not self.allowlist:
+            raise ValueError("custom tool profile requires a non-empty allowlist")
+
+    def visible(self, *, name: str, family: str, read_only: bool) -> bool:
+        if family == "core":
+            return True
+
+        selected = {
+            "full": True,
+            "readonly": read_only,
+            "market": family == "xtdata",
+            "account": family in {"xttrade_query", "portfolio"},
+            "core": False,
+            "custom": True,
+        }[self.profile]
+        if not selected:
+            return False
+        if self.allowlist and not self._matches(name, self.allowlist):
+            return False
+        return not self._matches(name, self.denylist)
+
+    @staticmethod
+    def _matches(name: str, patterns: tuple[str, ...]) -> bool:
+        return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
+
+
+def default_tool_title(name: str) -> str:
+    words = []
+    for word in name.split("_"):
+        if word in {"qmt", "mcp"}:
+            words.append(word.upper())
+        elif word in {"xtdata", "xttrade"}:
+            words.append(word)
+        else:
+            words.append(word.capitalize())
+    return " ".join(words)
+
+
+def mutation_like(name: str) -> bool:
+    return any(fnmatch.fnmatchcase(name, pattern) for pattern in MUTATION_TOOL_PATTERNS)
+
+
+def register_mcp_tool(
+    mcp: Any,
+    *,
+    wrapped: Callable[..., Any],
+    name: str,
+    title: str,
+    description: str,
+    behavior: ToolBehavior,
+) -> Callable[..., Any]:
+    """Register the audited callable through the rich SDK when it is installed.
+
+    The unit tier deliberately has no MCP/Pydantic dependency. Its minimal fake
+    server still receives the audited callable through the fallback path.
+    """
+    try:
+        from typing import Annotated
+
+        from mcp.types import CallToolResult, TextContent, ToolAnnotations
+        from pydantic import BaseModel, ConfigDict
+    except ImportError:
+        return mcp.tool()(wrapped)
+
+    class ToolResultEnvelope(BaseModel):
+        model_config = ConfigDict(extra="allow")
+
+        ok: bool
+        error_type: str | None = None
+        error: str | None = None
+        details: dict[str, Any] | None = None
+
+    output_annotation = Annotated[CallToolResult, ToolResultEnvelope]
+
+    @functools.wraps(wrapped)
+    def adapter(*args: Any, **kwargs: Any) -> Any:
+        payload = wrapped(*args, **kwargs)
+        if not isinstance(payload, dict):
+            payload = {
+                "ok": False,
+                "error_type": "internal",
+                "error": "tool returned a non-object result",
+                "details": {"tool": name},
+            }
+        text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        return CallToolResult(
+            content=[TextContent(type="text", text=text)],
+            structuredContent=payload,
+            isError=payload.get("ok") is False,
+        )
+
+    signature = inspect.signature(wrapped, follow_wrapped=True)
+    adapter.__signature__ = signature.replace(return_annotation=output_annotation)  # type: ignore[attr-defined]
+    adapter.__annotations__ = dict(getattr(wrapped, "__annotations__", {}))
+    adapter.__annotations__["return"] = output_annotation
+    annotations = ToolAnnotations(
+        title=title,
+        readOnlyHint=behavior.read_only,
+        destructiveHint=behavior.destructive,
+        idempotentHint=behavior.idempotent,
+        openWorldHint=behavior.open_world,
+    )
+    return mcp.tool(
+        name=name,
+        title=title,
+        description=description,
+        annotations=annotations,
+        structured_output=True,
+    )(adapter)

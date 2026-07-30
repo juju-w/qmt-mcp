@@ -155,7 +155,10 @@ The verifier never accepts the bearer token as a positional argument, so it does
 land in shell history or process arguments. Remote plain HTTP is refused by default.
 `QMT_MCP_ALLOW_INSECURE_HTTP=1` is an explicit escape hatch for an isolated, controlled
 network. Set `QMT_MCP_MIN_TOOLS` only when intentionally deploying a reduced tool set;
-the standard appliance requires at least 37.
+the standard `full` appliance requires at least 37. For a server using
+`QMT_MCP_TOOL_PROFILE=core`, `readonly`, `market`, `account`, or `custom`, set
+the verifier threshold to the intended visible count and confirm the effective
+policy with `qmtctl tools --json` plus `qmt_capabilities.tool_visibility`.
 
 Use qmtctl for client-level discovery and smoke checks:
 

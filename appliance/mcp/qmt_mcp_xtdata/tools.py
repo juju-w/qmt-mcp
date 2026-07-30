@@ -268,13 +268,16 @@ def register_xtdata_tools(mcp: MCPServer, registry: ToolRegistry, health: Health
         name="qmt_xtdata_quote_subscribe",
         family="xtdata",
         description=(
-            "Create or update a read-only quote subscription. Uses official xtdata.subscribe_quote when available and "
+            "Create or update a non-trading quote subscription. Uses official xtdata.subscribe_quote when available and "
             "falls back to bounded snapshot polling when enabled. Args: codes, optional subscription_id/label/group, "
             "period=tick, backend_preference=auto|official_subscription|polling_fallback, fallback_interval_seconds."
         ),
         audit_fields=["subscription_id", "codes", "period", "backend_preference"],
         worker_backed=True,
         timeout=20,
+        read_only=False,
+        destructive=False,
+        idempotent=True,
     )
     def qmt_xtdata_quote_subscribe(
         codes: list[str],
@@ -320,6 +323,9 @@ def register_xtdata_tools(mcp: MCPServer, registry: ToolRegistry, health: Health
         audit_fields=["subscription_id"],
         worker_backed=True,
         timeout=10,
+        read_only=False,
+        destructive=True,
+        idempotent=True,
     )
     def qmt_xtdata_quote_unsubscribe(subscription_id: str) -> dict[str, Any]:
         if not subscription_id:
@@ -371,6 +377,9 @@ def register_xtdata_tools(mcp: MCPServer, registry: ToolRegistry, health: Health
         audit_fields=["code", "period", "start_time", "end_time"],
         worker_backed=True,
         timeout=120,
+        read_only=False,
+        destructive=False,
+        idempotent=True,
     )
     def qmt_xtdata_download_history(
         code: str,
@@ -405,6 +414,9 @@ def register_xtdata_tools(mcp: MCPServer, registry: ToolRegistry, health: Health
         audit_fields=["codes", "period", "start_time", "end_time"],
         worker_backed=True,
         timeout=300,
+        read_only=False,
+        destructive=False,
+        idempotent=True,
     )
     def qmt_xtdata_download_history_batch(
         codes: list[str],
@@ -755,6 +767,9 @@ def register_xtdata_tools(mcp: MCPServer, registry: ToolRegistry, health: Health
         audit_fields=["sectors", "include_external", "force", "max_codes"],
         worker_backed=True,
         timeout=600,
+        read_only=False,
+        destructive=False,
+        idempotent=True,
     )
     def qmt_xtdata_refresh_instrument_cache(
         sectors: list[str] | None = None,

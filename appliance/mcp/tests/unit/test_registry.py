@@ -21,7 +21,7 @@ class FakeMCP:
     def __init__(self):
         self.registered = []
 
-    def tool(self):
+    def tool(self, **_metadata):
         def deco(fn):
             self.registered.append(fn.__name__)
             return fn
@@ -119,3 +119,20 @@ def test_refused_outcome_on_mcp_core_error(tmp_audit_path):
     records = [json.loads(line) for line in Path(tmp_audit_path).read_text().splitlines()]
     assert records[-1]["outcome"] == "refused"
     assert records[-1]["error_type"] == "not_ready"
+
+
+def test_mutation_like_tool_cannot_be_mislabeled_read_only(tmp_audit_path):
+    reg, mcp, _ = _make_registry(tmp_audit_path)
+
+    with pytest.raises(McpCoreError) as exc:
+
+        @reg.register(
+            mcp,
+            name="qmt_xtdata_download_history",
+            family="xtdata",
+            description="download",
+        )
+        def qmt_xtdata_download_history():
+            return {"ok": True}
+
+    assert exc.value.details["tool"] == "qmt_xtdata_download_history"

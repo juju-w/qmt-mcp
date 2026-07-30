@@ -99,3 +99,23 @@ def test_oauth_discovery_knobs_from_env(monkeypatch, tmp_path):
     assert cfg.oauth_authorization_servers == ("https://auth1.example.com", "https://auth2.example.com")
     assert cfg.oauth_scopes_supported == ("qmt:read", "qmt:account")
     assert cfg.oauth_resource == "https://qmt.example.com/mcp"
+
+
+def test_tool_profile_knobs_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv("QMT_MCP_TOOL_PROFILE", "CUSTOM")
+    monkeypatch.setenv("QMT_MCP_TOOL_ALLOWLIST", "qmt_xtdata_snapshot,qmt_xtdata_option_*")
+    monkeypatch.setenv("QMT_MCP_TOOL_DENYLIST", "qmt_xtdata_option_quotes")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.tool_profile == "custom"
+    assert cfg.tool_allowlist == ("qmt_xtdata_snapshot", "qmt_xtdata_option_*")
+    assert cfg.tool_denylist == ("qmt_xtdata_option_quotes",)
+
+
+@pytest.mark.parametrize("profile", ["unknown", ""])
+def test_invalid_or_empty_custom_tool_profile_fails_closed(monkeypatch, tmp_path, profile):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv("QMT_MCP_TOOL_PROFILE", profile or "custom")
+    with pytest.raises(McpCoreError) as exc:
+        load_config(_empty_env(tmp_path))
+    assert exc.value.error_type == "config"

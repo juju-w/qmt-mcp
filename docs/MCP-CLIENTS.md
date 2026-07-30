@@ -62,6 +62,36 @@ WWW-Authenticate: Bearer resource_metadata="https://qmt.example.com/.well-known/
   JWT/JWKS 验证；正式 OAuth access token 应由前置网关验证并转成当前服务接受的
   bearer，完整内置 OAuth 仍是后续功能。
 
+## 工具契约与可见性
+
+`tools/list` 中每个工具都带 `title`、`description`、`inputSchema`、
+`outputSchema` 和四个标准行为注解。调用结果同时包含：
+
+- `structuredContent`：原始业务 JSON，适合新版客户端直接消费。
+- `content[0].text`：与前者等价的 JSON 文本，兼容旧版客户端。
+- `isError`：业务 envelope 的 `ok=false` 时为 `true`。
+
+可以在服务端按 Agent 用途固定工具面：
+
+| Profile | 可见工具 |
+|---|---|
+| `full` | 所有已启用工具（默认） |
+| `readonly` | 所有只读工具 |
+| `market` | core + xtdata |
+| `account` | core + xttrade query + portfolio |
+| `core` | 仅健康和能力 |
+| `custom` | core + allowlist 命中 |
+
+```env
+QMT_MCP_TOOL_PROFILE=custom
+QMT_MCP_TOOL_ALLOWLIST=qmt_xtdata_snapshot,qmt_xtdata_bars,qmt_xtdata_option_*
+QMT_MCP_TOOL_DENYLIST=qmt_xtdata_option_quotes
+```
+
+allowlist/denylist 是逗号分隔的 shell glob；denylist 对非 core 工具优先。
+配置在 MCP 进程启动时确定，修改后需重启。当前 profile 是实例级能力裁剪，
+不是 OAuth 用户级授权；按 token scope 动态裁剪由后续授权层负责。
+
 ## Codex
 
 Codex CLI 和 Codex Desktop 共用 `~/.codex/config.toml` 里的 MCP 配置。推荐不要把 token 明文写进配置，而是让 Codex 从环境变量读取：
@@ -203,3 +233,4 @@ QMT_MCP_URL=https://qmt.example.com/mcp \
 | Codex 看不到工具 | 确认 `~/.codex/config.toml` 里 `bearer_token_env_var` 是环境变量名，不是 token 值。 |
 | OAuth 客户端找不到授权服务器 | 确认 `QMT_MCP_PUBLIC_BASE_URL` 是客户端可访问的 HTTPS 外部地址，并配置了 `QMT_MCP_OAUTH_AUTHORIZATION_SERVERS`。 |
 | OAuth 登录成功但 MCP 仍 401 | 授权服务器签发的 token 没有被当前 bearer gate 接受；需要在网关层把 OAuth token 兑换/校验后转成 MCP 可接受的 bearer，或后续接入 JWT/JWKS 校验。 |
+| 能连接但工具比预期少 | 调用 `qmt_capabilities` 查看 `tool_visibility`；检查 `QMT_MCP_TOOL_PROFILE`、allowlist/denylist 后重启容器。 |

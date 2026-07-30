@@ -1,119 +1,308 @@
 name: Release
 
-# Publishes the broker-neutral amd64 base image to GHCR and (on a version tag)
-# creates a GitHub Release. The image contains NO QMT terminal / xtquant / broker
-# data — those are supplied at runtime as a mounted broker pack — so publishing it
-# publicly is safe. amd64-only by design (Apple Silicon is emulation-only).
+# A successful main CI run automatically:
+#   1. derives the SemVer bump from Conventional Commits;
+#   2. updates VERSION and CHANGELOG in chore(release): vX.Y.Z [skip ci];
+#   3. tags that release commit;
+#   4. publishes the amd64 appliance image, six qmtctl packages, checksums, and
+#      one GitHub Release.
 #
-# Build policy (keep image builds deliberate & infrequent):
-#   - The heavy Wine image is NEVER built on push/PR (that is ci.yml's job, which
-#     only lints + unit-tests — it does not touch the image).
-#   - It builds ONLY on an explicit version tag or a manual run:
-#       push a tag vX.Y.Z      -> image :X.Y.Z + :latest, and a GitHub Release
-#       "Run workflow" (manual) -> image :edge, no Release
-#   - concurrency cancels an older in-flight build for the same ref.
+# workflow_dispatch can retry an existing release from main or a selected v* tag.
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
 
 permissions:
-  contents: write   # create the GitHub Release
-  packages: write   # push to GHCR
+  contents: write
+  packages: write
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  prepare:
+    name: Resolve and tag release
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.release.outputs.publish }}
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      release_sha: ${{ steps.release.outputs.release_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.ref }}
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve version and create release commit
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --force --tags origin
+
+          publish=false
+          version=""
+          tag=""
+          release_sha=""
+
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+            version="${tag#v}"
+            file_version="$(tr -d '[:space:]' < VERSION)"
+            python .github/scripts/release_policy.py validate-version "$version"
+            if [ "$file_version" != "$version" ]; then
+              echo "Tag ${tag} does not match VERSION=${file_version}." >&2
+              exit 1
+            fi
+            release_sha="$(git rev-parse HEAD)"
+            publish=true
+          else
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "Manual releases must run from main or an existing v* tag." >&2
+              exit 1
+            fi
+
+            git pull --ff-only origin main
+            current_sha="$(git rev-parse HEAD)"
+            if [ "$EVENT_NAME" = "workflow_run" ] &&
+               [ -n "${TESTED_SHA:-}" ] &&
+               [ "$current_sha" != "$TESTED_SHA" ]; then
+              echo "main advanced from tested ${TESTED_SHA} to ${current_sha}; a newer CI run will release it."
+              {
+                echo "publish=false"
+                echo "version="
+                echo "tag="
+                echo "release_sha="
+              } >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            head_tag="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+            if [ -n "$head_tag" ]; then
+              tag="$head_tag"
+              version="${tag#v}"
+              python .github/scripts/release_policy.py validate-version "$version"
+              file_version="$(tr -d '[:space:]' < VERSION)"
+              if [ "$file_version" != "$version" ]; then
+                echo "HEAD tag ${tag} does not match VERSION=${file_version}." >&2
+                exit 1
+              fi
+              release_sha="$current_sha"
+              publish=true
+            else
+              last_message="$(git log -1 --format='%s')"
+              if [[ "$last_message" == chore\(release\):* ]]; then
+                version="$(tr -d '[:space:]' < VERSION)"
+                python .github/scripts/release_policy.py validate-version "$version"
+                tag="v${version}"
+                if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+                  echo "Tag ${tag} already exists but is not attached to HEAD." >&2
+                  exit 1
+                fi
+                git tag "$tag"
+                git push origin "$tag"
+                release_sha="$current_sha"
+                publish=true
+              else
+                last_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)"
+                if [ -n "$last_tag" ]; then
+                  current="${last_tag#v}"
+                  policy="$(python .github/scripts/release_policy.py next-version \
+                    --current "$current" --base-ref "$last_tag" --head HEAD)"
+                else
+                  current="$(tr -d '[:space:]' < VERSION)"
+                  policy="$(python .github/scripts/release_policy.py next-version \
+                    --current "$current" --head HEAD)"
+                fi
+
+                bump="$(printf '%s\n' "$policy" | sed -n 's/^bump=//p')"
+                version="$(printf '%s\n' "$policy" | sed -n 's/^version=//p')"
+                if [ "$bump" = "none" ]; then
+                  echo "No releasable Conventional Commits since ${last_tag:-repository start}."
+                  {
+                    echo "publish=false"
+                    echo "version=$current"
+                    echo "tag="
+                    echo "release_sha="
+                  } >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+
+                tag="v${version}"
+                if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+                  echo "Release tag ${tag} already exists." >&2
+                  exit 1
+                fi
+
+                echo "Bump ${bump}: ${current} -> ${version}"
+                printf '%s\n' "$version" > VERSION
+                python .github/scripts/release_policy.py finalize-changelog \
+                  --path CHANGELOG.md \
+                  --version "$version" \
+                  --previous-tag "${last_tag:-v${current}}" \
+                  --repository "https://github.com/${REPOSITORY}"
+
+                git add VERSION CHANGELOG.md
+                git commit -m "chore(release): ${tag} [skip ci]"
+                git push origin HEAD:main
+
+                release_sha="$(git rev-parse HEAD)"
+                git tag "$tag"
+                git push origin "$tag"
+                publish=true
+              fi
+            fi
+          fi
+
+          {
+            echo "publish=$publish"
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "release_sha=$release_sha"
+          } >> "$GITHUB_OUTPUT"
+
   image:
-    name: Build & push base image (GHCR)
+    name: Build and push appliance image
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Verify VERSION matches tag
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          file="$(tr -d ' \n' < VERSION)"
-          if [ "$tag" != "$file" ]; then
-            echo "Tag $GITHUB_REF_NAME ($tag) != VERSION file ($file)"; exit 1
-          fi
-
+        with:
+          ref: ${{ needs.prepare.outputs.release_sha }}
       - uses: docker/setup-buildx-action@v3
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/qmt-mcp
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
-            type=raw,value=edge,enable=${{ github.event_name == 'workflow_dispatch' }}
-
-      - name: Build & push (linux/amd64)
+      - name: Build and push linux/amd64
         uses: docker/build-push-action@v6
         with:
           context: appliance
           file: appliance/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/qmt-mcp:${{ needs.prepare.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/qmt-mcp:latest
+          labels: |
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.release_sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    needs: image
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          body: |
-            QMT-MCP appliance ${{ github.ref_name }}.
-            Image: `ghcr.io/${{ github.repository_owner }}/qmt-mcp:${{ github.ref_name }}`
-            See CHANGELOG.md for details.
-
   cli:
-    name: Build qmtctl binaries (if present)
+    name: Package qmtctl for six targets
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
-    needs: release
-    if: startsWith(github.ref, 'refs/tags/')
     defaults:
       run:
         working-directory: cli/qmtctl
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.release_sha }}
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
           cache-dependency-path: cli/qmtctl/go.mod
-      - name: Cross-compile qmtctl
+      - name: Test qmtctl
         run: |
+          set -euo pipefail
+          go test ./...
+          go vet ./...
+      - name: Build release packages
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
           mkdir -p dist
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
-            os="${target%/*}"; arch="${target#*/}"
-            ext=""; [ "$os" = "windows" ] && ext=".exe"
-            out="dist/qmtctl-${os}-${arch}${ext}"
-            echo "building $out"
-            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -o "$out" .
+
+          for target in \
+            linux/amd64 linux/arm64 \
+            darwin/amd64 darwin/arm64 \
+            windows/amd64 windows/arm64
+          do
+            os="${target%/*}"
+            arch="${target#*/}"
+            package="qmtctl_${VERSION}_${os}_${arch}"
+            stage="${RUNNER_TEMP}/${package}"
+            mkdir -p "$stage"
+
+            extension=""
+            [ "$os" = "windows" ] && extension=".exe"
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 \
+              go build -trimpath -o "${stage}/qmtctl${extension}" .
+
+            if [ "$os" = "windows" ]; then
+              (
+                cd "$stage"
+                zip -q "${GITHUB_WORKSPACE}/cli/qmtctl/dist/${package}.zip" "qmtctl${extension}"
+              )
+            else
+              tar -C "$stage" -czf "dist/${package}.tar.gz" qmtctl
+            fi
           done
-      - name: Attach binaries to release
+
+          (
+            cd dist
+            sha256sum qmtctl_* > SHA256SUMS
+          )
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qmtctl-${{ needs.prepare.outputs.version }}
+          path: cli/qmtctl/dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [prepare, image, cli]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: qmtctl-${{ needs.prepare.outputs.version }}
+          path: dist
+      - name: Publish release and assets
         uses: softprops/action-gh-release@v2
         with:
-          files: cli/qmtctl/dist/*
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ needs.prepare.outputs.release_sha }}
+          name: ${{ needs.prepare.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            QMT-MCP appliance `${{ needs.prepare.outputs.version }}`.
+
+            Image: `ghcr.io/${{ github.repository_owner }}/qmt-mcp:${{ needs.prepare.outputs.version }}`
+            Platforms: qmtctl for Linux, macOS, and Windows on amd64 and arm64.
+            Verify downloads with `SHA256SUMS`.
+          files: dist/*

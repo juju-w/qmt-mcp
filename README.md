@@ -155,6 +155,19 @@ specs/       # Spec-Driven Development（spec-kit）：001~018 规格/计划/任
 [`constitution.md`](.specify/memory/constitution.md)，AI 协作见 [`AGENT.md`](AGENT.md)，
 测试见 [`appliance/mcp/tests/README.md`](appliance/mcp/tests/README.md)。
 
+## 版本与自动发布
+
+提交和 PR 标题统一使用 `type(scope): description` 格式，例如
+`feat(xtdata): add option filters`、`fix(cli): preserve session headers`。
+`main` 的 CI 通过后会按 Conventional Commits 自动计算 SemVer，更新 `VERSION` 和
+`CHANGELOG.md`，创建 release commit 与 tag，并发布：
+
+- `ghcr.io/juju-w/qmt-mcp:X.Y.Z` 与 `latest`（appliance 仅 linux/amd64）
+- Linux / macOS / Windows 的 qmtctl（amd64 + arm64）
+- `SHA256SUMS` 和 GitHub Release
+
+详细规则与版本增量映射见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+
 ## 参与贡献 / Help wanted 🙋
 
 最需要社区帮忙的是 **04 账户查询工具（`xttrade` 只读）**：联调"成功路径"需要一个**已开通

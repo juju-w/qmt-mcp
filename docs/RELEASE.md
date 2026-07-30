@@ -35,8 +35,10 @@ CJK fonts. The Dockerfile keeps stable work before frequently changing source:
 
 Changing MCP source therefore reruns only the final copy and smoke steps. The
 workflow reads `qmt-mcp:buildcache`, falls back to the previous GitHub Actions
-cache during migration, and writes a `mode=max` registry cache. The cache tag is
-an internal BuildKit artifact, not a runtime image.
+cache during migration, and writes a `mode=max` registry cache only for the
+highest SemVer tag. Historical release retries may read this cache but cannot
+overwrite it. The cache tag is an internal BuildKit artifact, not a runtime
+image.
 
 Adding more `RUN` commands does not automatically make the final image larger:
 layer contents do. Keep layers separated at dependency invalidation boundaries;

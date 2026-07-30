@@ -70,5 +70,5 @@
 - [x] T031 Run selected modern, legacy, 023 Tasks, and 024 MRTR conformance.
 - [x] T032 Run release policy, actionlint, diff/secret review, and native image
   smoke.
-- [ ] T033 Record evidence in `VERIFICATION.md`, close tasks accurately, and
+- [x] T033 Record evidence in `VERIFICATION.md`, close tasks accurately, and
   deliver through PR, main CI, and release.

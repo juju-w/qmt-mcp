@@ -11,8 +11,11 @@ decoding. There is no paging or compression flag, and single-page servers keep
 the same output.
 
 For stable `2026-07-28` servers, qmtctl declares MCP Tasks and waits for
-selected long-running tools by default. Its normal human and JSON output remains
-the final tool result.
+selected long-running tools by default. It first requests
+`subscriptions/listen` for the task and consumes complete
+`notifications/tasks` snapshots. Unsupported, unacknowledged, malformed, or
+lost streams automatically fall back to `tasks/get` polling. Its normal human
+and JSON output remains the final tool result.
 
 Building from source requires Go 1.25 or newer:
 
@@ -103,7 +106,7 @@ Execution modes are available as `--task-mode` or `QMTCTL_TASK_MODE`:
 
 | Mode | Behavior |
 |---|---|
-| `wait` | Default. Start a task, poll using server guidance, and print the final tool result. |
+| `wait` | Default. Start a task, prefer status notifications, fall back to server-guided polling, and print the final tool result. |
 | `detach` | Return the task handle immediately so another process can resume it. |
 | `sync` | Do not declare Tasks; request the server's synchronous compatibility path. |
 
@@ -131,7 +134,10 @@ server after authorization.
 
 `--timeout` bounds each HTTP exchange. `--task-timeout`, or
 `QMTCTL_TASK_TIMEOUT`, bounds the full wait lifecycle and defaults to 10
-minutes. A detached task remains valid server-side after qmtctl exits. Explicit
+minutes, including the notification stream and any later polling fallback.
+qmtctl refreshes OAuth before opening the stream and validates its
+acknowledgement, subscription ID, task ID, complete state, and timestamp before
+using a snapshot. A detached task remains valid server-side after qmtctl exits. Explicit
 `task` commands require a server advertising Tasks; ordinary commands still
 work synchronously against older or non-Tasks servers.
 

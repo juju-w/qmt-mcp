@@ -240,8 +240,9 @@ logout.
 - Client-secret storage in qmtctl; confidential clients should use a dedicated
   secret manager or gateway.
 - Trade/order/transfer scopes or tools.
-- MCP pagination/compression (022), Tasks (023), Apps (024), Resources and
-  Registry publication (025).
+- Pagination/compression (022), durable Tasks (023), task input (024), and task
+  status notifications (025) were delivered as follow-on features.
+- MCP Apps, Resources, and Registry publication remain unassigned future work.
 
 ## Assumptions
 

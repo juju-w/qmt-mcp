@@ -49,6 +49,7 @@
 | MCP 协议 | ✅ 双线兼容 | 主推稳定版 `2026-07-28`，同一 `/mcp` 自动兼容 2025 客户端 |
 | MCP 长任务 | ✅ 可用 | 2026 Tasks 持久化执行；未升级或未声明扩展的客户端继续同步调用 |
 | MCP 任务多轮输入 | ✅ 可用 | 任务可暂停并分批接收标准 MCP 输入；qmtctl 显式回答，不自动确认 |
+| MCP 任务状态通知 | ✅ 可用 | 2026 完整状态推送；qmtctl 通知优先，断流自动轮询回退 |
 | MCP 工具契约 / Profile | ✅ 可用 | 结构化结果、行为注解；可按 full/readonly/market/account/core/custom 裁剪工具面 |
 | OAuth 2.1 授权 | ✅ 可用 | static/oauth/hybrid；JWT/JWKS 校验、scope 裁剪、qmtctl PKCE 登录与刷新 |
 
@@ -166,6 +167,13 @@ QMT_MCP_TASK_MAX_RETAINED=1000
 回答值只交给当前任务协程，不写 SQLite、日志或审计。服务重启时等待输入的
 任务与其他未完成任务一样明确失败，不会重放回答。
 
+声明 Tasks 的 `2026-07-28` 客户端还可通过
+`subscriptions/listen.notifications.taskIds` 订阅状态。服务端先返回
+`notifications/subscriptions/acknowledged`，随后推送当前状态和每次已落库的
+`notifications/tasks` 完整快照。该能力没有新增配置项，也不会发送已删除的
+`notifications/tasks/status`。客户端不支持、未确认或连接中断时，继续用
+`tasks/get` 即可；qmtctl 默认先尝试通知，再自动回退到服务端指导频率的轮询。
+
 qmtctl 默认等待任务结束并保持原命令输出，也可脱离后续查：
 
 ```bash
@@ -178,7 +186,8 @@ qmtctl task update tsk_<id> \
   --responses-json '{"confirmation":{"action":"accept","content":{"confirm":true}}}'
 ```
 
-默认等待遇到 `input_required` 时会返回结构化
+通知与轮询共用同一个 `--task-timeout`。默认等待遇到
+`input_required` 时会返回结构化
 `task_input_required` 错误，包含 task ID 和待答请求；qmtctl 不会替用户确认。
 只有 `2026-07-28` 且声明 Tasks 的客户端启用这些语义，2025 或未声明客户端
 仍同步执行。

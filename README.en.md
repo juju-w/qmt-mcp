@@ -50,6 +50,7 @@ never needs to know the raw QMT code:
 | Database persistence (PostgreSQL, optional) | ✅ ready | market-data warehouse, read/write-through, off by default |
 | `qmtctl` CLI | ✅ ready | compiled Go CLI client for health/search/quotes/account queries |
 | MCP protocol | ✅ dual-era | prefers stable `2026-07-28`; the same `/mcp` endpoint accepts 2025 clients |
+| MCP durable tasks | ✅ ready | persistent lifecycle, explicit input, optional status push, and polling fallback |
 | MCP contracts / profiles | ✅ ready | structured results and behavior hints; full/readonly/market/account/core/custom surfaces |
 | OAuth 2.1 authorization | ✅ ready | static/oauth/hybrid, JWT/JWKS validation, scoped tools, qmtctl PKCE login and refresh |
 
@@ -150,6 +151,36 @@ compression:
 ```env
 QMT_MCP_LIST_PAGE_SIZE=50
 QMT_MCP_GZIP_MIN_SIZE=1024
+```
+
+### Durable MCP Tasks
+
+Stable `2026-07-28` clients that declare
+`io.modelcontextprotocol/tasks` receive durable handles for selected long
+operations. Supported 2025 clients and modern clients that do not declare the
+extension keep synchronous `tools/call` behavior on the same endpoint.
+
+Task state is stored in a bounded SQLite database in the broker pack. It keeps
+lifecycle state, owner/scope digests, pending standard `inputRequests`, and
+terminal output, but never tool arguments, credentials, or submitted answers.
+qmtctl requires explicit `task update` responses and never auto-confirms.
+
+Capable stable clients may opt into status push with
+`subscriptions/listen.notifications.taskIds`. The server acknowledges the
+accepted IDs, sends current state, and then emits complete
+`notifications/tasks` snapshots after committed transitions. Polling with
+`tasks/get` remains fully supported. qmtctl tries notifications first and
+automatically falls back to server-guided polling on unsupported or lost
+streams; both paths share the overall `--task-timeout`.
+
+```bash
+qmtctl cache refresh --force
+qmtctl --task-mode detach --json cache refresh --force
+qmtctl task get tsk_<id>
+qmtctl task wait tsk_<id>
+qmtctl task cancel tsk_<id>
+qmtctl task update tsk_<id> \
+  --responses-json '{"confirmation":{"action":"accept","content":{"confirm":true}}}'
 ```
 
 ## Quick start

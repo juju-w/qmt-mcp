@@ -26,6 +26,12 @@ WorkBuddy 等标准 HTTP 客户端通常无需额外配置。
 `tasks/update.inputResponses` 按相同键回答。这个能力同样只在上述稳定版
 Tasks 路径启用，不影响旧客户端。
 
+支持订阅的稳定版客户端可以在 `subscriptions/listen` 的
+`params.notifications.taskIds` 中请求任务。服务端先确认实际授权的 ID，再发送
+当前和后续 `notifications/tasks` 完整状态。通知是可选加速层，不取代
+`tasks/get`；旧客户端、只实现轮询的客户端和断线重连都继续可用。服务端不会
+发送旧草案里的 `notifications/tasks/status`。
+
 最小连通性检查：
 
 ```bash
@@ -129,6 +135,11 @@ Tasks 用于下载历史数据、批量下载财务数据、批量公式、因�
 扩展取决于各自版本；未声明时服务端自动同步回退。不要仅因为客户端能连接
 `2026-07-28` 就假定它已经支持 Tasks。
 
+若客户端实现 SEP-2575/SEP-2663，可订阅一个或多个自己有权访问的 task ID。
+确认帧之后会先收到当前快照，因此断线后重新订阅不依赖服务端保存事件回放。
+任务 ID 会同时检查创建 principal 和原始工具 scope；未知、过期和越权 ID
+都不会出现在确认帧中。
+
 ### 任务输入
 
 任务等待输入时，`tasks/get` 返回：
@@ -180,8 +191,11 @@ qmtctl task update tsk_<id> \
   '{"confirmation":{"action":"accept","content":{"confirm":true}}}'
 ```
 
-`--timeout` 控制单次 HTTP 请求，`--task-timeout` 控制完整等待周期。需要验证
-旧客户端路径时使用 `--task-mode sync`。
+等待模式先开 `subscriptions/listen`，严格校验确认帧、subscription ID、
+task ID、完整状态和时间戳；服务端不支持、未确认、返回坏帧或中途断流时自动
+按 `pollIntervalMs` 回到 `tasks/get`。`--timeout` 控制普通单次 HTTP 请求，
+`--task-timeout` 控制通知与轮询合计的完整等待周期。需要验证旧客户端路径时
+使用 `--task-mode sync`。
 
 默认等待如果遇到 `input_required`，qmtctl 会停止轮询并返回
 `task_input_required`；JSON 错误数据包含 `taskId` 和完整
@@ -334,6 +348,7 @@ resource metadata；否则使用静态 header。只支持旧 SSE transport 的�
 | 长命令立即返回 task ID | qmtctl 使用了 `--task-mode detach`；用 `task wait <id>` 恢复，或改回默认 `wait`。 |
 | `task_input_required` | 审阅错误数据中的 `inputRequests`，显式运行 `task update <id> --responses-json ...`，再 `task wait`；不要自动接受确认。 |
 | `server does not support MCP Tasks` | 服务端或当前协议未广告扩展；普通命令可用 `--task-mode sync`，显式 `task` 命令需升级服务端。 |
+| 任务等待仍出现 `tasks/get` | 客户端或服务端没有任务通知、task ID 未确认，或 SSE 已断开；qmtctl 会自动回退，不影响正确性。 |
 | `task ... returned insufficient/invalid params` | 检查 task ID、OAuth 身份和创建时所需 scope；服务端会故意隐藏未知与越权的区别。 |
 | 客户端只显示部分工具 | 客户端需支持标准 `nextCursor`；先用 `qmtctl tools --json` 验证完整目录，再升级客户端。 |
 | 能连上但没有行情 | QMT 未登录或 xtdata 未 ready；查看 `qmt_health`。 |

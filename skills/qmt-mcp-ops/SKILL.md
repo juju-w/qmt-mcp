@@ -162,6 +162,14 @@ in the live task process and are not written to SQLite, logs, or audit records.
 If the process restarts, waiting work fails explicitly instead of replaying
 answers.
 
+For stable clients, task status push uses
+`subscriptions/listen.notifications.taskIds` and complete
+`notifications/tasks` snapshots. The first frame confirms only authorized
+owner/scope matches, followed by current state so reconnect does not require an
+event log. Treat push as an optimization: polling remains valid, and qmtctl
+automatically falls back after an unsupported, unacknowledged, malformed, or
+lost stream. Both paths remain inside the same overall task timeout.
+
 ## Tool Families
 
 The standard registry has 37 tools:
@@ -224,6 +232,9 @@ flags are `--url`, `--access-token`/`--token`, `--json`, `--timeout`,
 `--task-mode`, and `--task-timeout`.
 The `tools` command always combines the complete paginated catalog and standard
 Go HTTP gzip decoding is automatic.
+Default task waiting prefers stable status notifications and falls back to
+`tasks/get`; `--task-mode detach` and `--task-mode sync` keep their existing
+semantics.
 
 For browser login with persisted refresh:
 

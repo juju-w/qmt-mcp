@@ -13,6 +13,7 @@ from urllib.parse import urlsplit, urlunsplit
 from mcp.server import CacheHint, MCPServer
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings
+from mcp.server.subscriptions import InMemorySubscriptionBus
 from mcp.shared.exceptions import MCPError
 from mcp.types import ListToolsResult
 from starlette.middleware.gzip import GZipMiddleware
@@ -26,6 +27,7 @@ from .health import HealthState
 from .pagination import InvalidPaginationCursor, paginate_by_key
 from .readiness import ReadinessProbe
 from .registry import ToolRegistry
+from .task_notifications import TaskListenHandler, TaskSubscriptionsListenRequestParams
 from .task_store import TaskStore
 from .tasks_extension import (
     TasksExtension,
@@ -186,6 +188,18 @@ class CoreASGI:
         self.connector: TraderConnector | None = None
 
     async def __call__(self, scope, receive, send):
+        if scope.get("type") == "lifespan":
+
+            async def lifespan_receive():
+                message = await receive()
+                if message.get("type") == "lifespan.shutdown":
+                    task_notifications = getattr(self, "task_notifications", None)
+                    if task_notifications is not None:
+                        task_notifications.close()
+                return message
+
+            await self.app(scope, lifespan_receive, send)
+            return
         if scope.get("type") != "http":
             await self.app(scope, receive, send)
             return
@@ -469,6 +483,17 @@ class AuthorizedMCPServer(MCPServer):
                 )
         return await super().call_tool(name, arguments, context)
 
+    def install_task_notifications(self, tasks_extension: TasksExtension) -> TaskListenHandler:
+        """Replace the core-only SDK listen handler with the Tasks-aware superset."""
+
+        handler = TaskListenHandler(self._subscriptions, tasks_extension)
+        self._lowlevel_server.add_request_handler(
+            "subscriptions/listen",
+            TaskSubscriptionsListenRequestParams,
+            handler,
+        )
+        return handler
+
 
 def _make_warehouse(config: CoreConfig, health: HealthState):
     """Build the market-data warehouse when a DB is configured; else None.
@@ -586,6 +611,7 @@ def create_app(config: CoreConfig | None = None):
         raise
 
     private_no_cache = CacheHint(ttl_ms=0, scope="private")
+    subscriptions = InMemorySubscriptionBus()
     tasks_extension = None
     extensions = []
     if config.tasks_enabled:
@@ -615,6 +641,7 @@ def create_app(config: CoreConfig | None = None):
             task_tools=task_tools,
             mrtr_before_task_tools=mrtr_before_task_tools,
             conformance_fixtures=config.task_conformance_fixtures,
+            subscriptions=subscriptions,
         )
         extensions.append(tasks_extension)
     token_verifier = build_token_verifier(config) if config.sdk_oauth_enabled else None
@@ -640,7 +667,11 @@ def create_app(config: CoreConfig | None = None):
         auth=auth_settings,
         token_verifier=token_verifier,
         extensions=extensions,
+        subscriptions=subscriptions,
     )
+    task_notifications = None
+    if tasks_extension is not None:
+        task_notifications = mcp.install_task_notifications(tasks_extension)
     workers = WorkerPool(config.worker_limit)
     visibility = ToolVisibilityPolicy(config.tool_profile, config.tool_allowlist, config.tool_denylist)
     registry = ToolRegistry(health, audit, workers, visibility)
@@ -672,6 +703,7 @@ def create_app(config: CoreConfig | None = None):
         app = NegotiatedGZipMiddleware(app, config.mcp_gzip_minimum_size)
     core = CoreASGI(app, config, health, registry, token_verifier)
     core.tasks_extension = tasks_extension
+    core.task_notifications = task_notifications
     # Build (do not start) the background readiness probe / trader connector.
     # main() starts them; tests can drive .step()/.attempt() directly.
     if config.enable_xtdata:

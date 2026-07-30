@@ -164,12 +164,13 @@ registry metadata, and capability output.
 - **SC-005**: Default `full` configuration exposes the same business tool names
   as v0.5.0 for equivalent optional feature gates.
 
-## Out of Scope
+## Follow-on Delivery
 
-- JWT/JWKS validation, authorization-server flows, and request-specific scope
-  filtering (021).
-- Pagination or transport compression (022).
-- MCP Tasks (023), MCP Apps (024), Resources and Registry publication (025).
+- 021 delivered JWT/JWKS validation, authorization-server flows, and
+  request-specific scope filtering.
+- 022 delivered pagination and transport compression.
+- 023-025 delivered durable Tasks, task input, and task status notifications.
+- MCP Apps, Resources, and Registry publication remain unassigned future work.
 - Exact field-by-field success schemas for every xtdata raw payload; the common
   envelope is strict while broker/version-dependent success fields remain open.
 - New market-data, account, analysis, or write tools.

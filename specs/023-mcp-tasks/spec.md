@@ -282,10 +282,11 @@ results.
   sensitive tool inputs. This feature deliberately fails interrupted active
   work instead.
 
-## Out of Scope
+## Out of Scope And Follow-on Delivery
 
 - `tasks/list`, `tasks/result`, distributed queues, or multi-node workers.
 - Persisting or replaying tool arguments after server restart.
-- Multi-round structured elicitation and URL-mode input (024).
-- Task status subscription and notification delivery (025).
+- Multi-round structured elicitation was delivered in 024; URL-mode input
+  remains future work.
+- Task status subscription and notification delivery was delivered in 025.
 - Taskifying short read-only snapshot, account, or discovery tools.

@@ -171,6 +171,11 @@ recovery matters. Older and non-declaring clients remain synchronous.
 Waiting tasks may expose standard MCP `inputRequests`; the prompt snapshot is
 durable, but response values are in-process only. A restart marks the task
 failed instead of replaying answers.
+Stable task-aware clients may additionally receive current and changed state
+through `subscriptions/listen` and `notifications/tasks`. This needs no new
+ingress route: preserve long-lived POST/SSE responses on `/mcp`, disable proxy
+buffering for them, and do not apply gzip to SSE. qmtctl falls back to
+`tasks/get` if the stream cannot continue.
 
 Use qmtctl for client-level discovery and smoke checks:
 
@@ -192,7 +197,8 @@ qmtctl --json task get tsk_<id>
 persists refresh rotation. MCP commands use an explicit access token first,
 then a static token, then the saved per-resource OAuth session.
 qmtctl's default task mode waits and prints the final tool result;
-`--task-mode sync` exercises the old-client compatibility path. If wait returns
+it prefers task notifications and transparently resumes polling after stream
+loss. `--task-mode sync` exercises the old-client compatibility path. If wait returns
 `task_input_required`, review its request data and use explicit
 `qmtctl task update`; never auto-accept a confirmation.
 

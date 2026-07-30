@@ -20,7 +20,10 @@ Exercises app assembly + the ASGI auth/`/healthz` path. It installs official `mc
 and injects a **fake `xtquant`** (see `conftest.py::fake_xtquant`), so it still
 needs no Wine or broker pack. It covers stable/legacy MCP negotiation, OAuth,
 durable Tasks, partial task input, MRTR-to-Task composition, and transient
-answer handling. It is skipped automatically when `mcp` is absent.
+answer handling. Task notification coverage includes the real Streamable HTTP
+SSE transport, acknowledgement/current/terminal ordering, mixed filters,
+backpressure, reconnect state, and OAuth isolation. It is skipped automatically
+when `mcp` is absent.
 
 ```bash
 python3 -m pip install "mcp==2.0.0"
@@ -29,7 +32,9 @@ python3 -m pytest -m integration
 
 CI additionally runs the pinned official MCP conformance package, including
 the 023 Tasks lifecycle scenarios plus `tasks-mrtr-input` and
-`tasks-mrtr-composition`. Their synthetic tools are available only when
+`tasks-mrtr-composition`. CI also invokes `tasks-status-notifications`; pinned
+conformance alpha.10 currently reports that scenario pending, so the project
+integration tests remain its executable gate. Synthetic tools are available only when
 `QMT_MCP_TASK_CONFORMANCE_FIXTURES=1`.
 
 ## Intentionally out of host scope

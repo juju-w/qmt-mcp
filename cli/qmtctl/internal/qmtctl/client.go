@@ -20,17 +20,19 @@ import (
 )
 
 type Client struct {
-	baseURL        string
-	token          string
-	httpClient     *http.Client
-	requestTimeout time.Duration
-	taskMode       string
-	verbose        bool
-	session        *mcp.ClientSession
-	oauth          mcpauth.OAuthHandler
-	oauthClose     io.Closer
-	initOnce       sync.Once
-	initErr        error
+	baseURL                string
+	token                  string
+	httpClient             *http.Client
+	notificationHTTPClient *http.Client
+	requestTimeout         time.Duration
+	taskMode               string
+	verbose                bool
+	session                *mcp.ClientSession
+	oauth                  mcpauth.OAuthHandler
+	oauthClose             io.Closer
+	initOnce               sync.Once
+	initErr                error
+	notificationIDs        atomic.Uint64
 }
 
 type ToolCallResult struct {
@@ -269,6 +271,11 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 		if baseTransport == nil {
 			baseTransport = http.DefaultTransport
 		}
+		c.notificationHTTPClient = &http.Client{
+			Transport:     baseTransport,
+			CheckRedirect: c.httpClient.CheckRedirect,
+			Jar:           c.httpClient.Jar,
+		}
 		timedTransport := requestTimeoutRoundTripper{
 			base:    baseTransport,
 			timeout: c.requestTimeout,
@@ -504,13 +511,26 @@ func (t *taskRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 
 func (t *taskRoundTripper) wait(ctx context.Context, meta json.RawMessage, task TaskInfo) (TaskInfo, error) {
 	current := task
+	if taskStatusSettled(current.Status) {
+		return current, nil
+	}
+	if current.Status != "working" {
+		return TaskInfo{}, invalidTaskStatus(current.TaskID, current.Status)
+	}
+	if pushed, settled, err := t.client.listenTask(ctx, meta, current); err != nil {
+		return TaskInfo{}, err
+	} else {
+		current = pushed
+		if settled {
+			return current, nil
+		}
+	}
 	for {
-		switch current.Status {
-		case "completed", "failed", "cancelled", "input_required":
+		if taskStatusSettled(current.Status) {
 			return current, nil
 		}
 		if current.Status != "working" {
-			return TaskInfo{}, fmt.Errorf("task %s returned invalid status %q", current.TaskID, current.Status)
+			return TaskInfo{}, invalidTaskStatus(current.TaskID, current.Status)
 		}
 		if err := waitForTaskPoll(ctx, current.PollIntervalMS); err != nil {
 			return TaskInfo{}, err

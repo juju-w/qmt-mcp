@@ -19,3 +19,10 @@
 - [x] T010 Trigger automatic version commit/tag only after successful `main` CI.
 - [x] T011 Package qmtctl for Linux/macOS/Windows on amd64+arm64 with checksums.
 - [x] T012 Publish the GHCR image and all CLI assets in one retryable GitHub Release.
+- [x] T013 Reorder Dockerfile layers so MCP source does not invalidate Wine and
+  Python dependency provisioning.
+- [x] T014 Persist a `mode=max` registry cache in GHCR and import the prior GHA
+  cache during migration.
+- [x] T015 Add optional digest-preserving mainland registry mirroring.
+- [x] T016 Add explicit Release permissions/token and current-workflow retries
+  for an existing version tag.

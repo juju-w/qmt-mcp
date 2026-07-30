@@ -7,14 +7,13 @@
 #   wine python -m pip install -r requirements.in
 #   wine python -m pip freeze > requirements.txt
 #
-# then change the Dockerfile from the unpinned
-#   pip install fastmcp uvicorn numpy pandas
-# to
+# The Dockerfile currently installs this declaration file directly. After
+# generating and verifying the lock, change it to:
 #   pip install -r requirements.txt
 # and rebuild + smoke-test on amd64.
 #
 # (Pinning cannot be verified from a non-amd64 host, so the lock is intentionally
-# not committed by automation — generate it on a real build. See 011 spec FR-006.)
+# not committed by automation — generate it on a real build. See 011 spec FR-008.)
 
 fastmcp
 uvicorn

@@ -8,3 +8,7 @@
 - [x] Add `--json` output for every command.
 - [x] Add integration smoke against a local appliance.
 - [x] Add goreleaser or equivalent cross-platform release config.
+- [x] Add OAuth protected-resource discovery plus existing access-token input
+  without implementing authorization-server flows in the thin client.
+- [x] Inject release SemVer into qmtctl and expose it through `version` and MCP
+  client metadata.

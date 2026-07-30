@@ -180,7 +180,11 @@ then publishes:
 - qmtctl for Linux, macOS, and Windows on amd64 and arm64
 - `SHA256SUMS` and one GitHub Release
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the accepted types and bump rules.
+The image uses a persistent BuildKit cache, and MCP source-only changes no longer
+reinstall Wine or Windows Python dependencies. An optional mainland China
+registry receives the same image digest without a second build. See
+[`docs/RELEASE.md`](docs/RELEASE.md) for cache, mirror, and retry configuration,
+and [`CONTRIBUTING.md`](CONTRIBUTING.md) for accepted types and bump rules.
 
 ## Contributing / Help wanted 🙋
 

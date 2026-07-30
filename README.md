@@ -166,7 +166,11 @@ specs/       # Spec-Driven Development（spec-kit）：001~018 规格/计划/任
 - Linux / macOS / Windows 的 qmtctl（amd64 + arm64）
 - `SHA256SUMS` 和 GitHub Release
 
-详细规则与版本增量映射见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+镜像使用持久 BuildKit cache；普通 MCP 源码变更不会重新安装 Wine 和 Windows
+Python 依赖。也可以配置阿里云 ACR 等国内仓库，CI 会复制同一个镜像 digest，
+不会二次构建。详细规则、国内镜像变量和旧 tag 重试方法见
+[`docs/RELEASE.md`](docs/RELEASE.md)，版本增量映射见
+[`CONTRIBUTING.md`](CONTRIBUTING.md)。
 
 ## 参与贡献 / Help wanted 🙋
 

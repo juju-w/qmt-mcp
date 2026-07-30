@@ -17,15 +17,30 @@ export QMT_MCP_URL=http://127.0.0.1:8765/mcp
 export QMT_MCP_TOKEN=...
 ```
 
+For a bearer access token issued by an OAuth authorization server or gateway:
+
+```bash
+export QMT_MCP_ACCESS_TOKEN=...
+qmtctl auth discover --json
+qmtctl health
+```
+
+`QMT_MCP_ACCESS_TOKEN` takes precedence over `QMT_MCP_TOKEN`. qmtctl discovers
+protected-resource metadata and sends an existing access token; it does not yet
+run browser login, token exchange, refresh, or dynamic client registration.
+
 Global flags override the environment:
 
 ```bash
 qmtctl --url http://127.0.0.1:8765/mcp --token "$QMT_MCP_TOKEN" health
+qmtctl --url https://qmt.example.com/mcp --access-token "$QMT_MCP_ACCESS_TOKEN" health
 ```
 
 ## Commands
 
 ```bash
+qmtctl version
+qmtctl auth discover
 qmtctl health
 qmtctl tools
 qmtctl search 天岳

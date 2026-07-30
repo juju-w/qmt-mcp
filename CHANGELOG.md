@@ -14,6 +14,10 @@ project constitution's quality gates.
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+## [0.4.0] - 2026-07-30
+
 ### Added
 - qmtctl can inspect OAuth protected-resource metadata with `qmtctl auth
   discover` and accepts bearer access tokens through `--access-token` or
@@ -115,7 +119,8 @@ project constitution's quality gates.
 - In-image pip deps are declared in `appliance/mcp/requirements.in`; the locked
   `requirements.txt` must be generated from an amd64 Wine build (constitution III).
 
-[Unreleased]: https://github.com/juju-w/qmt-mcp/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/juju-w/qmt-mcp/compare/v0.4.0...HEAD
 [0.2.0]: https://github.com/juju-w/qmt-mcp/compare/v0.1.0...v0.2.0
 [0.3.0]: https://github.com/juju-w/qmt-mcp/compare/v0.2.0...v0.3.0
 [0.3.1]: https://github.com/juju-w/qmt-mcp/compare/v0.3.0...v0.3.1
+[0.4.0]: https://github.com/juju-w/qmt-mcp/compare/v0.3.1...v0.4.0

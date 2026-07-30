@@ -14,6 +14,14 @@ DEFAULT_MCP_ENV = Path("/opt/qmt-mcp/mcp.env")
 VALID_AUTH_MODES = frozenset({"static", "oauth", "hybrid"})
 SAFE_JWT_ALGORITHMS = frozenset({"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512"})
 DEFAULT_OAUTH_SCOPES = ("qmt:read", "qmt:market", "qmt:account", "qmt:manage", "qmt:admin")
+DEFAULT_TASK_TOOLS = (
+    "qmt_xtdata_download_history",
+    "qmt_xtdata_download_history_batch",
+    "qmt_xtdata_download_financial_data",
+    "qmt_xtdata_formula_call_batch",
+    "qmt_xtdata_formula_generate_factor",
+    "qmt_xtdata_refresh_instrument_cache",
+)
 
 
 def _read_env_file(path: Path) -> dict[str, str]:
@@ -79,6 +87,14 @@ class CoreConfig:
     # 022 bounded MCP catalog pages and negotiated HTTP gzip.
     mcp_list_page_size: int = 50
     mcp_gzip_minimum_size: int = 1024
+    # 023 stable MCP Tasks lifecycle for selected long-running tools.
+    tasks_enabled: bool = True
+    task_store: str = ""
+    task_ttl_ms: int = 86_400_000
+    task_poll_interval_ms: int = 1000
+    task_max_retained: int = 1000
+    task_tools: tuple[str, ...] = DEFAULT_TASK_TOOLS
+    task_conformance_fixtures: bool = False
     # 005 readiness/connector knobs (defaults so direct construction stays easy).
     readiness_poll_s: float = 5.0
     enable_connector: bool = False
@@ -163,6 +179,12 @@ class CoreConfig:
             return f"{self.public_base_url}/mcp"
         return ""
 
+    @property
+    def effective_task_store(self) -> str:
+        if self.task_store.strip():
+            return self.task_store.strip()
+        return str(Path(self.audit_path).with_name("mcp-tasks-v1.sqlite3"))
+
     def validate_security(self) -> None:
         if self.transport not in {"streamable-http", "http", "sse"}:
             raise McpCoreError(
@@ -187,6 +209,33 @@ class CoreConfig:
                 "config",
                 "QMT_MCP_GZIP_MIN_SIZE must be between 0 and 10485760",
                 {"value": self.mcp_gzip_minimum_size},
+            )
+        if not 0 <= self.task_ttl_ms <= 365 * 24 * 60 * 60 * 1000:
+            raise McpCoreError(
+                "config",
+                "QMT_MCP_TASK_TTL_MS must be between 0 and 31536000000",
+                {"value": self.task_ttl_ms},
+            )
+        if not 100 <= self.task_poll_interval_ms <= 60_000:
+            raise McpCoreError(
+                "config",
+                "QMT_MCP_TASK_POLL_INTERVAL_MS must be between 100 and 60000",
+                {"value": self.task_poll_interval_ms},
+            )
+        if not 1 <= self.task_max_retained <= 100_000:
+            raise McpCoreError(
+                "config",
+                "QMT_MCP_TASK_MAX_RETAINED must be between 1 and 100000",
+                {"value": self.task_max_retained},
+            )
+        if len(self.effective_task_store) > 4096:
+            raise McpCoreError("config", "QMT_MCP_TASK_STORE is too long")
+        if len(self.task_tools) > 100 or any(
+            not name.startswith("qmt_") or len(name) > 128 for name in self.task_tools
+        ):
+            raise McpCoreError(
+                "config",
+                "QMT_MCP_TASK_TOOLS must contain at most 100 bounded qmt_ tool names",
             )
         if (
             self.auth_mode == "static"
@@ -271,6 +320,13 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         test_mode=env.get("QMT_MCP_TEST_MODE", "0") == "1",
         mcp_list_page_size=int(env.get("QMT_MCP_LIST_PAGE_SIZE", "50")),
         mcp_gzip_minimum_size=int(env.get("QMT_MCP_GZIP_MIN_SIZE", "1024")),
+        tasks_enabled=env.get("QMT_MCP_TASKS_ENABLED", "1") != "0",
+        task_store=env.get("QMT_MCP_TASK_STORE", "/broker/cache/mcp-tasks-v1.sqlite3"),
+        task_ttl_ms=int(env.get("QMT_MCP_TASK_TTL_MS", "86400000")),
+        task_poll_interval_ms=int(env.get("QMT_MCP_TASK_POLL_INTERVAL_MS", "1000")),
+        task_max_retained=int(env.get("QMT_MCP_TASK_MAX_RETAINED", "1000")),
+        task_tools=_split_csv(env.get("QMT_MCP_TASK_TOOLS", ",".join(DEFAULT_TASK_TOOLS))) or DEFAULT_TASK_TOOLS,
+        task_conformance_fixtures=env.get("QMT_MCP_TASK_CONFORMANCE_FIXTURES", "0") == "1",
         readiness_poll_s=max(1.0, float(env.get("QMT_READINESS_POLL_S", "5"))),
         enable_connector=env.get("QMT_ENABLE_CONNECTOR", "0") == "1",
         connect_retry=max(1, int(env.get("QMT_CONNECT_RETRY", "8"))),

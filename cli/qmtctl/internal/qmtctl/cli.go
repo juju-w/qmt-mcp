@@ -23,12 +23,14 @@ const defaultURL = "http://127.0.0.1:8765/mcp"
 var Version = "dev"
 
 type globalOptions struct {
-	url       string
-	token     string
-	authStore string
-	jsonOut   bool
-	timeout   time.Duration
-	verbose   bool
+	url         string
+	token       string
+	authStore   string
+	jsonOut     bool
+	timeout     time.Duration
+	taskMode    string
+	taskTimeout time.Duration
+	verbose     bool
 }
 
 func Run(args []string, stdout, stderr io.Writer) int {
@@ -37,10 +39,24 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	opts := globalOptions{
-		url:       getenvDefault("QMT_MCP_URL", defaultURL),
-		token:     firstNonEmpty(os.Getenv("QMT_MCP_ACCESS_TOKEN"), os.Getenv("QMT_MCP_TOKEN")),
-		authStore: os.Getenv("QMTCTL_AUTH_STORE"),
-		timeout:   10 * time.Second,
+		url:         getenvDefault("QMT_MCP_URL", defaultURL),
+		token:       firstNonEmpty(os.Getenv("QMT_MCP_ACCESS_TOKEN"), os.Getenv("QMT_MCP_TOKEN")),
+		authStore:   os.Getenv("QMTCTL_AUTH_STORE"),
+		timeout:     10 * time.Second,
+		taskMode:    getenvDefault("QMTCTL_TASK_MODE", taskModeWait),
+		taskTimeout: 10 * time.Minute,
+	}
+	if raw := os.Getenv("QMTCTL_TASK_TIMEOUT"); raw != "" {
+		value, err := parseDuration(raw)
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 2
+		}
+		if value <= 0 {
+			fmt.Fprintln(stderr, "task timeout must be greater than zero")
+			return 2
+		}
+		opts.taskTimeout = value
 	}
 	cmdArgs, err := parseGlobals(args, &opts)
 	if err != nil {
@@ -49,6 +65,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	if len(cmdArgs) == 0 {
 		usage(stderr)
+		return 2
+	}
+	if err := validateTaskMode(opts.taskMode); err != nil {
+		fmt.Fprintln(stderr, err)
 		return 2
 	}
 	store, err := newOAuthSessionStore(opts.authStore)
@@ -68,13 +88,17 @@ func Run(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 	}
-	contextTimeout := opts.timeout
-	if restoredHandler != nil {
-		contextTimeout = 5 * time.Minute
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), opts.taskTimeout)
 	defer cancel()
 	client := NewClient(opts.url, opts.token, opts.timeout, opts.verbose)
+	clientTaskMode := opts.taskMode
+	if cmdArgs[0] == "task" {
+		clientTaskMode = taskModeWait
+	}
+	if err := client.SetTaskMode(clientTaskMode); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
 	defer client.Close()
 	if restoredHandler != nil {
 		client.SetOAuthHandler(restoredHandler, restoredCloser)
@@ -104,6 +128,8 @@ func dispatch(
 		return runHealth(ctx, client, opts, stdout)
 	case "tools":
 		return runTools(ctx, client, opts, stdout)
+	case "task":
+		return runTask(ctx, client, opts, args[1:], stdout)
 	case "search":
 		return runSearch(ctx, client, opts, args[1:], stdout)
 	case "resolve":
@@ -332,6 +358,79 @@ func runTools(ctx context.Context, client *Client, opts globalOptions, stdout io
 	if len(tools) == 0 {
 		printMapSummary(stdout, doc)
 	}
+	return nil
+}
+
+func runTask(
+	ctx context.Context,
+	client *Client,
+	opts globalOptions,
+	args []string,
+	stdout io.Writer,
+) error {
+	if len(args) == 0 {
+		return fmt.Errorf("task requires get, wait, cancel, or update")
+	}
+	switch args[0] {
+	case "get", "wait", "cancel":
+		fs := newFlagSet("task "+args[0], &opts)
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		if fs.NArg() != 1 {
+			return fmt.Errorf("task %s requires exactly one task ID", args[0])
+		}
+		taskID := fs.Arg(0)
+		switch args[0] {
+		case "get":
+			task, err := client.TaskGet(ctx, taskID)
+			return writeTaskObject(stdout, task, opts, err)
+		case "wait":
+			task, err := client.TaskWait(ctx, taskID)
+			return writeTaskObject(stdout, task, opts, err)
+		default:
+			ack, err := client.TaskCancel(ctx, taskID)
+			return writeTaskObject(stdout, ack, opts, err)
+		}
+	case "update":
+		fs := newFlagSet("task update", &opts)
+		responsesJSON := fs.String("responses-json", "", "JSON object keyed by input request ID")
+		if err := parseFlagSet(fs, args[1:]); err != nil {
+			return err
+		}
+		if fs.NArg() != 1 {
+			return fmt.Errorf("task update requires exactly one task ID")
+		}
+		if strings.TrimSpace(*responsesJSON) == "" {
+			return fmt.Errorf("task update requires --responses-json")
+		}
+		var responses map[string]any
+		if err := json.Unmarshal([]byte(*responsesJSON), &responses); err != nil {
+			return fmt.Errorf("invalid --responses-json: %w", err)
+		}
+		ack, err := client.TaskUpdate(ctx, fs.Arg(0), responses)
+		return writeTaskObject(stdout, ack, opts, err)
+	default:
+		return fmt.Errorf("unknown task command %q", args[0])
+	}
+}
+
+func writeTaskObject(stdout io.Writer, value any, opts globalOptions, err error) error {
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	if opts.jsonOut {
+		return writeRawJSON(stdout, raw)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return err
+	}
+	printMapSummary(stdout, document)
 	return nil
 }
 
@@ -1140,7 +1239,8 @@ func parseGlobals(args []string, opts *globalOptions) ([]string, error) {
 			opts.jsonOut = true
 		case arg == "--verbose":
 			opts.verbose = true
-		case arg == "--url" || arg == "--token" || arg == "--access-token" || arg == "--auth-store" || arg == "--timeout":
+		case arg == "--url" || arg == "--token" || arg == "--access-token" || arg == "--auth-store" ||
+			arg == "--timeout" || arg == "--task-mode" || arg == "--task-timeout":
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("%s requires a value", arg)
 			}
@@ -1152,7 +1252,9 @@ func parseGlobals(args []string, opts *globalOptions) ([]string, error) {
 			strings.HasPrefix(arg, "--token=") ||
 			strings.HasPrefix(arg, "--access-token=") ||
 			strings.HasPrefix(arg, "--auth-store=") ||
-			strings.HasPrefix(arg, "--timeout="):
+			strings.HasPrefix(arg, "--timeout=") ||
+			strings.HasPrefix(arg, "--task-mode=") ||
+			strings.HasPrefix(arg, "--task-timeout="):
 			parts := strings.SplitN(arg, "=", 2)
 			if err := setGlobalValue(opts, parts[0], parts[1]); err != nil {
 				return nil, err
@@ -1178,6 +1280,20 @@ func setGlobalValue(opts *globalOptions, name, value string) error {
 			return err
 		}
 		opts.timeout = d
+	case "--task-mode":
+		if err := validateTaskMode(value); err != nil {
+			return err
+		}
+		opts.taskMode = value
+	case "--task-timeout":
+		d, err := parseDuration(value)
+		if err != nil {
+			return err
+		}
+		if d <= 0 {
+			return errors.New("task timeout must be greater than zero")
+		}
+		opts.taskTimeout = d
 	}
 	return nil
 }
@@ -1191,6 +1307,8 @@ func newFlagSet(name string, opts *globalOptions) *flag.FlagSet {
 	fs.StringVar(&opts.token, "access-token", opts.token, "OAuth access token")
 	fs.StringVar(&opts.authStore, "auth-store", opts.authStore, "OAuth session store path")
 	fs.DurationVar(&opts.timeout, "timeout", opts.timeout, "timeout")
+	fs.StringVar(&opts.taskMode, "task-mode", opts.taskMode, "task execution mode")
+	fs.DurationVar(&opts.taskTimeout, "task-timeout", opts.taskTimeout, "overall task timeout")
 	fs.BoolVar(&opts.verbose, "verbose", opts.verbose, "verbose output")
 	return fs
 }
@@ -1242,6 +1360,15 @@ func parseDuration(value string) (time.Duration, error) {
 		return 0, fmt.Errorf("invalid timeout %q", value)
 	}
 	return time.Duration(seconds) * time.Second, nil
+}
+
+func validateTaskMode(value string) error {
+	switch value {
+	case taskModeWait, taskModeDetach, taskModeSync:
+		return nil
+	default:
+		return fmt.Errorf("invalid task mode %q (want wait, detach, or sync)", value)
+	}
 }
 
 func splitCSV(value string) []string {
@@ -1310,8 +1437,8 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN|--access-token TOKEN] [--auth-store PATH] [--json] [--timeout 10s] <command>")
-	fmt.Fprintln(w, "commands: version, auth, health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, sector, formula, smoke")
+	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN|--access-token TOKEN] [--auth-store PATH] [--json] [--timeout 10s] [--task-mode wait|detach|sync] [--task-timeout 10m] <command>")
+	fmt.Fprintln(w, "commands: version, auth, health, tools, task, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, sector, formula, smoke")
 }
 
 func getenvDefault(name, fallback string) string {

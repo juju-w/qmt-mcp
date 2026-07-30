@@ -6,6 +6,7 @@ import hmac
 import json
 import os
 import sys
+from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -25,6 +26,11 @@ from .health import HealthState
 from .pagination import InvalidPaginationCursor, paginate_by_key
 from .readiness import ReadinessProbe
 from .registry import ToolRegistry
+from .task_store import TaskStore
+from .tasks_extension import (
+    TasksExtension,
+    register_task_conformance_fixtures,
+)
 from .tool_contracts import ToolVisibilityPolicy
 from .workers import WorkerPool
 
@@ -317,6 +323,87 @@ class NegotiatedGZipMiddleware:
         await self.gzip_app(gzip_scope, receive, send)
 
 
+class TaskRoutingHeaderMiddleware:
+    """Validate SEP-2663 task routing names missing from SDK 2.0's core map."""
+
+    METHODS = frozenset({"tasks/get", "tasks/update", "tasks/cancel"})
+    MAX_BODY = 1_048_576
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http" or scope.get("method") != "POST" or scope.get("path") != "/mcp":
+            await self.app(scope, receive, send)
+            return
+        headers = _header_map(scope)
+        header_method = headers.get(b"mcp-method", b"").decode("utf-8", "replace")
+        if header_method not in self.METHODS:
+            await self.app(scope, receive, send)
+            return
+        body = bytearray()
+        more_body = True
+        while more_body:
+            message = await receive()
+            body.extend(message.get("body", b""))
+            more_body = message.get("more_body", False)
+            if len(body) > self.MAX_BODY:
+                await _json_response(
+                    send,
+                    413,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {
+                            "code": -32600,
+                            "message": "Task request exceeds 1 MiB",
+                        },
+                    },
+                )
+                return
+        raw_body = bytes(body)
+        try:
+            document = json.loads(raw_body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            await self.app(scope, self._replay(raw_body, receive), send)
+            return
+        method = document.get("method") if isinstance(document, Mapping) else None
+        if method not in self.METHODS:
+            await self.app(scope, self._replay(raw_body, receive), send)
+            return
+        params = document.get("params")
+        task_id = params.get("taskId") if isinstance(params, Mapping) else None
+        header_name = headers.get(b"mcp-name", b"").decode("utf-8", "replace")
+        if header_method != method or not isinstance(task_id, str) or header_name != task_id:
+            await _json_response(
+                send,
+                400,
+                {
+                    "jsonrpc": "2.0",
+                    "id": document.get("id"),
+                    "error": {
+                        "code": -32020,
+                        "message": "MCP routing headers do not match the request",
+                    },
+                },
+            )
+            return
+        await self.app(scope, self._replay(raw_body, receive), send)
+
+    @staticmethod
+    def _replay(body: bytes, fallback):
+        sent = False
+
+        async def receive():
+            nonlocal sent
+            if sent:
+                return await fallback()
+            sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        return receive
+
+
 def register_core_tools(mcp: MCPServer, registry: ToolRegistry, health: HealthState) -> None:
     @registry.register(
         mcp,
@@ -499,6 +586,25 @@ def create_app(config: CoreConfig | None = None):
         raise
 
     private_no_cache = CacheHint(ttl_ms=0, scope="private")
+    tasks_extension = None
+    extensions = []
+    if config.tasks_enabled:
+        task_store = TaskStore(
+            config.effective_task_store,
+            ttl_ms=config.task_ttl_ms,
+            poll_interval_ms=config.task_poll_interval_ms,
+            max_retained=config.task_max_retained,
+        )
+        task_store.recover_interrupted()
+        task_tools = list(config.task_tools)
+        if config.task_conformance_fixtures:
+            task_tools.extend(("slow_compute", "failing_job", "protocol_error_job", "confirm_delete"))
+        tasks_extension = TasksExtension(
+            task_store,
+            task_tools=task_tools,
+            conformance_fixtures=config.task_conformance_fixtures,
+        )
+        extensions.append(tasks_extension)
     token_verifier = build_token_verifier(config) if config.sdk_oauth_enabled else None
     auth_settings = None
     if config.sdk_oauth_enabled:
@@ -521,16 +627,21 @@ def create_app(config: CoreConfig | None = None):
         },
         auth=auth_settings,
         token_verifier=token_verifier,
+        extensions=extensions,
     )
     workers = WorkerPool(config.worker_limit)
     visibility = ToolVisibilityPolicy(config.tool_profile, config.tool_allowlist, config.tool_denylist)
     registry = ToolRegistry(health, audit, workers, visibility)
     mcp.tool_registry = registry
+    if tasks_extension is not None:
+        tasks_extension.bind_registry(registry)
     register_core_tools(mcp, registry, health)
     warehouse = _make_warehouse(config, health)
     register_optional_xtdata(mcp, registry, health, config, warehouse=warehouse)
     trader_session = register_optional_xttrade(mcp, registry, health, config)
     register_optional_portfolio(mcp, registry, health, config, trader_session=trader_session)
+    if config.task_conformance_fixtures:
+        register_task_conformance_fixtures(mcp)
     registry.assert_no_write_tools()
 
     if config.transport == "sse":
@@ -543,9 +654,12 @@ def create_app(config: CoreConfig | None = None):
             stateless_http=False,
             host=config.host,
         )
+    if config.tasks_enabled:
+        app = TaskRoutingHeaderMiddleware(app)
     if config.mcp_gzip_minimum_size > 0:
         app = NegotiatedGZipMiddleware(app, config.mcp_gzip_minimum_size)
     core = CoreASGI(app, config, health, registry, token_verifier)
+    core.tasks_extension = tasks_extension
     # Build (do not start) the background readiness probe / trader connector.
     # main() starts them; tests can drive .step()/.attempt() directly.
     if config.enable_xtdata:

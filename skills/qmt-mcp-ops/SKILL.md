@@ -27,7 +27,7 @@ credentials, account data, or a personal strategy into the image.
 
 ```text
 appliance/mcp/
-  qmt_mcp_core/       auth, OAuth metadata, registry, health, audit, workers
+  qmt_mcp_core/       auth, OAuth metadata, registry, health, audit, durable tasks
   qmt_mcp_xtdata/     market, search, subscriptions, options, reference, sectors, formulas
   qmt_mcp_xttrade/    read-only account queries
   qmt_mcp_portfolio/  read-only portfolio analytics
@@ -122,6 +122,28 @@ MCP JSON responses at or above `QMT_MCP_GZIP_MIN_SIZE` use negotiated gzip
 (default 1024 bytes). SSE is excluded. Set the threshold to `0` when an ingress
 must own compression.
 
+## Durable Tasks
+
+Stable MCP `2026-07-28` clients that declare
+`io.modelcontextprotocol/tasks` receive durable task handles for selected long
+operations. Supported 2025 clients and modern non-declaring clients remain
+synchronous on the same `/mcp` endpoint.
+
+The default SQLite store is
+`/broker/cache/mcp-tasks-v1.sqlite3`. It keeps lifecycle metadata, owner
+digests, required scopes, and terminal output but excludes tool arguments,
+credentials, and raw principal identifiers. Keep it on persistent real disk,
+assign it to one active MCP server process, and include it in backups only if
+detached task recovery matters. Startup marks interrupted active tasks failed;
+terminal entries remain until TTL or bounded retention cleanup.
+
+Production task-capable tools default to history download, batch history,
+financial download, batch formula, factor generation, and instrument-cache
+refresh. Configure them with `QMT_MCP_TASKS_ENABLED`,
+`QMT_MCP_TASK_STORE`, `QMT_MCP_TASK_TTL_MS`,
+`QMT_MCP_TASK_POLL_INTERVAL_MS`, `QMT_MCP_TASK_MAX_RETAINED`, and
+`QMT_MCP_TASK_TOOLS`.
+
 ## Tool Families
 
 The standard registry has 37 tools:
@@ -180,7 +202,8 @@ qmtctl health
 ```
 
 `QMT_MCP_ACCESS_TOKEN` takes precedence over `QMT_MCP_TOKEN`. Equivalent global
-flags are `--url`, `--access-token`/`--token`, `--json`, and `--timeout`.
+flags are `--url`, `--access-token`/`--token`, `--json`, `--timeout`,
+`--task-mode`, and `--task-timeout`.
 The `tools` command always combines the complete paginated catalog and standard
 Go HTTP gzip decoding is automatic.
 
@@ -201,6 +224,7 @@ store location is required.
 | Command family | Typical use |
 |---|---|
 | `version`, `auth`, `health`, `tools`, `smoke` | Version, discovery, connectivity, registry |
+| `task` | Get, wait, cancel, or update one durable task |
 | `search`, `resolve`, `snapshot`, `bars`, `cache` | Instrument and market data |
 | `subscription` | Add, remove, list, and inspect quote subscriptions |
 | `account` | Read-only asset, position, order, trade, status, IPO queries |
@@ -214,6 +238,8 @@ Use `qmtctl <family> --help` for exact arguments. Representative calls:
 
 ```bash
 qmtctl snapshot --cache-only 510300.SH
+qmtctl --task-mode detach --json cache refresh --force
+qmtctl task wait tsk_<id>
 qmtctl subscription add --id strategy1 510300.SH,510500.SH
 qmtctl portfolio risk --account 123456789 --max-single-weight 0.3
 qmtctl option vix-inputs --family 300ETF
@@ -234,6 +260,9 @@ qmtctl smoke --code 510300.SH
 | `not_authorized` on account tools | Flag, account allowlist, or broker permission missing |
 | OAuth discovery works but calls return 401 | Check JWT signature/`kid`, issuer, audience, expiry, client id, and algorithm |
 | OAuth call returns 403 | Token lacks the family or `qmt:manage` scope named by the challenge |
+| Long command prints a task handle | Detach mode is active; run `qmtctl task wait <id>` or use the default wait mode |
+| Explicit task command says unsupported | Server/protocol did not advertise Tasks; use ordinary commands with `--task-mode sync` or upgrade the server |
+| Task ID becomes invalid after OAuth change | Resume with the same principal and original tool scopes; unknown and unauthorized IDs intentionally share `-32602` |
 | Chinese path decoding fails | Image or prefix is missing `zh_CN.GBK` |
 
 ## Security

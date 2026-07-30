@@ -81,6 +81,21 @@ Pagination is applied after startup and OAuth visibility. qmtctl consumes all
 pages automatically. SSE is never compressed; set gzip to `0` when a reverse
 proxy owns compression.
 
+### MCP durable tasks
+
+| Variable | Default | Description |
+|---|---|---|
+| `QMT_MCP_TASKS_ENABLED` | `1` | Enable stable `2026-07-28` Tasks for declaring clients |
+| `QMT_MCP_TASK_STORE` | `/broker/cache/mcp-tasks-v1.sqlite3` | Persistent single-process SQLite store |
+| `QMT_MCP_TASK_TTL_MS` | `86400000` | Task retention TTL; `0` uses no time expiry |
+| `QMT_MCP_TASK_POLL_INTERVAL_MS` | `1000` | Client poll guidance, 100 through 60000 ms |
+| `QMT_MCP_TASK_MAX_RETAINED` | `1000` | Maximum retained terminal tasks |
+| `QMT_MCP_TASK_TOOLS` | six long-running tools | CSV task-capable production tool allowlist |
+
+The store excludes tool arguments, credentials, authorization headers, and raw
+principal identifiers. Supported 2025 clients and modern clients that do not
+declare Tasks continue synchronous calls.
+
 ### Feature gates
 
 | Variable | Default | Description |
@@ -111,6 +126,8 @@ proxy owns compression.
 | `QMT_MCP_ACCESS_TOKEN` | Existing OAuth/gateway token; highest precedence |
 | `QMT_MCP_TOKEN` | Static bearer fallback |
 | `QMTCTL_AUTH_STORE` | Optional OAuth session-store path |
+| `QMTCTL_TASK_MODE` | `wait` (default), `detach`, or `sync` |
+| `QMTCTL_TASK_TIMEOUT` | Overall task wait timeout; default `10m` |
 
 qmtctl credential precedence is explicit flag, access-token env, static-token
 env, then saved per-resource OAuth session. Browser login:
@@ -122,6 +139,19 @@ qmtctl auth login \
 qmtctl auth status
 qmtctl auth logout
 ```
+
+For durable long-running calls:
+
+```bash
+qmtctl cache refresh --force
+qmtctl --task-mode detach --json cache refresh --force
+qmtctl task get tsk_<id>
+qmtctl task wait tsk_<id>
+qmtctl task cancel tsk_<id>
+```
+
+`--timeout` applies to one HTTP exchange. `--task-timeout` applies to the
+complete wait lifecycle.
 
 ## Broker Pack
 

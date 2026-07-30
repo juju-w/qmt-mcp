@@ -10,6 +10,10 @@ complete catalog. It also uses Go's standard transparent gzip negotiation and
 decoding. There is no paging or compression flag, and single-page servers keep
 the same output.
 
+For stable `2026-07-28` servers, qmtctl declares MCP Tasks and waits for
+selected long-running tools by default. Its normal human and JSON output remains
+the final tool result.
+
 Building from source requires Go 1.25 or newer:
 
 ```bash
@@ -93,6 +97,34 @@ qmtctl --url https://qmt.example.com/mcp --access-token "$TOKEN" health
 qmtctl --url http://127.0.0.1:8765/mcp --token "$QMT_MCP_TOKEN" health
 ```
 
+## Long-running Tasks
+
+Execution modes are available as `--task-mode` or `QMTCTL_TASK_MODE`:
+
+| Mode | Behavior |
+|---|---|
+| `wait` | Default. Start a task, poll using server guidance, and print the final tool result. |
+| `detach` | Return the task handle immediately so another process can resume it. |
+| `sync` | Do not declare Tasks; request the server's synchronous compatibility path. |
+
+```bash
+qmtctl cache refresh --force
+qmtctl --task-mode detach --json cache refresh --force
+qmtctl task get tsk_<id>
+qmtctl task wait tsk_<id>
+qmtctl task cancel tsk_<id>
+qmtctl task update tsk_<id> --responses-json '{"approval":"yes"}'
+```
+
+`task update` is present for the stable protocol; structured multi-round input
+is introduced separately and a task not waiting for input rejects the update.
+
+`--timeout` bounds each HTTP exchange. `--task-timeout`, or
+`QMTCTL_TASK_TIMEOUT`, bounds the full wait lifecycle and defaults to 10
+minutes. A detached task remains valid server-side after qmtctl exits. Explicit
+`task` commands require a server advertising Tasks; ordinary commands still
+work synchronously against older or non-Tasks servers.
+
 ## Commands
 
 ```bash
@@ -103,6 +135,9 @@ qmtctl auth status
 qmtctl auth logout
 qmtctl health
 qmtctl tools
+qmtctl task get tsk_<id>
+qmtctl task wait tsk_<id>
+qmtctl task cancel tsk_<id>
 qmtctl search 天岳
 qmtctl resolve 纳指 --rank liquidity --json
 qmtctl snapshot 510300.SH

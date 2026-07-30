@@ -70,6 +70,10 @@ def test_defaults_and_env_file_overlay(monkeypatch, tmp_path):
     assert cfg.enable_xtdata is True
     assert cfg.mcp_list_page_size == 50
     assert cfg.mcp_gzip_minimum_size == 1024
+    assert cfg.tasks_enabled is True
+    assert cfg.task_ttl_ms == 86_400_000
+    assert cfg.task_poll_interval_ms == 1000
+    assert cfg.task_max_retained == 1000
 
 
 def test_process_env_overrides_file(monkeypatch, tmp_path):
@@ -208,6 +212,45 @@ def test_pagination_and_compression_knobs_from_env(monkeypatch, tmp_path):
     ],
 )
 def test_invalid_pagination_or_compression_knobs_fail_closed(monkeypatch, tmp_path, name, value):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv(name, value)
+    with pytest.raises(McpCoreError) as exc:
+        load_config(_empty_env(tmp_path))
+    assert exc.value.error_type == "config"
+
+
+def test_task_knobs_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv("QMT_MCP_TASKS_ENABLED", "0")
+    monkeypatch.setenv("QMT_MCP_TASK_STORE", str(tmp_path / "tasks.sqlite3"))
+    monkeypatch.setenv("QMT_MCP_TASK_TTL_MS", "0")
+    monkeypatch.setenv("QMT_MCP_TASK_POLL_INTERVAL_MS", "250")
+    monkeypatch.setenv("QMT_MCP_TASK_MAX_RETAINED", "17")
+    monkeypatch.setenv("QMT_MCP_TASK_TOOLS", "qmt_one,qmt_two")
+    monkeypatch.setenv("QMT_MCP_TASK_CONFORMANCE_FIXTURES", "1")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.tasks_enabled is False
+    assert cfg.effective_task_store == str(tmp_path / "tasks.sqlite3")
+    assert cfg.task_ttl_ms == 0
+    assert cfg.task_poll_interval_ms == 250
+    assert cfg.task_max_retained == 17
+    assert cfg.task_tools == ("qmt_one", "qmt_two")
+    assert cfg.task_conformance_fixtures is True
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("QMT_MCP_TASK_TTL_MS", "-1"),
+        ("QMT_MCP_TASK_TTL_MS", "31536000001"),
+        ("QMT_MCP_TASK_POLL_INTERVAL_MS", "99"),
+        ("QMT_MCP_TASK_POLL_INTERVAL_MS", "60001"),
+        ("QMT_MCP_TASK_MAX_RETAINED", "0"),
+        ("QMT_MCP_TASK_MAX_RETAINED", "100001"),
+        ("QMT_MCP_TASK_TOOLS", "not-a-qmt-tool"),
+    ],
+)
+def test_invalid_task_knobs_fail_closed(monkeypatch, tmp_path, name, value):
     monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
     monkeypatch.setenv(name, value)
     with pytest.raises(McpCoreError) as exc:

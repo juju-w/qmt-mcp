@@ -85,12 +85,19 @@ def mock_mcp(*, xtdata: str, tool_count: int):
         thread.join()
 
 
-def run_verifier(base_url: str, *, token: str | None = "test-token") -> subprocess.CompletedProcess[str]:
+def run_verifier(
+    base_url: str,
+    *,
+    token: str | None = "test-token",
+    access_token: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
-    if token is None:
-        env.pop("QMT_MCP_TOKEN", None)
-    else:
+    env.pop("QMT_MCP_TOKEN", None)
+    env.pop("QMT_MCP_ACCESS_TOKEN", None)
+    if token is not None:
         env["QMT_MCP_TOKEN"] = token
+    if access_token is not None:
+        env["QMT_MCP_ACCESS_TOKEN"] = access_token
     return subprocess.run(
         ["bash", str(SCRIPT), base_url],
         check=False,
@@ -130,7 +137,15 @@ def test_requires_token_when_not_interactive():
     result = run_verifier("http://127.0.0.1:38765", token=None)
 
     assert result.returncode == 2
-    assert "set QMT_MCP_TOKEN" in result.stderr
+    assert "set QMT_MCP_ACCESS_TOKEN or QMT_MCP_TOKEN" in result.stderr
+
+
+def test_access_token_takes_precedence_over_static_token():
+    with mock_mcp(xtdata="ready", tool_count=37) as base_url:
+        result = run_verifier(base_url, token="wrong-static-token", access_token="test-token")
+
+    assert result.returncode == 0
+    assert "verify-mcp: PASSED." in result.stdout
 
 
 def test_rejects_plain_http_for_remote_hosts():

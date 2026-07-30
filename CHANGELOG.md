@@ -14,6 +14,10 @@ project constitution's quality gates.
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+## [0.3.0] - 2026-07-30
+
 ### Changed
 - CI now enforces Conventional Commit subjects and PR titles without duplicate
   branch/PR runs. A successful `main` CI run automatically updates `VERSION` and
@@ -84,5 +88,6 @@ project constitution's quality gates.
 - In-image pip deps are declared in `appliance/mcp/requirements.in`; the locked
   `requirements.txt` must be generated from an amd64 Wine build (constitution III).
 
-[Unreleased]: https://github.com/juju-w/qmt-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/juju-w/qmt-mcp/compare/v0.3.0...HEAD
 [0.2.0]: https://github.com/juju-w/qmt-mcp/compare/v0.1.0...v0.2.0
+[0.3.0]: https://github.com/juju-w/qmt-mcp/compare/v0.2.0...v0.3.0

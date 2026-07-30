@@ -42,7 +42,17 @@ Runner: `@modelcontextprotocol/conformance@0.2.0-alpha.10`.
 | qmtctl client | 2026-07-28 | `tools_call` | 1/1 passed |
 | qmtctl client | 2025-11-25 | `tools_call` | 1/1 passed |
 
-## Pending delivery evidence
+## Pull request gates
 
-- Native GitHub `linux/amd64` appliance image gate.
-- Remaining PR checks, merge, main CI, and automated release.
+PR [#12](https://github.com/juju-w/qmt-mcp/pull/12), CI run
+`30567008132`:
+
+- Conventional commit policy: passed.
+- Python lint and unit tests: passed.
+- Go test and build: passed.
+- gitleaks secret scan: passed.
+- Full selected modern/legacy conformance job: passed.
+- Native `linux/amd64` appliance build and smoke: passed in 2m09s.
+  Stable system, Wine, Windows Python, and locked runtime layers were restored
+  from the shared `appliance-ci` / registry caches; only the changed source
+  layer and cache export were rebuilt.

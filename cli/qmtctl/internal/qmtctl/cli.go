@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -795,6 +796,7 @@ func extractCodes(value any) []string {
 		}
 	}
 	walk(value)
+	sort.Strings(out)
 	return out
 }
 

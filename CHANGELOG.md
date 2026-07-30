@@ -33,6 +33,8 @@ project constitution's quality gates.
 ### Fixed
 - GitHub Release creation now requests job-level write permission and passes the
   release token explicitly instead of relying on an action default.
+- qmtctl strategy JSON imports sort deduplicated instrument codes, removing
+  platform-dependent output caused by Go map iteration.
 
 ## [0.3.1] - 2026-07-30
 

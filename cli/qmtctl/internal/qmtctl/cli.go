@@ -3,14 +3,19 @@ package qmtctl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
+	"golang.org/x/oauth2"
 )
 
 const defaultURL = "http://127.0.0.1:8765/mcp"
@@ -18,11 +23,12 @@ const defaultURL = "http://127.0.0.1:8765/mcp"
 var Version = "dev"
 
 type globalOptions struct {
-	url     string
-	token   string
-	jsonOut bool
-	timeout time.Duration
-	verbose bool
+	url       string
+	token     string
+	authStore string
+	jsonOut   bool
+	timeout   time.Duration
+	verbose   bool
 }
 
 func Run(args []string, stdout, stderr io.Writer) int {
@@ -31,9 +37,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	opts := globalOptions{
-		url:     getenvDefault("QMT_MCP_URL", defaultURL),
-		token:   firstNonEmpty(os.Getenv("QMT_MCP_ACCESS_TOKEN"), os.Getenv("QMT_MCP_TOKEN")),
-		timeout: 10 * time.Second,
+		url:       getenvDefault("QMT_MCP_URL", defaultURL),
+		token:     firstNonEmpty(os.Getenv("QMT_MCP_ACCESS_TOKEN"), os.Getenv("QMT_MCP_TOKEN")),
+		authStore: os.Getenv("QMTCTL_AUTH_STORE"),
+		timeout:   10 * time.Second,
 	}
 	cmdArgs, err := parseGlobals(args, &opts)
 	if err != nil {
@@ -44,23 +51,55 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		usage(stderr)
 		return 2
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
+	store, err := newOAuthSessionStore(opts.authStore)
+	if err != nil {
+		printError(stderr, err, opts.jsonOut)
+		return 1
+	}
+	var restoredHandler mcpauth.OAuthHandler
+	var restoredCloser io.Closer
+	if opts.token == "" && shouldRestoreOAuth(cmdArgs) {
+		handler, closer, _, restoreErr := newRestoredOAuthHandler(opts.url, store, false, stderr)
+		if restoreErr == nil {
+			restoredHandler = handler
+			restoredCloser = closer
+		} else if !errors.Is(restoreErr, ErrOAuthSessionNotFound) {
+			printError(stderr, restoreErr, opts.jsonOut)
+			return 1
+		}
+	}
+	contextTimeout := opts.timeout
+	if restoredHandler != nil {
+		contextTimeout = 5 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 	defer cancel()
 	client := NewClient(opts.url, opts.token, opts.timeout, opts.verbose)
 	defer client.Close()
-	if err := dispatch(ctx, client, opts, cmdArgs, stdout); err != nil {
+	if restoredHandler != nil {
+		client.SetOAuthHandler(restoredHandler, restoredCloser)
+	}
+	if err := dispatch(ctx, client, store, opts, cmdArgs, stdout, stderr); err != nil {
 		printError(stderr, err, opts.jsonOut)
 		return 1
 	}
 	return 0
 }
 
-func dispatch(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+func dispatch(
+	ctx context.Context,
+	client *Client,
+	store *oauthSessionStore,
+	opts globalOptions,
+	args []string,
+	stdout io.Writer,
+	stderr io.Writer,
+) error {
 	switch args[0] {
 	case "version":
 		return runVersion(opts, stdout)
 	case "auth":
-		return runAuth(ctx, client, opts, args[1:], stdout)
+		return runAuth(ctx, client, store, opts, args[1:], stdout, stderr)
 	case "health":
 		return runHealth(ctx, client, opts, stdout)
 	case "tools":
@@ -107,7 +146,15 @@ func runVersion(opts globalOptions, stdout io.Writer) error {
 	return err
 }
 
-func runAuth(ctx context.Context, client *Client, opts globalOptions, args []string, stdout io.Writer) error {
+func runAuth(
+	ctx context.Context,
+	client *Client,
+	store *oauthSessionStore,
+	opts globalOptions,
+	args []string,
+	stdout io.Writer,
+	stderr io.Writer,
+) error {
 	if len(args) == 0 || args[0] == "discover" || args[0] == "metadata" {
 		doc, err := client.OAuthMetadata(ctx)
 		if err != nil {
@@ -119,7 +166,141 @@ func runAuth(ctx context.Context, client *Client, opts globalOptions, args []str
 		printMapSummary(stdout, doc)
 		return nil
 	}
+	switch args[0] {
+	case "status":
+		_, token, session, err := store.Load(opts.url)
+		if errors.Is(err, ErrOAuthSessionNotFound) {
+			return writeAuthStatus(stdout, opts, nil, nil)
+		}
+		if err != nil {
+			return err
+		}
+		return writeAuthStatus(stdout, opts, &session, token)
+	case "logout":
+		deleted, err := store.Delete(opts.url)
+		if err != nil {
+			return err
+		}
+		if opts.jsonOut {
+			return writeJSON(stdout, map[string]any{"ok": true, "logged_out": deleted})
+		}
+		if deleted {
+			_, err = fmt.Fprintln(stdout, "OAuth session removed.")
+		} else {
+			_, err = fmt.Fprintln(stdout, "No OAuth session was saved.")
+		}
+		return err
+	case "login":
+		return runAuthLogin(ctx, client, store, opts, args[1:], stdout, stderr)
+	}
 	return fmt.Errorf("unknown auth subcommand %q", args[0])
+}
+
+func runAuthLogin(
+	_ context.Context,
+	client *Client,
+	store *oauthSessionStore,
+	opts globalOptions,
+	args []string,
+	stdout io.Writer,
+	stderr io.Writer,
+) error {
+	fs := newFlagSet("auth login", &opts)
+	metadataURL := fs.String("client-id-metadata-url", "", "Client ID Metadata Document URL")
+	clientID := fs.String("client-id", "", "preregistered public client ID")
+	dynamic := fs.Bool("dynamic-registration", false, "use deprecated dynamic client registration")
+	scope := fs.String("scope", "qmt:read", "space-separated OAuth scopes")
+	noBrowser := fs.Bool("no-browser", false, "print authorization URL without opening a browser")
+	loginTimeout := fs.Duration("login-timeout", 5*time.Minute, "browser authorization timeout")
+	if err := parseFlagSet(fs, args); err != nil {
+		return err
+	}
+	selected := 0
+	for _, configured := range []bool{*metadataURL != "", *clientID != "", *dynamic} {
+		if configured {
+			selected++
+		}
+	}
+	if selected != 1 {
+		return errors.New("choose exactly one of --client-id-metadata-url, --client-id, or --dynamic-registration")
+	}
+	requestedScopes := strings.Fields(*scope)
+	if !slices.Contains(requestedScopes, "qmt:read") {
+		requestedScopes = append([]string{"qmt:read"}, requestedScopes...)
+	}
+	registration := oauthRegistration{
+		clientID:            *clientID,
+		clientIDMetadataURL: *metadataURL,
+		dynamic:             *dynamic,
+	}
+	switch {
+	case registration.clientIDMetadataURL != "":
+		registration.mode = "client_id_metadata"
+	case registration.clientID != "":
+		registration.mode = "preregistered"
+	default:
+		registration.mode = "dynamic"
+	}
+	handler, closer, err := newOAuthLoginHandler(opts.url, store, oauthLoginOptions{
+		registration: registration,
+		scopes:       requestedScopes,
+		noBrowser:    *noBrowser,
+		out:          stderr,
+	})
+	if err != nil {
+		return err
+	}
+	// auth login must validate the token it just obtained. An ambient static or
+	// access-token environment variable still wins for ordinary commands, but
+	// must not mask a broken OAuth exchange here.
+	client.token = ""
+	client.SetOAuthHandler(handler, closer)
+	loginContext, cancel := context.WithTimeout(context.Background(), *loginTimeout)
+	defer cancel()
+	if err := authorizeOAuthScopes(loginContext, handler, opts.url, requestedScopes); err != nil {
+		return err
+	}
+	if _, err := client.ListTools(loginContext); err != nil {
+		return err
+	}
+	if opts.jsonOut {
+		return writeJSON(stdout, map[string]any{"ok": true, "resource": opts.url, "scopes": requestedScopes})
+	}
+	_, err = fmt.Fprintln(stdout, "OAuth login saved.")
+	return err
+}
+
+func writeAuthStatus(
+	stdout io.Writer,
+	opts globalOptions,
+	session *storedOAuthSession,
+	token *oauth2.Token,
+) error {
+	status := map[string]any{"logged_in": session != nil, "resource": opts.url}
+	if session != nil && token != nil {
+		status["client_id"] = session.ClientID
+		status["registration"] = session.Registration
+		status["scopes"] = session.Scopes
+		status["expires_at"] = token.Expiry
+		status["expired"] = !token.Expiry.IsZero() && token.Expiry.Before(time.Now())
+	}
+	if opts.jsonOut {
+		return writeJSON(stdout, status)
+	}
+	printMapSummary(stdout, status)
+	return nil
+}
+
+func shouldRestoreOAuth(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "auth", "version", "help", "-h", "--help":
+		return false
+	default:
+		return true
+	}
 }
 
 func runHealth(ctx context.Context, client *Client, opts globalOptions, stdout io.Writer) error {
@@ -959,7 +1140,7 @@ func parseGlobals(args []string, opts *globalOptions) ([]string, error) {
 			opts.jsonOut = true
 		case arg == "--verbose":
 			opts.verbose = true
-		case arg == "--url" || arg == "--token" || arg == "--access-token" || arg == "--timeout":
+		case arg == "--url" || arg == "--token" || arg == "--access-token" || arg == "--auth-store" || arg == "--timeout":
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("%s requires a value", arg)
 			}
@@ -970,6 +1151,7 @@ func parseGlobals(args []string, opts *globalOptions) ([]string, error) {
 		case strings.HasPrefix(arg, "--url=") ||
 			strings.HasPrefix(arg, "--token=") ||
 			strings.HasPrefix(arg, "--access-token=") ||
+			strings.HasPrefix(arg, "--auth-store=") ||
 			strings.HasPrefix(arg, "--timeout="):
 			parts := strings.SplitN(arg, "=", 2)
 			if err := setGlobalValue(opts, parts[0], parts[1]); err != nil {
@@ -988,6 +1170,8 @@ func setGlobalValue(opts *globalOptions, name, value string) error {
 		opts.url = value
 	case "--token", "--access-token":
 		opts.token = value
+	case "--auth-store":
+		opts.authStore = value
 	case "--timeout":
 		d, err := parseDuration(value)
 		if err != nil {
@@ -1005,6 +1189,7 @@ func newFlagSet(name string, opts *globalOptions) *flag.FlagSet {
 	fs.StringVar(&opts.url, "url", opts.url, "MCP URL")
 	fs.StringVar(&opts.token, "token", opts.token, "MCP token")
 	fs.StringVar(&opts.token, "access-token", opts.token, "OAuth access token")
+	fs.StringVar(&opts.authStore, "auth-store", opts.authStore, "OAuth session store path")
 	fs.DurationVar(&opts.timeout, "timeout", opts.timeout, "timeout")
 	fs.BoolVar(&opts.verbose, "verbose", opts.verbose, "verbose output")
 	return fs
@@ -1016,15 +1201,17 @@ func parseFlagSet(fs *flag.FlagSet, args []string) error {
 
 func interspersedFlags(args []string) []string {
 	boolFlags := map[string]bool{
-		"--json":             true,
-		"--verbose":          true,
-		"--force":            true,
-		"--refresh-metrics":  true,
-		"--cancelable-only":  true,
-		"--live":             true,
-		"--cache-only":       true,
-		"--fallback-polling": true,
-		"--confirm":          true,
+		"--json":                 true,
+		"--verbose":              true,
+		"--force":                true,
+		"--refresh-metrics":      true,
+		"--cancelable-only":      true,
+		"--live":                 true,
+		"--cache-only":           true,
+		"--fallback-polling":     true,
+		"--confirm":              true,
+		"--dynamic-registration": true,
+		"--no-browser":           true,
 	}
 	var flags []string
 	var positionals []string
@@ -1123,7 +1310,7 @@ func printError(stderr io.Writer, err error, asJSON bool) {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN|--access-token TOKEN] [--json] [--timeout 10s] <command>")
+	fmt.Fprintln(w, "usage: qmtctl [--url URL] [--token TOKEN|--access-token TOKEN] [--auth-store PATH] [--json] [--timeout 10s] <command>")
 	fmt.Fprintln(w, "commands: version, auth, health, tools, search, resolve, snapshot, bars, cache, subscription, account, portfolio, option, ref, sector, formula, smoke")
 }
 

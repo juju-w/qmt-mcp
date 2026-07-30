@@ -51,6 +51,7 @@ never needs to know the raw QMT code:
 | `qmtctl` CLI | ✅ ready | compiled Go CLI client for health/search/quotes/account queries |
 | MCP protocol | ✅ dual-era | prefers stable `2026-07-28`; the same `/mcp` endpoint accepts 2025 clients |
 | MCP contracts / profiles | ✅ ready | structured results and behavior hints; full/readonly/market/account/core/custom surfaces |
+| OAuth 2.1 authorization | ✅ ready | static/oauth/hybrid, JWT/JWKS validation, scoped tools, qmtctl PKCE login and refresh |
 
 > **Trading/account permission**: connecting `xtquant` to the trading interface
 > (orders **and** account queries) requires the broker to enable "programmatic
@@ -99,8 +100,10 @@ front; it searches by Chinese name / pinyin initials / alias / sector / theme
 | `qmt_xttrade_new_purchase_limit` | new-share (IPO) purchase limits |
 | `qmt_xttrade_ipo_data` | today's IPO/new-issue data (not account-scoped) |
 
-All tools are **read-only**, authenticated, audited, and return structured JSON
-(no write/order/cancel/transfer tools).
+All trading and account tools are **read-only**, authenticated, audited, and
+return structured JSON (no order/cancel/transfer tools). Managed sectors and
+formula output are non-trading mutations that are off by default and require
+explicit feature gates, a namespace/sandbox, and OAuth `qmt:manage`.
 
 > **Account queries (feature 04)** are off by default; enable with
 > `QMT_ENABLE_XTTRADE_QUERY=1` **and** an account allowlist `QMT_TRADE_ACCOUNTS`,
@@ -126,8 +129,9 @@ QMT_MCP_TOOL_DENYLIST=qmt_xtdata_download_*
 
 Profiles are `full`, `readonly`, `market`, `account`, `core`, and `custom`;
 `custom` requires an allowlist. The profile and shell globs are fixed at process
-startup, so restart the container after changing them. `qmt_health` and
-`qmt_capabilities` always remain visible.
+startup, so restart the container after changing them. In OAuth mode this
+surface is intersected with token scopes; even `qmt:admin` cannot bypass a
+startup profile or feature gate.
 
 ## Quick start
 
@@ -136,7 +140,7 @@ startup, so restart the container after changing them. `qmt_health` and
 
 ```bash
 cd appliance
-cp .env.example .env                       # fill in QMT_MCP_TOKEN / BROKER_PACK / ...
+cp .env.example .env                       # fill in authentication / BROKER_PACK / ...
 docker compose build                       # build the broker-neutral base image
 scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
 docker compose up -d
@@ -149,6 +153,12 @@ Connect (after RDP login, log into your account in QMT; trading needs the
 RDP:  <host>:13389   wineuser / password in .env  (use a real RDP client, not VNC)
 MCP:  http://<host>:18765/mcp   with Authorization: Bearer <QMT_MCP_TOKEN>
 ```
+
+The default `static` mode is upgrade-compatible. Public or multi-user
+deployments can use an external authorization server with `oauth` or `hybrid`;
+QMT-MCP remains the resource server and never stores user passwords or issues
+tokens. See [client setup](docs/MCP-CLIENTS.md) and
+[deployment hardening](appliance/docs/DEPLOY.md).
 
 You can also use the **qmtctl** CLI from the command line (see [`cli/qmtctl/README.md`](cli/qmtctl/README.md)):
 
@@ -164,6 +174,16 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 ./qmtctl option chain --family 300ETF                  # option chain
 ./qmtctl ref financial 600000.SH --tables Income       # reference data
 ./qmtctl account asset --account <id> # account asset (requires xttrade enabled)
+```
+
+In OAuth mode qmtctl can run browser-based PKCE login and securely reuse and
+refresh the session:
+
+```bash
+./qmtctl --url https://qmt.example.com/mcp auth login \
+  --client-id-metadata-url https://client.example.com/qmtctl.json \
+  --scope 'qmt:read qmt:market'
+./qmtctl --url https://qmt.example.com/mcp auth status
 ```
 
 More: [broker pack guide](appliance/docs/BROKER-PACK.md) ·

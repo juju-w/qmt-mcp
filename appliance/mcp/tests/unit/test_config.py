@@ -37,6 +37,15 @@ def test_token_present_enables_auth(monkeypatch, tmp_path):
     assert cfg.token == "s3cret"
 
 
+def test_static_auth_mode_is_backward_compatible_default(monkeypatch, tmp_path):
+    monkeypatch.setenv("MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.auth_mode == "static"
+    assert cfg.auth_required is True
+    assert cfg.sdk_oauth_enabled is False
+
+
 def test_invalid_transport_rejected(monkeypatch, tmp_path):
     monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
     monkeypatch.setenv("QMT_MCP_TRANSPORT", "carrier-pigeon")
@@ -99,6 +108,72 @@ def test_oauth_discovery_knobs_from_env(monkeypatch, tmp_path):
     assert cfg.oauth_authorization_servers == ("https://auth1.example.com", "https://auth2.example.com")
     assert cfg.oauth_scopes_supported == ("qmt:read", "qmt:account")
     assert cfg.oauth_resource == "https://qmt.example.com/mcp"
+
+
+def test_oauth_mode_loads_complete_resource_server_config(monkeypatch, tmp_path):
+    monkeypatch.setenv("MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("QMT_MCP_AUTH_MODE", "oauth")
+    monkeypatch.setenv("QMT_MCP_PUBLIC_BASE_URL", "https://qmt.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_ISSUER", "https://auth.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_AUTHORIZATION_SERVERS", "https://auth.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_JWKS_URL", "https://auth.example.com/jwks.json")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.auth_required is True
+    assert cfg.sdk_oauth_enabled is True
+    assert cfg.oauth_resource_url == "https://qmt.example.com/mcp"
+    assert cfg.oauth_issuer_url == "https://auth.example.com"
+    assert cfg.oauth_scopes_supported == (
+        "qmt:read",
+        "qmt:market",
+        "qmt:account",
+        "qmt:manage",
+        "qmt:admin",
+    )
+
+
+def test_oauth_issuer_preserves_provider_trailing_slash(monkeypatch, tmp_path):
+    monkeypatch.setenv("MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("QMT_MCP_AUTH_MODE", "oauth")
+    monkeypatch.setenv("QMT_MCP_PUBLIC_BASE_URL", "https://qmt.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_ISSUER", "https://auth.example.com/")
+    monkeypatch.setenv("QMT_MCP_OAUTH_JWKS_URL", "https://auth.example.com/jwks.json")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.oauth_issuer_url == "https://auth.example.com/"
+    assert cfg.authorization_servers == ("https://auth.example.com/",)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("QMT_MCP_OAUTH_JWKS_URL", ""),
+        ("QMT_MCP_OAUTH_JWKS_URL", "http://auth.example.com/jwks.json"),
+        ("QMT_MCP_OAUTH_ALGORITHMS", "HS256"),
+        ("QMT_MCP_OAUTH_RESOURCE", "https://qmt.example.com/mcp?tenant=unsafe"),
+    ],
+)
+def test_oauth_mode_rejects_incomplete_or_unsafe_config(monkeypatch, tmp_path, name, value):
+    monkeypatch.setenv("MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("QMT_MCP_AUTH_MODE", "oauth")
+    monkeypatch.setenv("QMT_MCP_PUBLIC_BASE_URL", "https://qmt.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_ISSUER", "https://auth.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_AUTHORIZATION_SERVERS", "https://auth.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_JWKS_URL", "https://auth.example.com/jwks.json")
+    monkeypatch.setenv(name, value)
+    with pytest.raises(McpCoreError) as exc:
+        load_config(_empty_env(tmp_path))
+    assert exc.value.error_type == "auth"
+
+
+def test_hybrid_mode_requires_static_token(monkeypatch, tmp_path):
+    monkeypatch.setenv("MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("QMT_MCP_AUTH_MODE", "hybrid")
+    monkeypatch.setenv("QMT_MCP_PUBLIC_BASE_URL", "https://qmt.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_ISSUER", "https://auth.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_AUTHORIZATION_SERVERS", "https://auth.example.com")
+    monkeypatch.setenv("QMT_MCP_OAUTH_JWKS_URL", "https://auth.example.com/jwks.json")
+    with pytest.raises(McpCoreError) as exc:
+        load_config(_empty_env(tmp_path))
+    assert "hybrid" in exc.value.message
 
 
 def test_tool_profile_knobs_from_env(monkeypatch, tmp_path):

@@ -1,6 +1,6 @@
 ---
 name: deploying-qmt-mcp-appliance
-description: Build, deploy, and verify the QMT-MCP appliance locally or on remote Linux, including static-token and OAuth access-token endpoints. Use for first deployment, release artifacts, broker-pack or xtquant failures, exit codes 10-14, CRLF-broken images, silent `/livez`, and post-deploy validation.
+description: Build, deploy, and verify the QMT-MCP appliance locally or on remote Linux, including static, OAuth JWT/JWKS, and hybrid endpoints. Use for first deployment, release artifacts, broker-pack or xtquant failures, exit codes 10-14, CRLF-broken images, silent `/livez`, and post-deploy validation.
 ---
 
 # Deploying the QMT-MCP Appliance
@@ -140,7 +140,7 @@ count in one shot:
 read -r -s -p "QMT MCP token: " QMT_MCP_TOKEN; printf '\n'; export QMT_MCP_TOKEN
 ./verify-mcp.sh https://qmt.example.com
 
-# OAuth/gateway-issued bearer (takes precedence over QMT_MCP_TOKEN)
+# Existing OAuth bearer (takes precedence over QMT_MCP_TOKEN)
 read -r -s -p "QMT access token: " QMT_MCP_ACCESS_TOKEN; printf '\n'
 export QMT_MCP_ACCESS_TOKEN
 ./verify-mcp.sh https://qmt.example.com
@@ -165,19 +165,24 @@ Use qmtctl for client-level discovery and smoke checks:
 ```bash
 qmtctl version
 qmtctl auth discover --json
+qmtctl auth login \
+  --client-id-metadata-url https://client.example.com/qmtctl.json \
+  --scope 'qmt:read qmt:market'
+qmtctl auth status
 qmtctl health
 qmtctl smoke --code 510300.SH
 ```
 
-`qmtctl auth discover` needs no token. The other MCP commands use
-`QMT_MCP_ACCESS_TOKEN` first and fall back to `QMT_MCP_TOKEN`.
+`qmtctl auth discover` needs no token. Login uses Authorization Code + PKCE and
+persists refresh rotation. MCP commands use an explicit access token first,
+then a static token, then the saved per-resource OAuth session.
 
 Manual probes worth knowing:
 
 | Check | Expected |
 |---|---|
 | `curl -s <base>/livez` | `{"ok": true, "server": "live"}` |
-| `curl -o /dev/null -w '%{http_code}' -X POST <base>/mcp -d '{}'` | `401` |
+| `curl -o /dev/null -w '%{http_code}' -X POST <base>/mcp -d '{}'` | `401` in every protected auth mode |
 | `docker inspect <c> --format '{{.State.Health.Status}}'` | `healthy` |
 | audit log `<pack>/logs/mcp-audit.jsonl` | one JSONL line per tool call |
 

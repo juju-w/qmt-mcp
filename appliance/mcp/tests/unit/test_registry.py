@@ -12,6 +12,7 @@ from qmt_mcp_core.config import CoreConfig
 from qmt_mcp_core.errors import McpCoreError
 from qmt_mcp_core.health import HealthState
 from qmt_mcp_core.registry import ToolRegistry
+from qmt_mcp_core.tool_contracts import ToolVisibilityPolicy
 from qmt_mcp_core.workers import WorkerPool
 
 
@@ -136,3 +137,57 @@ def test_mutation_like_tool_cannot_be_mislabeled_read_only(tmp_audit_path):
             return {"ok": True}
 
     assert exc.value.details["tool"] == "qmt_xtdata_download_history"
+
+
+def test_registry_intersects_startup_visibility_and_oauth_scopes(tmp_audit_path):
+    reg, mcp, _ = _make_registry(tmp_audit_path)
+
+    @reg.register(mcp, name="qmt_health", family="core", description="health")
+    def qmt_health():
+        return {"ok": True}
+
+    @reg.register(mcp, name="qmt_snapshot", family="xtdata", description="snapshot")
+    def qmt_snapshot():
+        return {"ok": True}
+
+    @reg.register(
+        mcp,
+        name="qmt_xtdata_download_history",
+        family="xtdata",
+        description="download",
+        read_only=False,
+    )
+    def qmt_xtdata_download_history():
+        return {"ok": True}
+
+    assert reg.oauth_tool_names({"qmt:read"}) == ["qmt_health"]
+    assert reg.oauth_tool_names({"qmt:read", "qmt:market"}) == ["qmt_health", "qmt_snapshot"]
+    assert reg.oauth_tool_names({"qmt:read", "qmt:market", "qmt:manage"}) == [
+        "qmt_health",
+        "qmt_snapshot",
+        "qmt_xtdata_download_history",
+    ]
+    assert reg.oauth_tool_names({"qmt:read", "qmt:admin"}) == [
+        "qmt_health",
+        "qmt_snapshot",
+        "qmt_xtdata_download_history",
+    ]
+
+
+def test_oauth_admin_cannot_bypass_startup_profile(tmp_audit_path):
+    health = HealthState(_config())
+    audit = JsonlAuditSink(tmp_audit_path, "acme")
+    audit.initialize()
+    reg = ToolRegistry(health, audit, WorkerPool(2), ToolVisibilityPolicy("core"))
+    mcp = FakeMCP()
+
+    @reg.register(mcp, name="qmt_health", family="core", description="health")
+    def qmt_health():
+        return {"ok": True}
+
+    @reg.register(mcp, name="qmt_snapshot", family="xtdata", description="snapshot")
+    def qmt_snapshot():
+        return {"ok": True}
+
+    assert reg.tool_names() == ["qmt_health"]
+    assert reg.oauth_tool_names({"qmt:read", "qmt:admin"}) == ["qmt_health"]

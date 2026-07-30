@@ -11,6 +11,11 @@ from dataclasses import dataclass
 from typing import Any
 
 VALID_TOOL_PROFILES = frozenset({"full", "readonly", "market", "account", "core", "custom"})
+OAUTH_BASE_SCOPE = "qmt:read"
+OAUTH_MARKET_SCOPE = "qmt:market"
+OAUTH_ACCOUNT_SCOPE = "qmt:account"
+OAUTH_MANAGE_SCOPE = "qmt:manage"
+OAUTH_ADMIN_SCOPE = "qmt:admin"
 
 MUTATION_TOOL_PATTERNS = (
     "qmt_xtdata_quote_subscribe",
@@ -73,6 +78,23 @@ class ToolVisibilityPolicy:
     @staticmethod
     def _matches(name: str, patterns: tuple[str, ...]) -> bool:
         return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
+
+
+def required_oauth_scopes(*, family: str, read_only: bool) -> tuple[str, ...]:
+    scopes = [OAUTH_BASE_SCOPE]
+    if family == "xtdata":
+        scopes.append(OAUTH_MARKET_SCOPE)
+    elif family in {"xttrade_query", "portfolio"}:
+        scopes.append(OAUTH_ACCOUNT_SCOPE)
+    if not read_only:
+        scopes.append(OAUTH_MANAGE_SCOPE)
+    return tuple(scopes)
+
+
+def oauth_scopes_allow(required: tuple[str, ...], granted: set[str] | frozenset[str]) -> bool:
+    if OAUTH_BASE_SCOPE not in granted:
+        return False
+    return OAUTH_ADMIN_SCOPE in granted or set(required) <= granted
 
 
 def default_tool_title(name: str) -> str:

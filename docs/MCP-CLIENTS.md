@@ -1,145 +1,210 @@
 # MCP 客户端接入
 
-QMT-MCP 暴露的是 streamable HTTP MCP endpoint：
+QMT-MCP 暴露一个 streamable HTTP endpoint：
 
 ```text
-http://<host>:18765/mcp
-Authorization: Bearer <QMT_MCP_TOKEN>
+https://qmt.example.com/mcp
+Authorization: Bearer <credential>
 ```
 
-服务端主推最新稳定协议 `2026-07-28`：新客户端走
-`server/discover` 和无会话请求；尚未升级的客户端仍可在同一个 `/mcp`
-地址使用 `2025-11-25`、`2025-06-18` 或 `2025-03-26`
-initialize/session 流程，不需要改连接 URL。`qmtctl` 也会先尝试新版并自动回退。
+服务端主推最新稳定协议 `2026-07-28`。同一个 `/mcp` 自动兼容
+`2025-11-25`、`2025-06-18` 和 `2025-03-26` 客户端，不需要维护两套 URL
+或手动选择协议。
 
-先确认服务已经起来：
+最小连通性检查：
 
 ```bash
-curl -fsS http://<host>:18765/livez
+curl -fsS https://qmt.example.com/livez
 ```
 
-容器重建后需要先 RDP 登录一次 QMT 桌面，MCP 会随桌面会话 autostart。
+容器创建或重启后，需要先 RDP 登录一次桌面，MCP 才会随会话 autostart。
 
 ## 认证模式
 
-默认模式仍然是静态 bearer token，适合个人 NAS、内网和受控客户端：
+| 模式 | 适用场景 | 服务端接受的凭证 |
+|---|---|---|
+| `static` | 个人 NAS、受控内网；默认且向后兼容 | `QMT_MCP_TOKEN` |
+| `oauth` | 公网、多用户、需要最小权限 | 外部 AS 签发并由本服务用 JWKS 校验的 JWT |
+| `hybrid` | 从静态 token 迁移到 OAuth | 上述两者之一 |
 
-```text
-Authorization: Bearer <QMT_MCP_TOKEN>
-```
+QMT-MCP 是 OAuth protected resource，不是 authorization server。登录页、
+用户认证、同意、authorization code 和 token 签发都属于外部 AS；QMT-MCP
+负责发布 RFC 9728 metadata、校验 JWT，并按 scope 裁剪工具。它不接收或转发
+上游第三方服务 token。
 
-为了兼容支持 OAuth 发现流程的新 MCP 客户端，QMT-MCP 也可以作为 OAuth 2.1 protected resource server 暴露资源元数据。它不负责登录页、授权码、刷新 token 或动态注册；这些仍由外部 authorization server 提供。
-
-启用 discovery metadata：
+### 静态模式
 
 ```env
-QMT_MCP_PUBLIC_BASE_URL=https://qmt.example.com
-QMT_MCP_OAUTH_AUTHORIZATION_SERVERS=https://auth.example.com
-QMT_MCP_OAUTH_SCOPES=qmt:read
-QMT_MCP_OAUTH_RESOURCE=https://qmt.example.com/mcp
-QMT_MCP_OAUTH_RESOURCE_NAME=QMT MCP
+QMT_MCP_AUTH_MODE=static
+QMT_MCP_TOKEN=<openssl-rand-hex-32>
 ```
 
-启用后，客户端可以访问：
+未设置 `QMT_MCP_AUTH_MODE` 时仍按 `static` 处理。
+
+### OAuth / hybrid 模式
+
+```env
+QMT_MCP_AUTH_MODE=oauth
+QMT_MCP_PUBLIC_BASE_URL=https://qmt.example.com
+QMT_MCP_OAUTH_ISSUER=https://auth.example.com
+QMT_MCP_OAUTH_AUTHORIZATION_SERVERS=https://auth.example.com
+QMT_MCP_OAUTH_JWKS_URL=https://auth.example.com/.well-known/jwks.json
+QMT_MCP_OAUTH_RESOURCE=https://qmt.example.com/mcp
+QMT_MCP_OAUTH_RESOURCE_NAME=QMT MCP
+QMT_MCP_OAUTH_SCOPES=qmt:read qmt:market qmt:account qmt:manage qmt:admin
+QMT_MCP_OAUTH_ALGORITHMS=RS256 ES256
+```
+
+`hybrid` 使用同样的 OAuth 配置，并额外要求强 `QMT_MCP_TOKEN`。生产 URL
+必须是 HTTPS；仅 loopback 开发允许 HTTP。
+
+外部 AS 签发的 access token 必须是带 `kid` 的非对称 JWT，并包含：
+
+- 与 `QMT_MCP_OAUTH_ISSUER` 精确相等的 `iss`
+- 包含 `QMT_MCP_OAUTH_RESOURCE` 的 `aud`
+- 有效的 `exp`，以及可选的 `nbf`
+- `client_id` 或 `azp`
+- 字符串 `scope`，或字符串数组 `scp`
+
+服务启动时不会从不可信 token 动态发现 issuer。JWKS URL、算法、超时、响应
+大小和缓存 TTL 都由运维配置钉住；新 `kid` 会触发一次受限刷新。
+
+客户端可发现：
 
 ```text
 https://qmt.example.com/.well-known/oauth-protected-resource
+https://qmt.example.com/.well-known/oauth-protected-resource/mcp
 ```
 
-未授权请求会收到类似下面的 challenge：
+未认证返回 401；已认证但权限不足返回 403 `insufficient_scope`，两者都带
+`WWW-Authenticate` step-up 信息。
+
+## Scope 与工具
+
+| Scope | 可见/可调用能力 |
+|---|---|
+| `qmt:read` | 必选基础 scope；core 健康与能力工具 |
+| `qmt:market` | xtdata 行情、搜索、期权、参考数据的只读工具 |
+| `qmt:account` | xttrade 账户查询与 portfolio 分析 |
+| `qmt:manage` | 在已有 family scope 上增加订阅、缓存、下载、受管板块/公式等非交易 mutation |
+| `qmt:admin` | 当前启动策略允许的完整工具面 |
+
+权限始终是多层交集：
 
 ```text
-WWW-Authenticate: Bearer resource_metadata="https://qmt.example.com/.well-known/oauth-protected-resource", scope="qmt:read"
+feature gate ∩ startup profile/allowlist/denylist ∩ token scope
 ```
 
-这对接的是 MCP 2025 之后的授权发现模型：MCP server 作为 resource server，authorization server 负责发 token，客户端通过 Protected Resource Metadata 找到授权服务器。生产环境应放在 HTTPS 后面，并让授权服务器签发 audience/resource 绑定到该 MCP endpoint 的 token。
+因此 `qmt:admin` 不能打开服务启动时未注册或被 Profile 禁掉的工具，
+`qmt:manage` 也不会独立授予行情、账户或任何交易权限。`tools/list` 会动态过滤，
+`tools/call` 会再次独立校验。
 
-当前边界要特别注意：
+## qmtctl
 
-- 服务端已支持 Protected Resource Metadata 和 `WWW-Authenticate` discovery。
-- `qmtctl` 已支持 `auth discover`，也能发送已有 OAuth access token。
-- QMT-MCP 本身还没有 authorization code、动态客户端注册、token refresh 或
-  JWT/JWKS 验证；正式 OAuth access token 应由前置网关验证并转成当前服务接受的
-  bearer，完整内置 OAuth 仍是后续功能。
+qmtctl 优先使用 `2026-07-28`，对旧服务自动回退到 2025 initialize/session。
 
-## 工具契约与可见性
+静态 token：
 
-`tools/list` 中每个工具都带 `title`、`description`、`inputSchema`、
-`outputSchema` 和四个标准行为注解。调用结果同时包含：
-
-- `structuredContent`：原始业务 JSON，适合新版客户端直接消费。
-- `content[0].text`：与前者等价的 JSON 文本，兼容旧版客户端。
-- `isError`：业务 envelope 的 `ok=false` 时为 `true`。
-
-可以在服务端按 Agent 用途固定工具面：
-
-| Profile | 可见工具 |
-|---|---|
-| `full` | 所有已启用工具（默认） |
-| `readonly` | 所有只读工具 |
-| `market` | core + xtdata |
-| `account` | core + xttrade query + portfolio |
-| `core` | 仅健康和能力 |
-| `custom` | core + allowlist 命中 |
-
-```env
-QMT_MCP_TOOL_PROFILE=custom
-QMT_MCP_TOOL_ALLOWLIST=qmt_xtdata_snapshot,qmt_xtdata_bars,qmt_xtdata_option_*
-QMT_MCP_TOOL_DENYLIST=qmt_xtdata_option_quotes
+```bash
+export QMT_MCP_URL=https://qmt.example.com/mcp
+export QMT_MCP_TOKEN=<token>
+qmtctl health
 ```
 
-allowlist/denylist 是逗号分隔的 shell glob；denylist 对非 core 工具优先。
-配置在 MCP 进程启动时确定，修改后需重启。当前 profile 是实例级能力裁剪，
-不是 OAuth 用户级授权；按 token scope 动态裁剪由后续授权层负责。
+推荐使用 Client ID Metadata Document 启动 OAuth Authorization Code + PKCE：
+
+```bash
+qmtctl --url https://qmt.example.com/mcp auth login \
+  --client-id-metadata-url https://client.example.com/qmtctl.json \
+  --scope 'qmt:read qmt:market'
+```
+
+也可以使用 AS 预注册的 public client：
+
+```bash
+qmtctl --url https://qmt.example.com/mcp auth login \
+  --client-id qmtctl-public \
+  --scope 'qmt:read qmt:market qmt:account'
+```
+
+只有旧 AS 无法使用前两种方式时，才显式启用已弃用的 DCR 兼容路径：
+
+```bash
+qmtctl --url https://qmt.example.com/mcp auth login --dynamic-registration
+```
+
+无桌面环境加 `--no-browser`，qmtctl 会打印 URL 并继续监听 loopback callback。
+会话按 resource 保存到用户配置目录，Unix 目录/文件权限为 0700/0600；refresh
+token 轮换会原子写回。状态不输出 access/refresh token：
+
+```bash
+qmtctl --url https://qmt.example.com/mcp auth status
+qmtctl --url https://qmt.example.com/mcp auth logout
+qmtctl --url https://qmt.example.com/mcp auth discover --json
+```
+
+已有 access token 可通过 `QMT_MCP_ACCESS_TOKEN` 或 `--access-token` 传入。显式
+access/static token 的优先级高于已保存 OAuth 会话。可用
+`QMTCTL_AUTH_STORE` 或 `--auth-store` 修改存储路径。
 
 ## Codex
 
-Codex CLI 和 Codex Desktop 共用 `~/.codex/config.toml` 里的 MCP 配置。推荐不要把 token 明文写进配置，而是让 Codex 从环境变量读取：
+Codex CLI 与 Codex Desktop 共用 `~/.codex/config.toml`。静态 token 是兼容性
+最明确的配置，token 只通过环境变量读取：
 
 ```toml
 [mcp_servers.qmt]
 enabled = true
-url = "http://<host>:18765/mcp"
+url = "https://qmt.example.com/mcp"
 bearer_token_env_var = "QMT_MCP_TOKEN"
 ```
 
-启动 Codex 前设置：
-
 ```bash
 export QMT_MCP_TOKEN=<token>
-codex
-```
-
-检查：
-
-```bash
 codex mcp list
 ```
 
-也可以先用 CLI 添加 URL，再手动补 `bearer_token_env_var`：
+也可以先添加 URL，再补环境变量字段：
 
 ```bash
-codex mcp add qmt --url http://<host>:18765/mcp
+codex mcp add qmt --url https://qmt.example.com/mcp
 ```
+
+Codex 各版本对远程 MCP OAuth 的 UI/注册方式可能不同。启用前应以当前安装版本
+的官方说明为准；无内置 OAuth 时可继续用静态模式，或用 qmtctl 独立完成 OAuth
+连通性和 scope 验证。
 
 ## Claude Code
 
-本机个人配置：
+静态模式：
 
 ```bash
 export QMT_MCP_TOKEN=<token>
-claude mcp add --transport http qmt http://<host>:18765/mcp \
+claude mcp add --transport http qmt https://qmt.example.com/mcp \
   --header "Authorization: Bearer ${QMT_MCP_TOKEN}"
 ```
 
-团队项目配置可以放在仓库根目录 `.mcp.json`。不要提交真实 token，使用环境变量占位：
+支持远程 MCP OAuth 的 Claude Code 版本可以只添加 URL，再在 `/mcp` 中选择
+qmt 并完成浏览器登录：
+
+```bash
+claude mcp add --transport http qmt https://qmt.example.com/mcp
+```
+
+外部 AS 仍需允许该客户端使用的注册方式和 loopback/客户端 redirect URI。
+Claude Code 会安全存储并自动刷新其自己的 token；QMT-MCP 只验证最终 JWT。
+行为与命令以
+[Anthropic 官方 MCP 文档](https://docs.anthropic.com/en/docs/claude-code/mcp)
+为准。
+
+团队 `.mcp.json` 不要提交真实 token：
 
 ```json
 {
   "mcpServers": {
     "qmt": {
       "type": "http",
-      "url": "http://<host>:18765/mcp",
+      "url": "https://qmt.example.com/mcp",
       "headers": {
         "Authorization": "Bearer ${QMT_MCP_TOKEN}"
       }
@@ -147,25 +212,17 @@ claude mcp add --transport http qmt http://<host>:18765/mcp \
   }
 }
 ```
-
-在 Claude Code 里运行：
-
-```text
-/mcp
-```
-
-确认 `qmt` 已连接并允许需要的工具。
 
 ## WorkBuddy
 
-如果 WorkBuddy 支持 streamable HTTP MCP，按下面的通用配置接入：
+确认当前版本支持 streamable HTTP 后，静态兼容配置为：
 
 ```json
 {
   "mcpServers": {
     "qmt": {
       "type": "http",
-      "url": "http://<host>:18765/mcp",
+      "url": "https://qmt.example.com/mcp",
       "headers": {
         "Authorization": "Bearer ${QMT_MCP_TOKEN}"
       }
@@ -174,63 +231,21 @@ claude mcp add --transport http qmt http://<host>:18765/mcp \
 }
 ```
 
-有些客户端使用 `transport` 字段：
-
-```json
-{
-  "mcpServers": {
-    "qmt": {
-      "transport": "streamable-http",
-      "url": "http://<host>:18765/mcp",
-      "headers": {
-        "Authorization": "Bearer ${QMT_MCP_TOKEN}"
-      }
-    }
-  }
-}
-```
-
-如果 WorkBuddy 只支持 SSE transport，当前 QMT-MCP 不能直接连接；需要后续加 SSE bridge 或客户端升级到 streamable HTTP。
-
-如果 WorkBuddy 支持 OAuth MCP discovery，优先配置 `url` 指向 `/mcp`，并在服务端设置上面的 `QMT_MCP_OAUTH_*` 变量；WorkBuddy 应通过 401 challenge 或 `.well-known/oauth-protected-resource` 自动发现 authorization server。若它只支持手填 header，则继续使用静态 bearer token 模式。
-
-## 验证工具
-
-接入成功后，客户端应能看到这些工具族：
-
-- `qmt_health` / `qmt_capabilities`
-- `qmt_xtdata_search_instruments`
-- `qmt_xtdata_snapshot`
-- `qmt_xtdata_bars`
-- `qmt_xtdata_quote_subscribe`
-- `qmt_xtdata_option_chain`
-- `qmt_xtdata_volatility_index_inputs`
-
-也可以用 `qmtctl` 做同样的连通性检查：
-
-```bash
-cd cli/qmtctl && go build -o qmtctl .
-QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token> ./qmtctl health
-QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token> ./qmtctl tools
-```
-
-检查 OAuth discovery 或使用网关签发的 access token：
-
-```bash
-QMT_MCP_URL=https://qmt.example.com/mcp ./qmtctl auth discover --json
-QMT_MCP_URL=https://qmt.example.com/mcp \
-  QMT_MCP_ACCESS_TOKEN=<access-token> ./qmtctl health
-```
+有些版本使用 `"transport": "streamable-http"`。若当前版本明确支持远程 MCP
+OAuth discovery，可只保留 URL，让客户端跟随 401 challenge 和 protected
+resource metadata；否则使用静态 header。只支持旧 SSE transport 的版本不能
+直连本服务。
 
 ## 常见问题
 
 | 现象 | 处理 |
 |---|---|
-| `connection refused` | 容器起来后还没 RDP 登录；登录 QMT 桌面，等待 MCP autostart。 |
-| `401` / unauthorized | token 不对，确认客户端传了 `Authorization: Bearer ...`。 |
-| 能连上但没有行情 | QMT 未登录或 xtdata 未 ready；看 `qmt_health` 的 readiness。 |
-| Claude Code 看不到工具 | 运行 `/mcp` 检查 server 状态和权限；确认 scope 是当前项目可见的配置。 |
-| Codex 看不到工具 | 确认 `~/.codex/config.toml` 里 `bearer_token_env_var` 是环境变量名，不是 token 值。 |
-| OAuth 客户端找不到授权服务器 | 确认 `QMT_MCP_PUBLIC_BASE_URL` 是客户端可访问的 HTTPS 外部地址，并配置了 `QMT_MCP_OAUTH_AUTHORIZATION_SERVERS`。 |
-| OAuth 登录成功但 MCP 仍 401 | 授权服务器签发的 token 没有被当前 bearer gate 接受；需要在网关层把 OAuth token 兑换/校验后转成 MCP 可接受的 bearer，或后续接入 JWT/JWKS 校验。 |
-| 能连接但工具比预期少 | 调用 `qmt_capabilities` 查看 `tool_visibility`；检查 `QMT_MCP_TOOL_PROFILE`、allowlist/denylist 后重启容器。 |
+| `connection refused` | 先 RDP 登录桌面并等待 MCP autostart。 |
+| `401 invalid_token` | 检查签名、`kid`、issuer、resource audience、时间和 JWT 算法；服务端不会在错误里泄漏细节。 |
+| `403 insufficient_scope` | 按 challenge 申请缺少的 family/management scope，重新登录。 |
+| OAuth 找不到 AS | 检查公开 HTTPS URL、issuer、authorization servers 和两种 RFC 9728 metadata 路径。 |
+| OAuth 登录后工具很少 | 查看 token scope，再检查 startup Profile、allow/deny 与 feature gate；它们取交集。 |
+| qmtctl 没复用登录 | `auth status` 检查 resource 是否完全相同；显式 token 会覆盖保存的会话。 |
+| 能连上但没有行情 | QMT 未登录或 xtdata 未 ready；查看 `qmt_health`。 |
+| Claude Code 看不到工具 | `/mcp` 检查连接和授权，并确认所申请 scope。 |
+| Codex 看不到工具 | `bearer_token_env_var` 应是变量名，不是 token 值。 |

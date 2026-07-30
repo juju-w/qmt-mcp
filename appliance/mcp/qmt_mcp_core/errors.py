@@ -9,6 +9,7 @@ from typing import Any
 ERROR_TYPES = {
     "validation",
     "auth",
+    "insufficient_scope",
     "config",  # startup-only: invalid runtime config (e.g. bad transport)
     "not_ready",
     "not_authorized",

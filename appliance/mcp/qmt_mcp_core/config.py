@@ -6,10 +6,14 @@ import os
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 from .errors import McpCoreError
 
 DEFAULT_MCP_ENV = Path("/opt/qmt-mcp/mcp.env")
+VALID_AUTH_MODES = frozenset({"static", "oauth", "hybrid"})
+SAFE_JWT_ALGORITHMS = frozenset({"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512"})
+DEFAULT_OAUTH_SCOPES = ("qmt:read", "qmt:market", "qmt:account", "qmt:manage", "qmt:admin")
 
 
 def _read_env_file(path: Path) -> dict[str, str]:
@@ -47,6 +51,13 @@ def _split_csv(value: str) -> tuple[str, ...]:
 def _split_scopes(value: str) -> tuple[str, ...]:
     normalized = (value or "").replace(",", " ")
     return tuple(part.strip() for part in normalized.split() if part.strip())
+
+
+def _is_secure_url(value: str) -> bool:
+    parsed = urlparse(value)
+    if parsed.scheme == "https":
+        return bool(parsed.netloc)
+    return parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
 
 
 @dataclass(frozen=True)
@@ -97,9 +108,17 @@ class CoreConfig:
     # resource server; token issuance is delegated to an external authorization server.
     public_base_url: str = ""
     oauth_authorization_servers: tuple[str, ...] = ()
-    oauth_scopes_supported: tuple[str, ...] = ("qmt:read",)
+    oauth_scopes_supported: tuple[str, ...] = DEFAULT_OAUTH_SCOPES
     oauth_resource: str = ""
     oauth_resource_name: str = "QMT MCP"
+    auth_mode: str = "static"
+    oauth_issuer: str = ""
+    oauth_jwks_url: str = ""
+    oauth_algorithms: tuple[str, ...] = ("RS256", "ES256")
+    oauth_clock_skew_s: int = 30
+    oauth_jwks_ttl_s: int = 300
+    oauth_http_timeout_s: float = 5.0
+    oauth_jwks_max_bytes: int = 1_048_576
     # 020 startup-static MCP tool visibility.
     tool_profile: str = "full"
     tool_allowlist: tuple[str, ...] = ()
@@ -111,11 +130,35 @@ class CoreConfig:
 
     @property
     def auth_required(self) -> bool:
-        return bool(self.token)
+        return self.auth_mode in {"oauth", "hybrid"} or bool(self.token)
 
     @property
     def oauth_enabled(self) -> bool:
-        return bool(self.oauth_authorization_servers)
+        return bool(self.authorization_servers)
+
+    @property
+    def sdk_oauth_enabled(self) -> bool:
+        return self.auth_mode in {"oauth", "hybrid"}
+
+    @property
+    def authorization_servers(self) -> tuple[str, ...]:
+        if self.oauth_authorization_servers:
+            return self.oauth_authorization_servers
+        return (self.oauth_issuer,) if self.oauth_issuer else ()
+
+    @property
+    def oauth_issuer_url(self) -> str:
+        if self.oauth_issuer:
+            return self.oauth_issuer
+        return self.oauth_authorization_servers[0] if len(self.oauth_authorization_servers) == 1 else ""
+
+    @property
+    def oauth_resource_url(self) -> str:
+        if self.oauth_resource:
+            return self.oauth_resource
+        if self.public_base_url:
+            return f"{self.public_base_url}/mcp"
+        return ""
 
     def validate_security(self) -> None:
         if self.transport not in {"streamable-http", "http", "sse"}:
@@ -124,18 +167,73 @@ class CoreConfig:
                 "invalid QMT_MCP_TRANSPORT",
                 {"transport": self.transport, "allowed": ["streamable-http", "http", "sse"]},
             )
-        if not self.token and not (_is_loopback(self.host) and self.allow_unauth_loopback):
+        if self.auth_mode not in VALID_AUTH_MODES:
+            raise McpCoreError(
+                "config",
+                "invalid QMT_MCP_AUTH_MODE",
+                {"auth_mode": self.auth_mode, "allowed": sorted(VALID_AUTH_MODES)},
+            )
+        if (
+            self.auth_mode == "static"
+            and not self.token
+            and not (_is_loopback(self.host) and self.allow_unauth_loopback)
+        ):
             raise McpCoreError(
                 "auth",
                 "QMT_MCP_TOKEN is required when MCP is bound to a non-loopback host",
                 {"host": self.host},
             )
+        if self.auth_mode == "hybrid" and not self.token:
+            raise McpCoreError("auth", "QMT_MCP_TOKEN is required in hybrid auth mode")
+        if self.sdk_oauth_enabled:
+            self._validate_oauth()
         try:
             from .tool_contracts import ToolVisibilityPolicy
 
             ToolVisibilityPolicy(self.tool_profile, self.tool_allowlist, self.tool_denylist)
         except ValueError as exc:
             raise McpCoreError("config", str(exc)) from exc
+
+    def _validate_oauth(self) -> None:
+        issuer = self.oauth_issuer_url
+        resource = self.oauth_resource_url
+        if not issuer or not self.oauth_jwks_url or not resource:
+            raise McpCoreError(
+                "auth",
+                "OAuth mode requires issuer, JWKS URL, and resource/public base URL",
+            )
+        if len(self.authorization_servers) != 1 or self.authorization_servers[0] != issuer:
+            raise McpCoreError(
+                "auth",
+                "OAuth JWT mode requires exactly one authorization server matching the issuer",
+            )
+        for label, value in (("issuer", issuer), ("JWKS URL", self.oauth_jwks_url), ("resource", resource)):
+            if not _is_secure_url(value):
+                raise McpCoreError("auth", f"OAuth {label} must use HTTPS (HTTP is allowed only on loopback)")
+            parsed = urlparse(value)
+            if parsed.username or parsed.password or parsed.fragment:
+                raise McpCoreError("auth", f"OAuth {label} must not contain credentials or a fragment")
+        issuer_parts = urlparse(issuer)
+        if issuer_parts.query:
+            raise McpCoreError("auth", "OAuth issuer must not contain a query string")
+        if urlparse(resource).query:
+            raise McpCoreError("auth", "OAuth resource must not contain a query string")
+        algorithms = set(self.oauth_algorithms)
+        if not algorithms or not algorithms <= SAFE_JWT_ALGORITHMS:
+            raise McpCoreError(
+                "auth",
+                "OAuth JWT algorithms must be an allowlist of asymmetric RS/PS/ES algorithms",
+                {"allowed": sorted(SAFE_JWT_ALGORITHMS)},
+            )
+        if "qmt:read" not in self.oauth_scopes_supported:
+            raise McpCoreError("auth", "OAuth scopes must include qmt:read")
+        unknown_scopes = set(self.oauth_scopes_supported) - set(DEFAULT_OAUTH_SCOPES)
+        if unknown_scopes:
+            raise McpCoreError(
+                "auth",
+                "OAuth scopes contain unsupported values",
+                {"unsupported": sorted(unknown_scopes), "allowed": list(DEFAULT_OAUTH_SCOPES)},
+            )
 
 
 def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
@@ -180,11 +278,22 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         formula_allowlist=env.get("QMT_FORMULA_ALLOWLIST", ""),
         formula_output_sandbox=env.get("QMT_FORMULA_OUTPUT_SANDBOX", "/broker/formula-output")
         or "/broker/formula-output",
+        auth_mode=(env.get("QMT_MCP_AUTH_MODE", "static") or "static").strip().lower(),
         public_base_url=env.get("QMT_MCP_PUBLIC_BASE_URL", "").rstrip("/"),
         oauth_authorization_servers=_split_csv(env.get("QMT_MCP_OAUTH_AUTHORIZATION_SERVERS", "")),
-        oauth_scopes_supported=_split_scopes(env.get("QMT_MCP_OAUTH_SCOPES", "qmt:read")) or ("qmt:read",),
+        oauth_scopes_supported=_split_scopes(env.get("QMT_MCP_OAUTH_SCOPES", " ".join(DEFAULT_OAUTH_SCOPES)))
+        or DEFAULT_OAUTH_SCOPES,
         oauth_resource=env.get("QMT_MCP_OAUTH_RESOURCE", "").rstrip("/"),
         oauth_resource_name=env.get("QMT_MCP_OAUTH_RESOURCE_NAME", "QMT MCP") or "QMT MCP",
+        # The issuer is an exact security identifier. Do not normalize a
+        # provider-owned trailing slash because JWT `iss` matching is literal.
+        oauth_issuer=env.get("QMT_MCP_OAUTH_ISSUER", ""),
+        oauth_jwks_url=env.get("QMT_MCP_OAUTH_JWKS_URL", ""),
+        oauth_algorithms=_split_scopes(env.get("QMT_MCP_OAUTH_ALGORITHMS", "RS256 ES256")) or ("RS256", "ES256"),
+        oauth_clock_skew_s=max(0, int(env.get("QMT_MCP_OAUTH_CLOCK_SKEW_S", "30"))),
+        oauth_jwks_ttl_s=max(30, int(env.get("QMT_MCP_OAUTH_JWKS_TTL_S", "300"))),
+        oauth_http_timeout_s=max(0.1, float(env.get("QMT_MCP_OAUTH_HTTP_TIMEOUT_S", "5"))),
+        oauth_jwks_max_bytes=max(1024, int(env.get("QMT_MCP_OAUTH_JWKS_MAX_BYTES", "1048576"))),
         tool_profile=(env.get("QMT_MCP_TOOL_PROFILE", "full") or "full").strip().lower(),
         tool_allowlist=_split_csv(env.get("QMT_MCP_TOOL_ALLOWLIST", "")),
         tool_denylist=_split_csv(env.get("QMT_MCP_TOOL_DENYLIST", "")),

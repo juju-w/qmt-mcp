@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from qmt_mcp_core.tool_contracts import ToolVisibilityPolicy, default_tool_title
+from qmt_mcp_core.tool_contracts import (
+    ToolVisibilityPolicy,
+    default_tool_title,
+    oauth_scopes_allow,
+    required_oauth_scopes,
+)
 
 
 @pytest.mark.parametrize(
@@ -55,3 +60,25 @@ def test_unknown_profile_is_rejected():
 
 def test_default_title_is_human_readable():
     assert default_tool_title("qmt_xtdata_option_chain") == "QMT xtdata Option Chain"
+
+
+@pytest.mark.parametrize(
+    ("family", "read_only", "expected"),
+    [
+        ("core", True, ("qmt:read",)),
+        ("xtdata", True, ("qmt:read", "qmt:market")),
+        ("xtdata", False, ("qmt:read", "qmt:market", "qmt:manage")),
+        ("xttrade_query", True, ("qmt:read", "qmt:account")),
+        ("portfolio", True, ("qmt:read", "qmt:account")),
+    ],
+)
+def test_required_oauth_scope_matrix(family, read_only, expected):
+    assert required_oauth_scopes(family=family, read_only=read_only) == expected
+
+
+def test_oauth_scope_policy_requires_base_and_all_tool_scopes():
+    required = ("qmt:read", "qmt:market", "qmt:manage")
+    assert oauth_scopes_allow(required, {"qmt:market", "qmt:manage"}) is False
+    assert oauth_scopes_allow(required, {"qmt:read", "qmt:market"}) is False
+    assert oauth_scopes_allow(required, {"qmt:read", "qmt:market", "qmt:manage"}) is True
+    assert oauth_scopes_allow(required, {"qmt:read", "qmt:admin"}) is True

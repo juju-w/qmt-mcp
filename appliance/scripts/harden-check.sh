@@ -24,16 +24,57 @@ ok()   { printf '  [ok]   %s\n' "$1"; }
 echo "harden-check: QMT-MCP appliance pre-flight"
 echo "(env source: ${ENV_FILE}$([ -f "$ENV_FILE" ] || echo ' [not found, using process env]'))"
 
-# 1) Bearer token strength (length only; never echo the value).
-TOKEN="${QMT_MCP_TOKEN:-}"
-if [ -z "$TOKEN" ]; then
-  err "QMT_MCP_TOKEN is empty — the MCP endpoint would be unauthenticated."
-elif [ "$TOKEN" = "changeme" ] || [ "$TOKEN" = "qmt" ] || [ "$TOKEN" = "token" ]; then
-  err "QMT_MCP_TOKEN is a well-known default — set a unique random token."
-elif [ "${#TOKEN}" -lt 32 ]; then
-  err "QMT_MCP_TOKEN is too short (${#TOKEN} chars); use >= 32 random chars."
-else
-  ok "QMT_MCP_TOKEN present and >= 32 chars."
+# 1) Authentication mode. The application repeats these checks at startup.
+AUTH_MODE="$(printf '%s' "${QMT_MCP_AUTH_MODE:-static}" | tr '[:upper:]' '[:lower:]')"
+case "$AUTH_MODE" in
+  static | oauth | hybrid) ok "Authentication mode is ${AUTH_MODE}." ;;
+  *) err "QMT_MCP_AUTH_MODE must be static, oauth, or hybrid." ;;
+esac
+
+# Static bearer strength (length only; never echo the value).
+if [ "$AUTH_MODE" = "static" ] || [ "$AUTH_MODE" = "hybrid" ]; then
+  TOKEN="${QMT_MCP_TOKEN:-}"
+  if [ -z "$TOKEN" ]; then
+    err "QMT_MCP_TOKEN is required in ${AUTH_MODE} mode."
+  elif [ "$TOKEN" = "changeme" ] || [ "$TOKEN" = "qmt" ] || [ "$TOKEN" = "token" ]; then
+    err "QMT_MCP_TOKEN is a well-known default — set a unique random token."
+  elif [ "${#TOKEN}" -lt 32 ]; then
+    err "QMT_MCP_TOKEN is too short (${#TOKEN} chars); use >= 32 random chars."
+  else
+    ok "QMT_MCP_TOKEN present and >= 32 chars."
+  fi
+fi
+
+secure_url() {
+  case "$1" in
+    https://*) return 0 ;;
+    http://localhost/* | http://localhost:* | http://127.0.0.1/* | http://127.0.0.1:*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+if [ "$AUTH_MODE" = "oauth" ] || [ "$AUTH_MODE" = "hybrid" ]; then
+  ISSUER="${QMT_MCP_OAUTH_ISSUER:-}"
+  SERVERS="${QMT_MCP_OAUTH_AUTHORIZATION_SERVERS:-$ISSUER}"
+  JWKS="${QMT_MCP_OAUTH_JWKS_URL:-}"
+  RESOURCE="${QMT_MCP_OAUTH_RESOURCE:-}"
+  if [ -z "$RESOURCE" ] && [ -n "${QMT_MCP_PUBLIC_BASE_URL:-}" ]; then
+    RESOURCE="${QMT_MCP_PUBLIC_BASE_URL%/}/mcp"
+  fi
+  for pair in "issuer:$ISSUER" "JWKS URL:$JWKS" "resource:$RESOURCE"; do
+    label="${pair%%:*}"
+    value="${pair#*:}"
+    if [ -z "$value" ]; then
+      err "OAuth ${label} is required in ${AUTH_MODE} mode."
+    elif ! secure_url "$value"; then
+      err "OAuth ${label} must use HTTPS (loopback HTTP is development-only)."
+    fi
+  done
+  if [ -z "$SERVERS" ] || [ "$SERVERS" != "$ISSUER" ]; then
+    err "QMT_MCP_OAUTH_AUTHORIZATION_SERVERS must contain exactly the configured issuer."
+  else
+    ok "OAuth issuer, JWKS, resource, and authorization server are pinned."
+  fi
 fi
 
 # 2) RDP password (default in compose is 'qmt').
@@ -58,7 +99,7 @@ fi
 
 # 4) TLS reminder for non-proxied public bind.
 if [ "$PROXIED" != "1" ]; then
-  note "No TLS proxy declared — bearer tokens over plain HTTP are sniffable on a LAN."
+  note "No TLS proxy declared — bearer credentials over plain HTTP are sniffable on a LAN."
 fi
 
 # 5) RDP should not be on the public internet.

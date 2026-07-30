@@ -4,7 +4,7 @@ The appliance is split into a **broker-neutral base image** and a runtime-mounte
 **broker pack**. Switch brokers by swapping the pack — never by rebuilding.
 
 ## What's in the base image (broker-neutral)
-Wine new-WoW64, Windows Python 3.12, CJK fonts, `fastmcp`+`uvicorn`, the read-only
+Wine new-WoW64, Windows Python 3.12, CJK fonts, official `mcp`+`uvicorn`, the read-only
 MCP launcher + scripts + XFCE autostart, xrdp, and `detect-broker`. **No** QMT
 terminal, **no** xtquant, **no** account data.
 

@@ -1,22 +1,8 @@
-# Declared runtime dependencies for the in-Wine MCP server (Windows Python 3.12).
-# This is the SOURCE OF TRUTH for what the image installs. The pinned lockfile
-# (requirements.txt) MUST be generated from the actual amd64 Wine build to satisfy
-# the constitution's "pinned, reproducible" rule:
-#
-#   # inside the built image, in the Wine Python:
-#   wine python -m pip install -r requirements.in
-#   wine python -m pip freeze > requirements.txt
-#
-# The Dockerfile currently installs this declaration file directly. After
-# generating and verifying the lock, change it to:
-#   pip install -r requirements.txt
-# and rebuild + smoke-test on amd64.
-#
-# (Pinning cannot be verified from a non-amd64 host, so the lock is intentionally
-# not committed by automation — generate it on a real build. See 011 spec FR-008.)
+# Direct runtime dependencies for the in-Wine Windows Python 3.12 server.
+# requirements.txt is the complete transitive lock consumed by CI and Docker.
 
-fastmcp
-uvicorn
-numpy
-pandas
-asyncpg   # 012: only used when QMT_DB_URL is set (optional PostgreSQL persistence)
+mcp==2.0.0
+uvicorn==0.52.0
+numpy==2.5.1
+pandas==3.0.5
+asyncpg==0.31.0  # 012: used only when QMT_DB_URL enables PostgreSQL persistence

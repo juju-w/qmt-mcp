@@ -47,6 +47,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
 	defer cancel()
 	client := NewClient(opts.url, opts.token, opts.timeout, opts.verbose)
+	defer client.Close()
 	if err := dispatch(ctx, client, opts, cmdArgs, stdout); err != nil {
 		printError(stderr, err, opts.jsonOut)
 		return 1

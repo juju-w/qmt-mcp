@@ -2,9 +2,9 @@
 
 Re-exports are lazy (PEP 562) so importing pure-logic submodules
 (`config`, `health`, `errors`, `audit`, `workers`, `registry`, ...) does not pull
-in `fastmcp`/`uvicorn`. This keeps the bulk of the package testable on a plain
+in `mcp`/`uvicorn`. This keeps the bulk of the package testable on a plain
 Python 3.12 with no third-party installs. `create_app`/`main` still resolve via
-attribute access (they import `fastmcp` only when actually used).
+attribute access (they import the MCP SDK only when actually used).
 """
 
 from __future__ import annotations

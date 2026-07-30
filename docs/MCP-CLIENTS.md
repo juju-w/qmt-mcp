@@ -7,6 +7,11 @@ http://<host>:18765/mcp
 Authorization: Bearer <QMT_MCP_TOKEN>
 ```
 
+服务端主推最新稳定协议 `2026-07-28`：新客户端走
+`server/discover` 和无会话请求；尚未升级的客户端仍可在同一个 `/mcp`
+地址使用 `2025-11-25`、`2025-06-18` 或 `2025-03-26`
+initialize/session 流程，不需要改连接 URL。`qmtctl` 也会先尝试新版并自动回退。
+
 先确认服务已经起来：
 
 ```bash

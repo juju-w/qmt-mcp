@@ -178,8 +178,11 @@ Manual probes worth knowing:
 | `docker inspect <c> --format '{{.State.Health.Status}}'` | `healthy` |
 | audit log `<pack>/logs/mcp-audit.jsonl` | one JSONL line per tool call |
 
-MCP calls need `Accept: application/json, text/event-stream` and the `mcp-session-id`
-header from `initialize`; responses are SSE (`event: message\ndata: {...}`).
+MCP calls need `Accept: application/json, text/event-stream`. Modern
+`2026-07-28` clients use `server/discover`, per-request metadata and standard
+MCP headers without a session id. Legacy 2025 clients retain the
+initialize/session flow and must echo the issued `mcp-session-id`; responses
+may be JSON or SSE (`event: message\ndata: {...}`).
 
 Audit timestamps carry Wine's TZ offset (e.g. `+0100`) while the container is
 `Asia/Shanghai`. Same instant, different notation — not a misconfiguration.

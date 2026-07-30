@@ -100,16 +100,14 @@ func TestSearchCallsExpectedMCPTool(t *testing.T) {
 		case "/healthz":
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 		case "/mcp":
-			var req map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				t.Fatal(err)
+			if got := r.Header.Get("authorization"); got != "Bearer s3cret" {
+				t.Fatalf("authorization header = %q", got)
+			}
+			req, ok := readToolRequest(t, w, r)
+			if !ok {
+				return
 			}
 			switch req["method"] {
-			case "initialize":
-				w.Header().Set("mcp-session-id", "abc")
-				writeRPCResult(w, req["id"], map[string]any{"protocolVersion": "2025-03-26"})
-			case "notifications/initialized":
-				writeRPCResult(w, req["id"], map[string]any{})
 			case "tools/call":
 				params := req["params"].(map[string]any)
 				if params["name"] != "qmt_xtdata_search_instruments" {
@@ -135,7 +133,11 @@ func TestSearchCallsExpectedMCPTool(t *testing.T) {
 	defer server.Close()
 
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"--url", server.URL + "/mcp", "search", "纳指", "--rank", "liquidity"}, &stdout, &stderr)
+	code := Run(
+		[]string{"--url", server.URL + "/mcp", "--token", "s3cret", "search", "纳指", "--rank", "liquidity"},
+		&stdout,
+		&stderr,
+	)
 	if code != 0 {
 		t.Fatalf("exit %d stderr=%s", code, stderr.String())
 	}
@@ -149,11 +151,11 @@ func TestSearchCallsExpectedMCPTool(t *testing.T) {
 
 func TestToolErrorEnvelopeReturnsNonZero(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
+		}
 		switch req["method"] {
-		case "initialize", "notifications/initialized":
-			writeRPCResult(w, req["id"], map[string]any{})
 		case "tools/call":
 			writeRPCResult(w, req["id"], toolResult(map[string]any{
 				"ok":         false,
@@ -180,13 +182,11 @@ func TestToolErrorEnvelopeReturnsNonZero(t *testing.T) {
 func TestAccountPositionsCallsExpectedMCPTool(t *testing.T) {
 	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatal(err)
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
 		}
 		switch req["method"] {
-		case "initialize", "notifications/initialized":
-			writeRPCResult(w, req["id"], map[string]any{})
 		case "tools/call":
 			params := req["params"].(map[string]any)
 			if params["name"] != "qmt_xttrade_positions" {
@@ -224,13 +224,11 @@ func TestAccountPositionsCallsExpectedMCPTool(t *testing.T) {
 func TestSnapshotCachePolicyCallsExpectedMCPTool(t *testing.T) {
 	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatal(err)
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
 		}
 		switch req["method"] {
-		case "initialize", "notifications/initialized":
-			writeRPCResult(w, req["id"], map[string]any{})
 		case "tools/call":
 			params := req["params"].(map[string]any)
 			if params["name"] != "qmt_xtdata_snapshot" {
@@ -261,13 +259,11 @@ func TestSnapshotCachePolicyCallsExpectedMCPTool(t *testing.T) {
 func TestSubscriptionAddCallsExpectedMCPTool(t *testing.T) {
 	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatal(err)
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
 		}
 		switch req["method"] {
-		case "initialize", "notifications/initialized":
-			writeRPCResult(w, req["id"], map[string]any{})
 		case "tools/call":
 			params := req["params"].(map[string]any)
 			if params["name"] != "qmt_xtdata_quote_subscribe" {
@@ -302,13 +298,11 @@ func TestSubscriptionAddCallsExpectedMCPTool(t *testing.T) {
 func TestPortfolioRiskCallsExpectedMCPTool(t *testing.T) {
 	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatal(err)
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
 		}
 		switch req["method"] {
-		case "initialize", "notifications/initialized":
-			writeRPCResult(w, req["id"], map[string]any{})
 		case "tools/call":
 			params := req["params"].(map[string]any)
 			if params["name"] != "qmt_portfolio_risk_checks" {
@@ -349,13 +343,11 @@ func TestPortfolioRiskCallsExpectedMCPTool(t *testing.T) {
 func TestOptionVixInputsCallsExpectedMCPTool(t *testing.T) {
 	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatal(err)
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
 		}
 		switch req["method"] {
-		case "initialize", "notifications/initialized":
-			writeRPCResult(w, req["id"], map[string]any{})
 		case "tools/call":
 			params := req["params"].(map[string]any)
 			if params["name"] != "qmt_xtdata_volatility_index_inputs" {
@@ -386,13 +378,11 @@ func TestOptionVixInputsCallsExpectedMCPTool(t *testing.T) {
 func TestRefIpoCallsExpectedMCPTool(t *testing.T) {
 	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatal(err)
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
 		}
 		switch req["method"] {
-		case "initialize", "notifications/initialized":
-			writeRPCResult(w, req["id"], map[string]any{})
 		case "tools/call":
 			params := req["params"].(map[string]any)
 			if params["name"] != "qmt_xtdata_ipo_info" {
@@ -428,13 +418,11 @@ func TestSectorImportJSONCallsExpectedMCPTool(t *testing.T) {
 	}
 	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatal(err)
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
 		}
 		switch req["method"] {
-		case "initialize", "notifications/initialized":
-			writeRPCResult(w, req["id"], map[string]any{})
 		case "tools/call":
 			params := req["params"].(map[string]any)
 			if params["name"] != "qmt_xtdata_sector_add_codes" {
@@ -474,13 +462,11 @@ func TestSectorImportJSONCallsExpectedMCPTool(t *testing.T) {
 func TestFormulaCallCallsExpectedMCPTool(t *testing.T) {
 	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatal(err)
+		req, ok := readToolRequest(t, w, r)
+		if !ok {
+			return
 		}
 		switch req["method"] {
-		case "initialize", "notifications/initialized":
-			writeRPCResult(w, req["id"], map[string]any{})
 		case "tools/call":
 			params := req["params"].(map[string]any)
 			if params["name"] != "qmt_xtdata_formula_call" {
@@ -514,7 +500,46 @@ func TestFormulaCallCallsExpectedMCPTool(t *testing.T) {
 }
 
 func writeRPCResult(w http.ResponseWriter, id any, result any) {
+	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
+}
+
+func writeRPCError(w http.ResponseWriter, id any, code int, message string) {
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"error":   map[string]any{"code": code, "message": message},
+	})
+}
+
+func readToolRequest(t *testing.T, w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
+	t.Helper()
+	if r.Method == http.MethodDelete {
+		w.WriteHeader(http.StatusNoContent)
+		return nil, false
+	}
+	var req map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		t.Errorf("decode MCP request: %v", err)
+		return nil, false
+	}
+	switch req["method"] {
+	case "server/discover":
+		writeRPCError(w, req["id"], -32601, "Method not found")
+		return nil, false
+	case "initialize":
+		writeRPCResult(w, req["id"], map[string]any{
+			"protocolVersion": "2025-11-25",
+			"capabilities":    map[string]any{"tools": map[string]any{}},
+			"serverInfo":      map[string]any{"name": "qmtctl-test", "version": "1.0.0"},
+		})
+		return nil, false
+	case "notifications/initialized":
+		w.WriteHeader(http.StatusAccepted)
+		return nil, false
+	}
+	return req, true
 }
 
 func toolResult(payload map[string]any) map[string]any {

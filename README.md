@@ -46,6 +46,7 @@
 | 账户只读查询 `xttrade` | ⚠️ 需券商权限 | 未开通时报 `not_authorized` 优雅降级，不崩溃 |
 | 数据库持久化（PostgreSQL，可选） | ✅ 可用 | 行情数据仓库，read/write-through，off by default |
 | `qmtctl` CLI | ✅ 可用 | Go 编译命令行客户端，支持行情/搜索/账户查询 |
+| MCP 协议 | ✅ 双线兼容 | 主推稳定版 `2026-07-28`，同一 `/mcp` 自动兼容 2025 客户端 |
 
 > **交易/账户权限**：外部 `xtquant` 连交易接口（下单**和**账户查询）需券商开通「程序化交易 /
 > 外部 Python 接口」权限（`m_nPythonConnectNet`）。未开通时只有行情可用。开通通常需满足
@@ -148,7 +149,7 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 appliance/   # 可部署 appliance：Dockerfile · compose · scripts · mcp/ · brokers/ · docs/
 cli/         # qmtctl：Go 编译的命令行客户端（streamable-http MCP）
 skills/      # AI Agent 运维知识库（部署/MCP/CLI/排错）
-specs/       # Spec-Driven Development（spec-kit）：001~018 规格/计划/任务
+specs/       # Spec-Driven Development（spec-kit）规格/计划/任务
 ```
 
 用 **Spec-Driven Development** 管理，一次一个 feature、先 spec 后实现；原则见

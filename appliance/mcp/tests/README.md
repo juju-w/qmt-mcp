@@ -1,7 +1,7 @@
 # QMT MCP tests
 
 Two tiers. The **unit tier** is the CI default and needs no third-party runtime
-deps — no `fastmcp`, no `uvicorn`, no `xtquant`, no Wine, no broker pack. It
+deps — no `mcp`, no `uvicorn`, no `xtquant`, no Wine, no broker pack. It
 covers the pure-logic modules (`config`, `errors`, `audit`, `health`, `workers`,
 `registry`, and the xtdata `validation`/`serializers`).
 
@@ -16,13 +16,13 @@ python3 -m pytest -m 'not integration'
 
 ## Integration tier (optional)
 
-Exercises app assembly + the ASGI auth/`/healthz` path. It installs `fastmcp`
+Exercises app assembly + the ASGI auth/`/healthz` path. It installs official `mcp`
 and injects a **fake `xtquant`** (see `conftest.py::fake_xtquant`), so it still
-needs no Wine or broker pack. It is skipped automatically when `fastmcp` is
+needs no Wine or broker pack. It is skipped automatically when `mcp` is
 absent.
 
 ```bash
-python3 -m pip install fastmcp
+python3 -m pip install "mcp==2.0.0"
 python3 -m pytest -m integration
 ```
 

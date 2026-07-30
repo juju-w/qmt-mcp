@@ -1,7 +1,6 @@
 package qmtctl
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type Client struct {
@@ -19,29 +20,9 @@ type Client struct {
 	token      string
 	httpClient *http.Client
 	verbose    bool
-	sessionID  string
+	session    *mcp.ClientSession
 	initOnce   sync.Once
 	initErr    error
-}
-
-type rpcRequest struct {
-	JSONRPC string         `json:"jsonrpc"`
-	ID      int64          `json:"id"`
-	Method  string         `json:"method"`
-	Params  map[string]any `json:"params,omitempty"`
-}
-
-type rpcResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      int64           `json:"id"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *rpcError       `json:"error,omitempty"`
-}
-
-type rpcError struct {
-	Code    int             `json:"code"`
-	Message string          `json:"message"`
-	Data    json.RawMessage `json:"data,omitempty"`
 }
 
 type ToolCallResult struct {
@@ -146,19 +127,36 @@ func (c *Client) ListTools(ctx context.Context) (map[string]any, error) {
 	if err := c.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
+	result, err := c.session.ListTools(ctx, nil)
+	if err != nil {
+		return nil, sdkError(err)
+	}
+	wire, err := json.Marshal(result)
+	if err != nil {
+		return nil, &AppError{Kind: "protocol", Message: fmt.Sprintf("cannot encode MCP tools result: %v", err)}
+	}
 	var out map[string]any
-	err := c.rpc(ctx, "tools/list", nil, &out)
-	return out, err
+	if err := json.Unmarshal(wire, &out); err != nil {
+		return nil, &AppError{Kind: "protocol", Message: fmt.Sprintf("cannot decode MCP tools result: %v", err)}
+	}
+	return out, nil
 }
 
 func (c *Client) CallTool(ctx context.Context, name string, args map[string]any) (json.RawMessage, error) {
 	if err := c.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	params := map[string]any{"name": name, "arguments": args}
+	sdkResult, err := c.session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	if err != nil {
+		return nil, sdkError(err)
+	}
+	wire, err := json.Marshal(sdkResult)
+	if err != nil {
+		return nil, &AppError{Kind: "protocol", Message: fmt.Sprintf("cannot encode MCP tool result: %v", err)}
+	}
 	var result ToolCallResult
-	if err := c.rpc(ctx, "tools/call", params, &result); err != nil {
-		return nil, err
+	if err := json.Unmarshal(wire, &result); err != nil {
+		return nil, &AppError{Kind: "protocol", Message: fmt.Sprintf("cannot decode MCP tool result: %v", err)}
 	}
 	payload, err := unwrapToolResult(result)
 	if err != nil {
@@ -172,85 +170,69 @@ func (c *Client) CallTool(ctx context.Context, name string, args map[string]any)
 
 func (c *Client) ensureInitialized(ctx context.Context) error {
 	c.initOnce.Do(func() {
-		params := map[string]any{
-			"protocolVersion": "2025-03-26",
-			"capabilities":    map[string]any{},
-			"clientInfo": map[string]any{
-				"name":    "qmtctl",
-				"version": Version,
+		baseTransport := c.httpClient.Transport
+		if baseTransport == nil {
+			baseTransport = http.DefaultTransport
+		}
+		mcpHTTPClient := &http.Client{
+			Transport:     bearerRoundTripper{token: c.token, base: baseTransport},
+			CheckRedirect: c.httpClient.CheckRedirect,
+			Jar:           c.httpClient.Jar,
+			Timeout:       c.httpClient.Timeout,
+		}
+		sdkClient := mcp.NewClient(
+			&mcp.Implementation{Name: "qmtctl", Version: Version},
+			&mcp.ClientOptions{Capabilities: &mcp.ClientCapabilities{}},
+		)
+		c.session, c.initErr = sdkClient.Connect(
+			ctx,
+			&mcp.StreamableClientTransport{
+				Endpoint:             c.baseURL,
+				HTTPClient:           mcpHTTPClient,
+				DisableStandaloneSSE: true,
 			},
+			nil,
+		)
+		if c.initErr != nil {
+			c.initErr = sdkError(c.initErr)
 		}
-		var out map[string]any
-		if err := c.rpcNoInit(ctx, "initialize", params, &out); err != nil {
-			c.initErr = err
-			return
-		}
-		_ = c.rpcNoInit(ctx, "notifications/initialized", nil, nil)
 	})
 	return c.initErr
 }
 
-func (c *Client) rpc(ctx context.Context, method string, params map[string]any, out any) error {
-	return c.rpcNoInit(ctx, method, params, out)
+func (c *Client) Close() error {
+	if c.session == nil {
+		return nil
+	}
+	return c.session.Close()
 }
 
-func (c *Client) rpcNoInit(ctx context.Context, method string, params map[string]any, out any) error {
-	body, err := json.Marshal(rpcRequest{JSONRPC: "2.0", ID: time.Now().UnixNano(), Method: method, Params: params})
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	c.addHeaders(req)
-	req.Header.Set("content-type", "application/json")
-	req.Header.Set("accept", "application/json, text/event-stream")
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return &AppError{Kind: "network", Message: err.Error()}
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return errorFromBody(resp.StatusCode, respBody)
-	}
-	if sessionID := resp.Header.Get("mcp-session-id"); sessionID != "" {
-		c.sessionID = sessionID
-	}
-	respBody = normalizeRPCBody(resp.Header.Get("content-type"), respBody)
-	if out == nil && len(bytes.TrimSpace(respBody)) == 0 {
+func sdkError(err error) error {
+	if err == nil {
 		return nil
 	}
-	var msg rpcResponse
-	if err := json.Unmarshal(respBody, &msg); err != nil {
-		return &AppError{Kind: "protocol", Message: "MCP endpoint returned invalid JSON"}
-	}
-	if msg.Error != nil {
-		return &AppError{Kind: "mcp", Message: msg.Error.Message, Status: msg.Error.Code}
-	}
-	if out == nil {
-		return nil
-	}
-	if len(msg.Result) == 0 {
-		return &AppError{Kind: "protocol", Message: "MCP response did not include result"}
-	}
-	if err := json.Unmarshal(msg.Result, out); err != nil {
-		return &AppError{Kind: "protocol", Message: fmt.Sprintf("cannot decode MCP result: %v", err)}
-	}
-	return nil
+	return &AppError{Kind: "mcp", Message: err.Error()}
 }
 
 func (c *Client) addHeaders(req *http.Request) {
 	if c.token != "" {
 		req.Header.Set("authorization", "Bearer "+c.token)
 	}
-	if c.sessionID != "" {
-		req.Header.Set("mcp-session-id", c.sessionID)
+}
+
+type bearerRoundTripper struct {
+	token string
+	base  http.RoundTripper
+}
+
+func (t bearerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.token == "" {
+		return t.base.RoundTrip(req)
 	}
+	clone := req.Clone(req.Context())
+	clone.Header = req.Header.Clone()
+	clone.Header.Set("authorization", "Bearer "+t.token)
+	return t.base.RoundTrip(clone)
 }
 
 func unwrapToolResult(result ToolCallResult) (json.RawMessage, error) {
@@ -354,17 +336,4 @@ func oauthMetadataURLs(base string) []string {
 		urls = append(urls, root)
 	}
 	return urls
-}
-
-func normalizeRPCBody(contentType string, body []byte) []byte {
-	if !strings.Contains(strings.ToLower(contentType), "text/event-stream") {
-		return body
-	}
-	for _, line := range strings.Split(string(body), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "data:") {
-			return []byte(strings.TrimSpace(strings.TrimPrefix(line, "data:")))
-		}
-	}
-	return body
 }

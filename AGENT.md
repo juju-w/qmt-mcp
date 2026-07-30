@@ -30,6 +30,7 @@
 | 016 xtdata 参考数据 | ✅ 完成——财务/分红/新股/可转债/ETF/周期等 9 工具（只读，按运行时能力降级）+ CLI |
 | 017 自定义板块管理 | ✅ 完成——文件夹及板块增删改查 7 工具（默认关闭，受管前缀沙箱）+ CLI |
 | 018 公式因子运行时 | ✅ 完成——调用/批量/生成/订阅/缓存等 7 工具（默认关闭，白名单 + 输出沙箱）+ CLI |
+| 019 MCP 协议基座 | ✅ 完成——官方 Python/Go SDK；主推 2026-07-28，同端点兼容 2025；官方 conformance 进 CI |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。
@@ -40,6 +41,7 @@
 - 若用远程主机，访问信息放本地 `.env`（如 `SSH_*`）——**已 gitignore，绝不提交**。
 - 在该主机上用 docker 构建/部署。本地构建 tag `qmt-appliance-base:local`，发布镜像 `ghcr.io/juju-w/qmt-mcp`；容器按实例命名（如 `qmt-<broker-id>`）。
 - **Python 固定 3.12**：`xtquant` 官方最高只支持到 3.12，不要升级 Wine 内的 Python。
+- **Go 固定 1.25**：qmtctl 使用官方 MCP Go SDK 1.7.x，开发、CI、发布工具链必须一致。
 - **free-threading（无 GIL）已调研、不采用**：无 GIL 是 3.13t/3.14t（不是 3.12）；导入未标记 FT 安全的 C 扩展会让解释器**自动重开 GIL**，而 `xtquant` 是专有编译扩展、不可能标 FT 安全 → 零收益且未测有风险；况且本服务是 I/O 密集（HTTP/asyncpg/共享内存），GIL 非瓶颈。结论：保持 3.12 + GIL。
 
 ## 构建 / 部署 / 测试
@@ -120,6 +122,7 @@ cd ../../cli/qmtctl
 go test ./...
 go vet ./...
 go build ./...
+go build ./cmd/conformance
 
 cd ../..
 python -m unittest discover -s .github/scripts -p 'test_*.py'

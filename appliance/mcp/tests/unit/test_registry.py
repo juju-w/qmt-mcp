@@ -16,7 +16,7 @@ from qmt_mcp_core.workers import WorkerPool
 
 
 class FakeMCP:
-    """Minimal stand-in for FastMCP: records tools registered via .tool()."""
+    """Minimal MCP server stand-in that records tools registered via .tool()."""
 
     def __init__(self):
         self.registered = []

@@ -7,6 +7,8 @@ description: Deploy, operate, and troubleshoot the QMT-MCP appliance and qmtctl.
 
 Operate the broker-neutral QMT appliance: Wine runs Windows QMT on native amd64,
 and streamable HTTP MCP exposes xtdata plus gated account and analysis features.
+The server and qmtctl prefer MCP `2026-07-28` and automatically retain the 2025
+initialize/session path for older clients at the same `/mcp` URL.
 
 For first deployment and deployment failures, use
 **deploying-qmt-mcp-appliance**. For repository development, CI, and release
@@ -31,7 +33,7 @@ appliance/mcp/
   qmt_mcp_portfolio/  read-only portfolio analytics
   qmt_mcp_db/         optional PostgreSQL persistence
 cli/qmtctl/           compiled streamable HTTP client
-specs/001-018/        feature specifications
+specs/                feature specifications
 ```
 
 ## Deploy

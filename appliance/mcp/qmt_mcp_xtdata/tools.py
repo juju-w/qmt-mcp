@@ -6,7 +6,7 @@ import hashlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from fastmcp import FastMCP
+    from mcp.server import MCPServer
 
 from qmt_mcp_core.errors import McpCoreError, ok_envelope
 from qmt_mcp_core.health import HealthState
@@ -191,7 +191,7 @@ def _search_cache_for_call(
     return usable_cache_or_seed(health.config.broker_id)
 
 
-def register_xtdata_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthState, warehouse=None) -> None:
+def register_xtdata_tools(mcp: MCPServer, registry: ToolRegistry, health: HealthState, warehouse=None) -> None:
     health.xtdata = "not_ready"
     try:
         _xtdata()

@@ -143,22 +143,27 @@ func (c *Client) TaskCancel(ctx context.Context, taskID string) (*TaskAck, error
 }
 
 func (c *Client) TaskWait(ctx context.Context, taskID string) (*TaskInfo, error) {
+	task, err := c.TaskGet(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if taskStatusSettled(task.Status) {
+		return task, nil
+	}
+	if task.Status != "working" {
+		return nil, invalidTaskStatus(taskID, task.Status)
+	}
+
+	current, settled, listenErr := c.listenTask(ctx, nil, *task)
+	if listenErr != nil {
+		return nil, listenErr
+	}
+	if settled {
+		return &current, nil
+	}
+
 	for {
-		task, err := c.TaskGet(ctx, taskID)
-		if err != nil {
-			return nil, err
-		}
-		switch task.Status {
-		case "completed", "failed", "cancelled", "input_required":
-			return task, nil
-		case "working":
-		default:
-			return nil, &AppError{
-				Kind:    "protocol",
-				Message: fmt.Sprintf("task %s returned invalid status %q", taskID, task.Status),
-			}
-		}
-		delay := time.Duration(task.PollIntervalMS) * time.Millisecond
+		delay := time.Duration(current.PollIntervalMS) * time.Millisecond
 		if delay < 100*time.Millisecond {
 			delay = 100 * time.Millisecond
 		}
@@ -172,6 +177,33 @@ func (c *Client) TaskWait(ctx context.Context, taskID string) (*TaskInfo, error)
 			return nil, ctx.Err()
 		case <-timer.C:
 		}
+		task, err = c.TaskGet(ctx, taskID)
+		if err != nil {
+			return nil, err
+		}
+		current = *task
+		if taskStatusSettled(current.Status) {
+			return &current, nil
+		}
+		if current.Status != "working" {
+			return nil, invalidTaskStatus(taskID, current.Status)
+		}
+	}
+}
+
+func taskStatusSettled(status string) bool {
+	switch status {
+	case "completed", "failed", "cancelled", "input_required":
+		return true
+	default:
+		return false
+	}
+}
+
+func invalidTaskStatus(taskID, status string) error {
+	return &AppError{
+		Kind:    "protocol",
+		Message: fmt.Sprintf("task %s returned invalid status %q", taskID, status),
 	}
 }
 

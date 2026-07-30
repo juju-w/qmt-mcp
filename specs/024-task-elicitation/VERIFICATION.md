@@ -100,5 +100,21 @@ passed all six required jobs:
 - Secret scan with gitleaks: PASS
 - Native linux/amd64 appliance build: PASS in 2m50s
 
-Final review-fix PR CI, main CI, and automated release evidence remain pending
-delivery.
+Final PR run
+[`30582478321`](https://github.com/juju-w/qmt-mcp/actions/runs/30582478321)
+passed after all review findings were resolved. PR
+[#16](https://github.com/juju-w/qmt-mcp/pull/16) merged as
+`22f5212 feat(mcp): add task elicitation (#16)`.
+
+Main CI run
+[`30582623517`](https://github.com/juju-w/qmt-mcp/actions/runs/30582623517)
+passed all six required jobs. Automated release run
+[`30582758938`](https://github.com/juju-w/qmt-mcp/actions/runs/30582758938)
+published
+[`v0.10.0`](https://github.com/juju-w/qmt-mcp/releases/tag/v0.10.0)
+with six qmtctl platform archives and `SHA256SUMS`.
+
+Both `ghcr.io/juju-w/qmt-mcp:0.10.0` and `latest` resolve to
+`sha256:01a42c1fb4b12d9e4fb00618db51c4b7a6b2e0e2f488655b6e52e9f88e2660fa`.
+The optional China registry mirror was correctly skipped because its
+repository variables and credentials were not configured.

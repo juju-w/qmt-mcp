@@ -161,6 +161,16 @@ jobs:
               --force \
               --output-dir "conformance-results/server-modern-${scenario}"
           done
+          # alpha.10 records this scenario as pending while its
+          # subscriptions/listen harness is rewritten. Keep it visible in CI;
+          # executable acceptance lives in the Python/Go integration suites.
+          npx --yes "$CONFORMANCE_PACKAGE" server \
+            --url http://127.0.0.1:18766/mcp \
+            --spec-version 2026-07-28 \
+            --scenario tasks-status-notifications \
+            --force \
+            --output-dir \
+              conformance-results/server-modern-tasks-status-notifications
           for scenario in server-initialize ping tools-list; do
             npx --yes "$CONFORMANCE_PACKAGE" server \
               --url http://127.0.0.1:18766/mcp \

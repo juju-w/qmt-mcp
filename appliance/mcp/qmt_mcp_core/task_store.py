@@ -73,6 +73,13 @@ class TaskRecord:
             payload["inputRequests"] = self.input_requests
         return payload
 
+    def to_notification(self) -> dict[str, Any]:
+        """Return the complete DetailedTask state used by notifications/tasks."""
+
+        payload = self.to_wire()
+        payload.pop("resultType", None)
+        return payload
+
 
 class TaskStore:
     """SQLite-backed task records with atomic, terminal-safe transitions."""

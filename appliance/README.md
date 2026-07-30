@@ -87,6 +87,14 @@ in-process and are never written to SQLite or logs. qmtctl exposes the task ID
 and pending requests and requires an explicit `task update`; it does not
 auto-confirm.
 
+Stable clients may also request task IDs through
+`subscriptions/listen.notifications.taskIds`. The acknowledgement is followed
+by current and changed `notifications/tasks` snapshots. This is an optional
+latency optimization: `tasks/get` remains the complete fallback for 2025,
+polling-only, disconnected, and not-yet-upgraded clients. qmtctl selects this
+path automatically and returns to server-guided polling if the stream cannot
+continue.
+
 ## Connect
 
 Use a real RDP client (macOS: **Windows App** / Microsoft Remote Desktop —

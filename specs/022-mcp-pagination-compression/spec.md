@@ -201,8 +201,10 @@ CLI, and image gates with pagination and compression enabled by default.
 - Reverse proxies may also compress responses. Standards-compliant
   `Content-Encoding` checks prevent double compression.
 
-## Out of Scope
+## Out of Scope And Follow-on Delivery
 
 - Pagination inside market-data tool results.
 - Brotli, zstd, request-body compression, or compressed SSE.
-- Resources, prompts, Apps, Tasks, or Registry publication.
+- Durable Tasks, task input, and uncompressed task status SSE were delivered
+  by 023-025.
+- Resources, prompts, Apps, and Registry publication remain future work.

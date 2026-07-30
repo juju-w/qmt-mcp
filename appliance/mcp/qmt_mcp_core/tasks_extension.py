@@ -31,9 +31,9 @@ from pydantic import Field, TypeAdapter, ValidationError
 from pydantic_core import to_jsonable_python
 
 from .registry import ToolRegistry
+from .task_notifications import TASKS_EXTENSION_ID, TaskStateEvent
 from .task_store import TaskRecord, TaskStore
 
-TASKS_EXTENSION_ID = "io.modelcontextprotocol/tasks"
 STABLE_PROTOCOL_VERSION = "2026-07-28"
 INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
@@ -52,6 +52,10 @@ _current_task_interaction: contextvars.ContextVar[TaskInteraction | None] = cont
     "qmt_task_interaction",
     default=None,
 )
+
+
+async def _noop_publish(_task_id: str) -> None:
+    return
 
 
 class TaskRequestParams(RequestParams):
@@ -167,9 +171,10 @@ def _error_payload(exc: MCPError) -> dict[str, Any]:
 class TaskInteraction:
     """Coordinate one live task's durable input snapshots and transient answers."""
 
-    def __init__(self, store: TaskStore, task_id: str):
+    def __init__(self, store: TaskStore, task_id: str, publish=_noop_publish):
         self.store = store
         self.task_id = task_id
+        self._publish = publish
         self._lock = asyncio.Lock()
         self._pending: dict[str, Any] = {}
         self._responses: dict[str, Any] = {}
@@ -204,6 +209,7 @@ class TaskInteraction:
             self._responses = {}
             self._waiter = waiter
             self._status_message = status_message
+        await self._publish(self.task_id)
         try:
             return await waiter
         finally:
@@ -213,6 +219,7 @@ class TaskInteraction:
 
     async def submit(self, input_responses: dict[str, Any]) -> None:
         _validate_response_batch(input_responses)
+        changed = False
         async with self._lock:
             if self._closed or not self._pending:
                 return
@@ -235,19 +242,23 @@ class TaskInteraction:
                     return
                 self._responses.update(matching)
                 self._pending = remaining
-                return
+                changed = True
+            else:
+                if not self.store.resume(self.task_id):
+                    self._close_locked()
+                    return
+                self._responses.update(matching)
+                self._pending = {}
+                waiter = self._waiter
+                self._waiter = None
+                responses = dict(self._responses)
+                self._responses = {}
+                if waiter is not None and not waiter.done():
+                    waiter.set_result(responses)
+                changed = True
 
-            if not self.store.resume(self.task_id):
-                self._close_locked()
-                return
-            self._responses.update(matching)
-            self._pending = {}
-            waiter = self._waiter
-            self._waiter = None
-            responses = dict(self._responses)
-            self._responses = {}
-            if waiter is not None and not waiter.done():
-                waiter.set_result(responses)
+        if changed:
+            await self._publish(self.task_id)
 
     async def close(self) -> None:
         async with self._lock:
@@ -290,11 +301,13 @@ class TasksExtension(Extension):
         task_tools: Sequence[str],
         mrtr_before_task_tools: Sequence[str] = (),
         conformance_fixtures: bool = False,
+        subscriptions=None,
     ):
         self.store = store
         self.task_tools = frozenset(task_tools)
         self.mrtr_before_task_tools = frozenset(mrtr_before_task_tools)
         self.conformance_fixtures = conformance_fixtures
+        self.subscriptions = subscriptions
         self.registry: ToolRegistry | None = None
         self._running: dict[str, asyncio.Task[None]] = {}
         self._interactions: dict[str, TaskInteraction] = {}
@@ -302,6 +315,42 @@ class TasksExtension(Extension):
 
     def bind_registry(self, registry: ToolRegistry) -> None:
         self.registry = registry
+
+    def require_capability(self, ctx) -> None:
+        require_client_extension(ctx, self.identifier)
+
+    def principal_digest(self) -> str:
+        return _principal_digest()
+
+    def subscription_records(self, task_ids: Sequence[str]) -> list[TaskRecord]:
+        """Return only current records authorized for this request principal."""
+
+        owner_digest = _principal_digest()
+        token = get_access_token()
+        scopes = set(token.scopes) if token is not None else None
+        records: list[TaskRecord] = []
+        for task_id in task_ids:
+            record = self.store.get(task_id)
+            if record is None or record.owner_digest != owner_digest:
+                continue
+            if scopes is not None and not set(record.required_scopes).issubset(scopes):
+                continue
+            records.append(record)
+        return records
+
+    async def _publish_current(self, task_id: str) -> None:
+        if self.subscriptions is None:
+            return
+        record = self.store.get(task_id)
+        if record is None:
+            return
+        await self.subscriptions.publish(
+            TaskStateEvent(
+                task_id=record.task_id,
+                owner_digest=record.owner_digest,
+                snapshot=record.to_notification(),
+            )
+        )
 
     def methods(self) -> Sequence[MethodBinding]:
         versions = frozenset({STABLE_PROTOCOL_VERSION})
@@ -321,7 +370,7 @@ class TasksExtension(Extension):
             result = await call_next(ctx)
             if not params.input_responses or isinstance(result, InputRequiredResult) or not _declares_tasks(ctx):
                 return result
-            return self._taskify_completed_result(params.name, result)
+            return await self._taskify_completed_result(params.name, result)
 
         if not _declares_tasks(ctx):
             if self.conformance_fixtures and params.name == "failing_job":
@@ -336,7 +385,7 @@ class TasksExtension(Extension):
             tool_name=params.name,
             required_scopes=required_scopes,
         )
-        interaction = TaskInteraction(self.store, record.task_id)
+        interaction = TaskInteraction(self.store, record.task_id, self._publish_current)
         self._interactions[record.task_id] = interaction
         runner = asyncio.create_task(
             self._execute(record.task_id, interaction, ctx, call_next),
@@ -351,9 +400,10 @@ class TasksExtension(Extension):
             )
             self._expiry_watchers[record.task_id] = watcher
             watcher.add_done_callback(lambda _done, task_id=record.task_id: self._expiry_watchers.pop(task_id, None))
+        await self._publish_current(record.task_id)
         return record.to_wire(created=True)
 
-    def _taskify_completed_result(self, tool_name: str, result: Any) -> dict[str, Any]:
+    async def _taskify_completed_result(self, tool_name: str, result: Any) -> dict[str, Any]:
         required_scopes: tuple[str, ...] = ()
         if self.registry is not None:
             required_scopes = self.registry.required_scopes(tool_name) or ()
@@ -370,23 +420,28 @@ class TasksExtension(Extension):
         completed = self.store.get(record.task_id)
         if completed is None:
             raise MCPError(code=INTERNAL_ERROR, message="Task creation failed")
+        await self._publish_current(record.task_id)
         return completed.to_wire(created=True)
 
     async def _execute(self, task_id: str, interaction: TaskInteraction, ctx, call_next) -> None:
         token = _current_task_interaction.set(interaction)
         try:
             result = await call_next(ctx)
-            self.store.complete(task_id, to_jsonable_python(result, by_alias=True, exclude_none=True))
+            if self.store.complete(task_id, to_jsonable_python(result, by_alias=True, exclude_none=True)):
+                await self._publish_current(task_id)
         except asyncio.CancelledError:
             return
         except MCPError as exc:
-            self.store.fail(task_id, _error_payload(exc), status_message=exc.message)
+            if self.store.fail(task_id, _error_payload(exc), status_message=exc.message):
+                await self._publish_current(task_id)
         except Exception:
-            self.store.fail(
+            changed = self.store.fail(
                 task_id,
                 {"code": INTERNAL_ERROR, "message": "Task execution failed"},
                 status_message="Task execution failed",
             )
+            if changed:
+                await self._publish_current(task_id)
         finally:
             _current_task_interaction.reset(token)
             await interaction.close()
@@ -441,7 +496,8 @@ class TasksExtension(Extension):
         require_client_extension(ctx, self.identifier)
         record = await self._authorized_record(params.task_id)
         if not record.terminal:
-            self.store.cancel(params.task_id)
+            if self.store.cancel(params.task_id):
+                await self._publish_current(params.task_id)
             await self._stop_runtime(params.task_id)
         return {"resultType": "complete"}
 

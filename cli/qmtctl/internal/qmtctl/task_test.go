@@ -50,6 +50,7 @@ func createdTaskWire(taskID string) map[string]any {
 func TestClientWaitModeResolvesTaskToOriginalToolPayload(t *testing.T) {
 	const taskID = "tsk_abcdefghijklmnopqrstuvwxyz0123456789ABCD"
 	polls := 0
+	listens := 0
 	startedAt := time.Now()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -91,6 +92,9 @@ func TestClientWaitModeResolvesTaskToOriginalToolPayload(t *testing.T) {
 				}
 			}
 			writeRPCResult(w, request["id"], result)
+		case "subscriptions/listen":
+			listens++
+			writeRPCError(w, request["id"], -32601, "Method not found")
 		default:
 			t.Fatalf("unexpected method %v", request["method"])
 		}
@@ -110,6 +114,9 @@ func TestClientWaitModeResolvesTaskToOriginalToolPayload(t *testing.T) {
 	}
 	if polls != 2 {
 		t.Fatalf("polls = %d, want 2", polls)
+	}
+	if listens != 1 {
+		t.Fatalf("listen attempts = %d, want 1", listens)
 	}
 }
 
@@ -362,6 +369,8 @@ func TestClientWaitModePreservesInputRequiredDetails(t *testing.T) {
 				},
 			}
 			writeRPCResult(w, request["id"], result)
+		case "subscriptions/listen":
+			writeRPCError(w, request["id"], -32601, "Method not found")
 		default:
 			t.Fatalf("unexpected method %v", request["method"])
 		}

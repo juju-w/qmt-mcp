@@ -98,6 +98,13 @@ declare Tasks continue synchronous calls. Stable declaring clients may observe
 `input_required`: pending standard MCP request snapshots are durable, while
 answer values are transient and are not stored or logged.
 
+Task status subscriptions require no server setting beyond Tasks. A stable
+client may request up to 64 task IDs under
+`subscriptions/listen.notifications.taskIds`; only authorized IDs are
+acknowledged. The server sends current state followed by complete
+`notifications/tasks` snapshots. Polling-only and supported 2025 clients remain
+valid, and the removed `notifications/tasks/status` method is never emitted.
+
 ### Feature gates
 
 | Variable | Default | Description |
@@ -156,9 +163,10 @@ qmtctl task update tsk_<id> \
 ```
 
 `--timeout` applies to one HTTP exchange. `--task-timeout` applies to the
-complete wait lifecycle. qmtctl stops on `input_required`, returns the task ID
-and pending requests, and never auto-accepts. Response JSON is bounded to 16
-keys and 64 KiB.
+complete wait lifecycle across notification streaming and any polling fallback.
+qmtctl refreshes OAuth before listening, stops on `input_required`, returns the
+task ID and pending requests, and never auto-accepts. Response JSON is bounded
+to 16 keys and 64 KiB.
 
 ## Broker Pack
 

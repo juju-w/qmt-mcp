@@ -199,12 +199,15 @@ under Wine.
 - **SC-007**: The native linux/amd64 CI image build passes before merge and its
   cache is reusable by the release workflow.
 
-## Out of Scope
+## Follow-on Delivery
 
-- Tool output schemas, annotations, profiles, and dynamic visibility (020).
-- JWT/JWKS validation and interactive OAuth flows (021).
-- MCP Tasks (023), MCP Apps (024), Resources and Registry publication (025).
-- Live xtdata/xttrade validation.
+- 020 delivered tool output schemas, annotations, profiles, and dynamic
+  visibility.
+- 021 delivered JWT/JWKS validation and interactive OAuth flows.
+- 023-025 delivered durable Tasks, task input, and task status notifications.
+- MCP Apps, Resources, and Registry publication remain unassigned future work.
+- Live xtdata/xttrade validation remains outside this protocol-foundation
+  feature.
 
 ## Assumptions
 

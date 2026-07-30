@@ -1,4 +1,4 @@
-"""ASGI/FastMCP application assembly."""
+"""ASGI application assembly for the official MCP Python SDK."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import os
 import sys
 from typing import Any
 
-from fastmcp import FastMCP
+from mcp.server import CacheHint, MCPServer
 
 from .audit import JsonlAuditSink
 from .config import CoreConfig, load_config
@@ -189,7 +189,7 @@ class CoreASGI:
         await self.app(scope, receive, send)
 
 
-def register_core_tools(mcp: FastMCP, registry: ToolRegistry, health: HealthState) -> None:
+def register_core_tools(mcp: MCPServer, registry: ToolRegistry, health: HealthState) -> None:
     @registry.register(
         mcp,
         name="qmt_health",
@@ -238,7 +238,7 @@ def _make_warehouse(config: CoreConfig, health: HealthState):
 
 
 def register_optional_xtdata(
-    mcp: FastMCP, registry: ToolRegistry, health: HealthState, config: CoreConfig, warehouse=None
+    mcp: MCPServer, registry: ToolRegistry, health: HealthState, config: CoreConfig, warehouse=None
 ) -> None:
     if not config.enable_xtdata:
         health.xtdata = "disabled"
@@ -253,7 +253,7 @@ def register_optional_xtdata(
         health.set_family("xtdata", "error", f"failed to register xtdata tools: {type(exc).__name__}", [])
 
 
-def register_optional_xttrade(mcp: FastMCP, registry: ToolRegistry, health: HealthState, config: CoreConfig):
+def register_optional_xttrade(mcp: MCPServer, registry: ToolRegistry, health: HealthState, config: CoreConfig):
     """Register the read-only account-query family iff enabled + allow-listed.
 
     Returns a TraderSession (for the connector) when registered, else None. Fails
@@ -288,7 +288,7 @@ def register_optional_xttrade(mcp: FastMCP, registry: ToolRegistry, health: Heal
 
 
 def register_optional_portfolio(
-    mcp: FastMCP, registry: ToolRegistry, health: HealthState, config: CoreConfig, trader_session=None
+    mcp: MCPServer, registry: ToolRegistry, health: HealthState, config: CoreConfig, trader_session=None
 ) -> None:
     if not config.enable_portfolio_analysis:
         health.set_family("portfolio", "disabled", "portfolio analysis disabled (QMT_ENABLE_PORTFOLIO_ANALYSIS=0)", [])
@@ -323,7 +323,19 @@ def create_app(config: CoreConfig | None = None):
         health.audit = "error"
         raise
 
-    mcp = FastMCP("QMT MCP")
+    private_no_cache = CacheHint(ttl_ms=0, scope="private")
+    mcp = MCPServer(
+        "QMT MCP",
+        version=os.environ.get("QMT_MCP_VERSION", "dev"),
+        cache_hints={
+            "server/discover": private_no_cache,
+            "tools/list": private_no_cache,
+            "prompts/list": private_no_cache,
+            "resources/list": private_no_cache,
+            "resources/templates/list": private_no_cache,
+            "resources/read": private_no_cache,
+        },
+    )
     workers = WorkerPool(config.worker_limit)
     registry = ToolRegistry(health, audit, workers)
     register_core_tools(mcp, registry, health)
@@ -333,7 +345,16 @@ def create_app(config: CoreConfig | None = None):
     register_optional_portfolio(mcp, registry, health, config, trader_session=trader_session)
     registry.assert_no_write_tools()
 
-    app = mcp.http_app(transport=config.transport)
+    if config.transport == "sse":
+        app = mcp.sse_app(host=config.host)
+    else:
+        # Stateful mode preserves legacy initialize/session semantics. The SDK
+        # routes 2026-07-28 requests through its stateless path at the same URL.
+        app = mcp.streamable_http_app(
+            streamable_http_path="/mcp",
+            stateless_http=False,
+            host=config.host,
+        )
     core = CoreASGI(app, config, health)
     # Build (do not start) the background readiness probe / trader connector.
     # main() starts them; tests can drive .step()/.attempt() directly.

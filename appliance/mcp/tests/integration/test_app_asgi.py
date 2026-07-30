@@ -1,7 +1,7 @@
 """Integration tier: app assembly + ASGI auth path.
 
-Requires `fastmcp` installed; uses a fake `xtquant` so no Wine/broker pack is
-needed. Skipped automatically in the unit tier (when fastmcp is absent).
+Requires the official `mcp` package; uses a fake `xtquant` so no Wine/broker
+pack is needed. Skipped automatically in the unit tier (when mcp is absent).
 """
 
 from __future__ import annotations
@@ -11,9 +11,11 @@ import json
 
 import pytest
 
-pytest.importorskip("fastmcp")
+pytest.importorskip("mcp")
 
 pytestmark = pytest.mark.integration
+
+from starlette.testclient import TestClient  # noqa: E402
 
 from qmt_mcp_core.app import create_app  # noqa: E402
 from qmt_mcp_core.config import CoreConfig  # noqa: E402
@@ -71,6 +73,15 @@ def _scope(path: str, token: str | None = None) -> dict:
     if token is not None:
         headers.append((b"authorization", f"Bearer {token}".encode()))
     return {"type": "http", "path": path, "headers": headers, "method": "GET"}
+
+
+def _response_json(response) -> dict:
+    if "text/event-stream" not in response.headers.get("content-type", ""):
+        return response.json()
+    for line in response.text.splitlines():
+        if line.startswith("data:"):
+            return json.loads(line.removeprefix("data:").strip())
+    raise AssertionError("SSE response did not contain a data event")
 
 
 def test_healthz_requires_token(fake_xtquant, tmp_path):
@@ -131,3 +142,81 @@ def test_oauth_resource_metadata_and_challenge(fake_xtquant, tmp_path):
     challenge = header_map[b"www-authenticate"].decode()
     assert 'resource_metadata="https://qmt.example.com/.well-known/oauth-protected-resource"' in challenge
     assert 'scope="qmt:read qmt:account"' in challenge
+
+
+def test_modern_discover_is_stateless_and_cache_hinted(fake_xtquant, tmp_path):
+    app, _cfg, _health, _reg = create_app(
+        _config(tmp_path, "", host="127.0.0.1", allow_unauth_loopback=True, enable_xtdata=False)
+    )
+    request_meta = {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": {"name": "integration-test", "version": "1.0.0"},
+        "io.modelcontextprotocol/clientCapabilities": {},
+    }
+    headers = {
+        "accept": "application/json, text/event-stream",
+        "mcp-protocol-version": "2026-07-28",
+        "mcp-method": "server/discover",
+    }
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "server/discover",
+        "params": {"_meta": request_meta},
+    }
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        response = client.post("/mcp", json=payload, headers=headers)
+
+    assert response.status_code == 200
+    assert "mcp-session-id" not in response.headers
+    result = _response_json(response)["result"]
+    assert result["supportedVersions"] == ["2026-07-28"]
+    assert result["ttlMs"] == 0
+    assert result["cacheScope"] == "private"
+
+
+def test_legacy_initialize_and_session_share_modern_endpoint(fake_xtquant, tmp_path):
+    app, _cfg, _health, _reg = create_app(
+        _config(tmp_path, "", host="127.0.0.1", allow_unauth_loopback=True, enable_xtdata=False)
+    )
+    accept = {"accept": "application/json, text/event-stream"}
+    initialize = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "legacy-integration-test", "version": "1.0.0"},
+        },
+    }
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        response = client.post("/mcp", json=initialize, headers=accept)
+        assert response.status_code == 200
+        session_id = response.headers["mcp-session-id"]
+        assert _response_json(response)["result"]["protocolVersion"] == "2025-11-25"
+
+        session_headers = {
+            **accept,
+            "mcp-session-id": session_id,
+            "mcp-protocol-version": "2025-11-25",
+        }
+        initialized = client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+            headers=session_headers,
+        )
+        assert initialized.status_code == 202
+
+        listed = client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+            headers=session_headers,
+        )
+        assert listed.status_code == 200
+        assert {tool["name"] for tool in _response_json(listed)["result"]["tools"]} >= {
+            "qmt_health",
+            "qmt_capabilities",
+        }

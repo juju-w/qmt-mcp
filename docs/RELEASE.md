@@ -27,15 +27,17 @@ CJK fonts. The Dockerfile keeps stable work before frequently changing source:
 
 1. pinned Wine base image;
 2. Ubuntu runtime packages and fonts;
-3. declared Python requirements;
+3. hash-verified Python dependency lock;
 4. Wine prefix and Windows Python dependency provisioning (the installer and
    pip download cache are removed inside this layer);
 5. launcher scripts and MCP source;
 6. short application smoke test.
 
-Changing MCP source therefore reruns only the final copy and smoke steps. The
-workflow reads `qmt-mcp:buildcache`, falls back to the previous GitHub Actions
-cache during migration, and writes a `mode=max` registry cache only for the
+Changing MCP source therefore reruns only the final copy and smoke steps. PR
+and main CI build the complete `linux/amd64` appliance on a native runner and
+write the result to the `appliance-ci` GHA cache. Release reads that tested
+cache first, then `qmt-mcp:buildcache`, and finally the previous default GHA
+cache during migration. It writes a `mode=max` registry cache only for the
 highest SemVer tag. Historical release retries may read this cache but cannot
 overwrite it. The cache tag is an internal BuildKit artifact, not a runtime
 image.

@@ -2,6 +2,10 @@
 
 Detailed configuration and request examples for **qmt-mcp-ops**.
 
+Protocol baseline: MCP `2026-07-28` is preferred. The same streamable HTTP
+endpoint accepts legacy `2025-11-25`, `2025-06-18`, and `2025-03-26` clients.
+qmtctl negotiates this automatically through the official Go SDK.
+
 ## Environment Variables
 
 ### Required server configuration

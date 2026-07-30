@@ -14,7 +14,7 @@ generic runtime, on a native `linux/amd64` host:
 - `linux/amd64` runtime; new WoW64 Wine prefix via `WINEARCH=wow64`
 - CJK fonts on the Linux desktop **and** inside the Wine prefix
 - Windows Python 3.12 installed into the Wine prefix (downloaded at build time)
-- `fastmcp` / `uvicorn` for the MCP server; `detect-broker` to resolve the pack
+- official `mcp` Python SDK / `uvicorn` for the MCP server; `detect-broker` to resolve the pack
 - `8765` serves the read-only QMT **MCP** server (bearer-token; see root README)
 
 Because nothing broker-specific is baked in, the build context stays tiny and the

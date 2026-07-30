@@ -81,6 +81,118 @@ jobs:
       - name: Unit tests
         run: pytest -m 'not integration'
 
+  protocol-conformance:
+    name: MCP 2026 + legacy conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: appliance/mcp/requirements.txt
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: "1.25"
+          cache-dependency-path: cli/qmtctl/go.sum
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
+      - name: Install locked MCP runtime
+        working-directory: appliance/mcp
+        run: |
+          python -m pip install --require-hashes -r requirements.txt
+          python -m pip install "pytest==9.0.2"
+      - name: Official SDK integration tests
+        working-directory: appliance/mcp
+        run: pytest -m integration
+      - name: Run official server and qmtctl conformance
+        env:
+          CONFORMANCE_PACKAGE: "@modelcontextprotocol/conformance@0.2.0-alpha.10"
+        run: |
+          set -euo pipefail
+          mkdir -p conformance-results
+
+          PYTHONPATH=appliance/mcp \
+          MCP_HOST=127.0.0.1 \
+          MCP_PORT=18766 \
+          QMT_MCP_ALLOW_UNAUTH_LOOPBACK=1 \
+          QMT_MCP_ENABLE_XTDATA=0 \
+          QMT_MCP_AUDIT_PATH="${RUNNER_TEMP}/qmt-mcp-conformance-audit.jsonl" \
+            python appliance/mcp/qmt_mcp.py \
+              >conformance-results/server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18766/livez >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              cat conformance-results/server.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          for scenario in tools-list caching http-header-validation; do
+            npx --yes "$CONFORMANCE_PACKAGE" server \
+              --url http://127.0.0.1:18766/mcp \
+              --spec-version 2026-07-28 \
+              --scenario "$scenario" \
+              --output-dir "conformance-results/server-modern-${scenario}"
+          done
+          for scenario in server-initialize ping tools-list; do
+            npx --yes "$CONFORMANCE_PACKAGE" server \
+              --url http://127.0.0.1:18766/mcp \
+              --spec-version 2025-11-25 \
+              --scenario "$scenario" \
+              --output-dir "conformance-results/server-legacy-${scenario}"
+          done
+
+          go build -C cli/qmtctl \
+            -o "${RUNNER_TEMP}/qmtctl-conformance" \
+            ./cmd/conformance
+          for scenario in tools_call request-metadata http-standard-headers; do
+            npx --yes "$CONFORMANCE_PACKAGE" client \
+              --command "${RUNNER_TEMP}/qmtctl-conformance" \
+              --spec-version 2026-07-28 \
+              --scenario "$scenario" \
+              --output-dir "conformance-results/client-modern-${scenario}"
+          done
+          for scenario in initialize tools_call; do
+            npx --yes "$CONFORMANCE_PACKAGE" client \
+              --command "${RUNNER_TEMP}/qmtctl-conformance" \
+              --spec-version 2025-11-25 \
+              --scenario "$scenario" \
+              --output-dir "conformance-results/client-legacy-${scenario}"
+          done
+      - name: Upload conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: mcp-conformance
+          path: conformance-results/
+
+  appliance-image:
+    name: Build appliance (linux/amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: docker/setup-buildx-action@v4.2.0
+      - name: Build and smoke appliance
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: appliance
+          file: appliance/Dockerfile
+          platforms: linux/amd64
+          push: false
+          outputs: type=cacheonly
+          cache-from: |
+            type=gha,scope=appliance-ci
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/qmt-mcp:buildcache
+          cache-to: type=gha,scope=appliance-ci,mode=max
+
   secret-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
@@ -102,8 +214,8 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-go@v7.0.0
         with:
-          go-version: "1.22"
-          cache-dependency-path: cli/qmtctl/go.mod
+          go-version: "1.25"
+          cache-dependency-path: cli/qmtctl/go.sum
       - name: Go test, vet and build
         run: |
           set -euo pipefail

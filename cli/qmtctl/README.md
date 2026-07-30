@@ -4,6 +4,11 @@
 thin client over the streamable-http MCP endpoint and does not import `xtquant`
 or duplicate broker logic locally.
 
+It uses the official MCP Go SDK. It prefers stable MCP `2026-07-28`
+(`server/discover`, stateless requests, standard MCP headers) and automatically
+falls back to the 2025 initialize/session flow when a server has not upgraded.
+Building from source requires Go 1.25 or newer.
+
 ## Build
 
 ```bash

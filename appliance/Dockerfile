@@ -4,7 +4,7 @@
 #   - Wine new-WoW64 on native linux/amd64
 #   - Windows Python 3.12 installed into the Wine prefix
 #   - CJK fonts (Linux desktop + inside the Wine prefix)
-#   - fastmcp + uvicorn + numpy/pandas (MCP + xtdata deps)
+#   - official MCP SDK + uvicorn + numpy/pandas (MCP + xtdata deps)
 #   - the read-only QMT MCP launcher + scripts + XFCE autostart
 #   - xrdp desktop
 #   - detect-broker tooling (python3 + python3-yaml)
@@ -69,9 +69,9 @@ RUN set -eux; \
 ENV LANG=zh_CN.GBK \
     LC_ALL=zh_CN.GBK
 
-# Copy only the dependency declaration before the expensive Wine provisioning.
+# Copy only the dependency lock before the expensive Wine provisioning.
 # Application source is copied later, so ordinary MCP changes keep this layer.
-COPY mcp/requirements.in /tmp/qmt-mcp-requirements.in
+COPY mcp/requirements.txt /tmp/qmt-mcp-requirements.txt
 
 # ---- pre-create wineuser (uid/gid 1000) to match runtime USER_UID/USER_GID ----
 RUN groupadd --gid 1000 wineuser \
@@ -119,13 +119,13 @@ RUN set -eux; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip config set \
         global.index-url https://pypi.tuna.tsinghua.edu.cn/simple; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -m pip install -q --no-cache-dir \
-        -r 'Z:\tmp\qmt-mcp-requirements.in'; \
+        --require-hashes -r 'Z:\tmp\qmt-mcp-requirements.txt'; \
     mkdir -p "$WINEPREFIX/drive_c/windows/Fonts"; \
     cp /usr/share/fonts/opentype/noto/*CJK*.ttc "$WINEPREFIX/drive_c/windows/Fonts/" 2>/dev/null || true; \
     cp /usr/share/fonts/truetype/wqy/*.ttc      "$WINEPREFIX/drive_c/windows/Fonts/" 2>/dev/null || true; \
     # Dependency smoke only. The application smoke runs after its source copy.
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" --version; \
-    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "import fastmcp, uvicorn, numpy, pandas; print('fastmcp', fastmcp.__version__)"; \
+    xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "from importlib.metadata import version; import mcp, uvicorn, numpy, pandas; print('mcp', version('mcp'))"; \
     wineserver -k || true
 
 # ---- frequently changing application source ----

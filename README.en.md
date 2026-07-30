@@ -49,6 +49,7 @@ never needs to know the raw QMT code:
 | Read-only account queries `xttrade` | ⚠️ needs broker permission | degrades to `not_authorized` (no crash) when not enabled |
 | Database persistence (PostgreSQL, optional) | ✅ ready | market-data warehouse, read/write-through, off by default |
 | `qmtctl` CLI | ✅ ready | compiled Go CLI client for health/search/quotes/account queries |
+| MCP protocol | ✅ dual-era | prefers stable `2026-07-28`; the same `/mcp` endpoint accepts 2025 clients |
 
 > **Trading/account permission**: connecting `xtquant` to the trading interface
 > (orders **and** account queries) requires the broker to enable "programmatic
@@ -160,7 +161,7 @@ More: [broker pack guide](appliance/docs/BROKER-PACK.md) ·
 appliance/   # deployable appliance: Dockerfile · compose · scripts · mcp/ · brokers/ · docs/
 cli/         # qmtctl: compiled Go CLI client (streamable-http MCP)
 skills/      # AI agent ops knowledge base (deploy/MCP/CLI/troubleshooting)
-specs/       # Spec-Driven Development (spec-kit): 001~018 spec/plan/tasks
+specs/       # Spec-Driven Development (spec-kit): feature specs/plans/tasks
 ```
 
 Managed with **Spec-Driven Development**, one feature at a time, spec before code.

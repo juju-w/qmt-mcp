@@ -252,6 +252,7 @@ jobs:
             org.opencontainers.image.revision=${{ needs.prepare.outputs.release_sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: |
+            type=gha,scope=appliance-ci
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/qmt-mcp:buildcache
             type=gha
           cache-to: ${{ needs.prepare.outputs.publish_latest == 'true' && format('type=registry,ref=ghcr.io/{0}/qmt-mcp:buildcache,mode=max,image-manifest=true,oci-mediatypes=true', github.repository_owner) || '' }}
@@ -321,8 +322,8 @@ jobs:
           ref: ${{ needs.prepare.outputs.release_sha }}
       - uses: actions/setup-go@v7.0.0
         with:
-          go-version: "1.22"
-          cache-dependency-path: cli/qmtctl/go.mod
+          go-version: "1.25"
+          cache-dependency-path: cli/qmtctl/go.sum
       - name: Test qmtctl
         run: |
           set -euo pipefail

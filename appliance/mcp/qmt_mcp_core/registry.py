@@ -16,7 +16,9 @@ from .tool_contracts import (
     ToolVisibilityPolicy,
     default_tool_title,
     mutation_like,
+    oauth_scopes_allow,
     register_mcp_tool,
+    required_oauth_scopes,
 )
 from .workers import WorkerPool
 
@@ -60,8 +62,12 @@ class ToolRegistry:
                 names.append(name)
         return sorted(names)
 
-    def visibility_summary(self) -> dict[str, Any]:
-        visible = sum(1 for meta in self._tools.values() if meta["visible"])
+    def visibility_summary(self, scopes: set[str] | frozenset[str] | None = None) -> dict[str, Any]:
+        visible = sum(
+            1
+            for meta in self._tools.values()
+            if meta["visible"] and (scopes is None or oauth_scopes_allow(meta["required_scopes"], scopes))
+        )
         return {
             "profile": self.visibility.profile,
             "allowlist": list(self.visibility.allowlist),
@@ -69,6 +75,19 @@ class ToolRegistry:
             "visible_count": visible,
             "hidden_count": len(self._tools) - visible,
         }
+
+    def required_scopes(self, name: str) -> tuple[str, ...] | None:
+        meta = self._tools.get(name)
+        if meta is None or not meta["visible"]:
+            return None
+        return meta["required_scopes"]
+
+    def oauth_authorized(self, name: str, scopes: set[str] | frozenset[str]) -> bool:
+        required = self.required_scopes(name)
+        return required is not None and oauth_scopes_allow(required, scopes)
+
+    def oauth_tool_names(self, scopes: set[str] | frozenset[str]) -> list[str]:
+        return sorted(name for name in self._tools if self.oauth_authorized(name, scopes))
 
     def assert_no_write_tools(self) -> None:
         leaked = [name for name in self._tools if any(keyword in name.lower() for keyword in WRITE_TOOL_KEYWORDS)]
@@ -175,6 +194,7 @@ class ToolRegistry:
                 "visible": visible,
                 "callable": wrapped,
                 "mcp_callable": mcp_callable,
+                "required_scopes": required_oauth_scopes(family=family, read_only=read_only),
             }
             self.health.update_family_tools(family, self.tool_names(family))
             return wrapped

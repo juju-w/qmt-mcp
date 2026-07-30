@@ -51,6 +51,11 @@ func TestVersionReportsInjectedVersion(t *testing.T) {
 func TestHealthUsesOAuthAccessTokenEnvironment(t *testing.T) {
 	t.Setenv("QMT_MCP_TOKEN", "static-token")
 	t.Setenv("QMT_MCP_ACCESS_TOKEN", "oauth-access-token")
+	brokenStore := filepath.Join(t.TempDir(), "broken-oauth-store.json")
+	if err := os.WriteFile(brokenStore, []byte("not-json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("QMTCTL_AUTH_STORE", brokenStore)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("authorization"); got != "Bearer oauth-access-token" {
 			t.Fatalf("authorization header = %q", got)

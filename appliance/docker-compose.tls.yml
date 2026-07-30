@@ -10,7 +10,7 @@
 #   - A Caddy reverse proxy terminates TLS and publishes 80/443.
 #
 # Run scripts/harden-check.sh first. Provide ./Caddyfile (from
-# deploy/Caddyfile.example) and set a real domain + email + a strong token.
+# deploy/Caddyfile.example) and set a real domain + email + authentication.
 
 services:
   qmt:
@@ -33,10 +33,26 @@ services:
       WINEARCH: "wow64"
       WINEPREFIX: "/home/wineuser/.wine"
       BROKER_MOUNT: "/broker"
-      QMT_MCP_TOKEN: "${QMT_MCP_TOKEN:?set a strong QMT_MCP_TOKEN in .env}"
+      QMT_MCP_AUTH_MODE: "${QMT_MCP_AUTH_MODE:-static}"
+      QMT_MCP_TOKEN: "${QMT_MCP_TOKEN:-}"
       QMT_BEHIND_TLS_PROXY: "1"
       MCP_HOST: "0.0.0.0"
       MCP_PORT: "8765"
+      QMT_MCP_TOOL_PROFILE: "${QMT_MCP_TOOL_PROFILE:-full}"
+      QMT_MCP_TOOL_ALLOWLIST: "${QMT_MCP_TOOL_ALLOWLIST:-}"
+      QMT_MCP_TOOL_DENYLIST: "${QMT_MCP_TOOL_DENYLIST:-}"
+      QMT_MCP_PUBLIC_BASE_URL: "${QMT_MCP_PUBLIC_BASE_URL:-}"
+      QMT_MCP_OAUTH_AUTHORIZATION_SERVERS: "${QMT_MCP_OAUTH_AUTHORIZATION_SERVERS:-}"
+      QMT_MCP_OAUTH_ISSUER: "${QMT_MCP_OAUTH_ISSUER:-}"
+      QMT_MCP_OAUTH_JWKS_URL: "${QMT_MCP_OAUTH_JWKS_URL:-}"
+      QMT_MCP_OAUTH_SCOPES: "${QMT_MCP_OAUTH_SCOPES:-qmt:read qmt:market qmt:account qmt:manage qmt:admin}"
+      QMT_MCP_OAUTH_RESOURCE: "${QMT_MCP_OAUTH_RESOURCE:-}"
+      QMT_MCP_OAUTH_RESOURCE_NAME: "${QMT_MCP_OAUTH_RESOURCE_NAME:-QMT MCP}"
+      QMT_MCP_OAUTH_ALGORITHMS: "${QMT_MCP_OAUTH_ALGORITHMS:-RS256 ES256}"
+      QMT_MCP_OAUTH_CLOCK_SKEW_S: "${QMT_MCP_OAUTH_CLOCK_SKEW_S:-30}"
+      QMT_MCP_OAUTH_JWKS_TTL_S: "${QMT_MCP_OAUTH_JWKS_TTL_S:-300}"
+      QMT_MCP_OAUTH_HTTP_TIMEOUT_S: "${QMT_MCP_OAUTH_HTTP_TIMEOUT_S:-5}"
+      QMT_MCP_OAUTH_JWKS_MAX_BYTES: "${QMT_MCP_OAUTH_JWKS_MAX_BYTES:-1048576}"
     volumes:
       - "${BROKER_PACK:?set BROKER_PACK in .env to a broker pack dir}:/broker"
     shm_size: "1g"

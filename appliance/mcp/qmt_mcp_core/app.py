@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import sys
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from mcp.server import CacheHint, MCPServer
+from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.server.auth.settings import AuthSettings
+from mcp.shared.exceptions import MCPError
 
 from .audit import JsonlAuditSink
+from .auth import build_token_verifier
 from .config import CoreConfig, load_config
 from .connector import TraderConnector
 from .errors import McpCoreError, error_envelope
@@ -63,20 +69,25 @@ def _base_url(scope, config: CoreConfig) -> str:
 
 
 def _resource_url(scope, config: CoreConfig) -> str:
-    if config.oauth_resource:
-        return config.oauth_resource
+    if config.oauth_resource_url:
+        return config.oauth_resource_url
     return f"{_base_url(scope, config)}/mcp"
 
 
 def _resource_metadata_url(scope, config: CoreConfig) -> str:
-    return f"{_base_url(scope, config)}/.well-known/oauth-protected-resource"
+    resource = urlsplit(_resource_url(scope, config))
+    suffix = resource.path.strip("/")
+    metadata_path = "/.well-known/oauth-protected-resource"
+    if suffix:
+        metadata_path = f"{metadata_path}/{suffix}"
+    return urlunsplit((resource.scheme, resource.netloc, metadata_path, "", ""))
 
 
 def _protected_resource_metadata(scope, config: CoreConfig) -> dict[str, Any]:
     return {
         "resource": _resource_url(scope, config),
         "resource_name": config.oauth_resource_name,
-        "authorization_servers": list(config.oauth_authorization_servers),
+        "authorization_servers": list(config.authorization_servers),
         "scopes_supported": list(config.oauth_scopes_supported),
         "bearer_methods_supported": ["header"],
     }
@@ -86,9 +97,23 @@ def _www_authenticate(scope, config: CoreConfig) -> str:
     if not config.oauth_enabled:
         return "Bearer"
     parts = [f'resource_metadata="{_resource_metadata_url(scope, config)}"']
-    if config.oauth_scopes_supported:
-        parts.append(f'scope="{" ".join(config.oauth_scopes_supported)}"')
+    parts.append('scope="qmt:read"')
+    parts.append(f'resource="{_resource_url(scope, config)}"')
     return "Bearer " + ", ".join(parts)
+
+
+def _insufficient_scope_challenge(scope, config: CoreConfig, missing_scope: str) -> str:
+    return (
+        'Bearer error="insufficient_scope", '
+        f'scope="{missing_scope}", '
+        f'resource_metadata="{_resource_metadata_url(scope, config)}", '
+        f'resource="{_resource_url(scope, config)}"'
+    )
+
+
+def _current_scopes() -> set[str] | None:
+    token = get_access_token()
+    return set(token.scopes) if token is not None else None
 
 
 def _win_to_unix(win_path: str) -> str:
@@ -142,10 +167,12 @@ def _make_connector(config: CoreConfig, health: HealthState, session=None) -> Tr
 
 
 class CoreASGI:
-    def __init__(self, app, config: CoreConfig, health: HealthState):
+    def __init__(self, app, config: CoreConfig, health: HealthState, registry: ToolRegistry, token_verifier=None):
         self.app = app
         self.config = config
         self.health = health
+        self.registry = registry
+        self.token_verifier = token_verifier
         self.readiness_probe: ReadinessProbe | None = None
         self.connector: TraderConnector | None = None
 
@@ -169,12 +196,28 @@ class CoreASGI:
                     send, 404, error_envelope("disabled", "OAuth protected resource metadata disabled")
                 )
                 return
-            await _json_response(send, 200, _protected_resource_metadata(scope, self.config))
+            await _json_response(
+                send,
+                200,
+                _protected_resource_metadata(scope, self.config),
+                headers=[
+                    (b"access-control-allow-origin", b"*"),
+                    (b"cache-control", b"public, max-age=300"),
+                ],
+            )
             return
 
         headers = _header_map(scope)
         auth = headers.get(b"authorization", b"").decode()
-        if self.config.auth_required and auth != f"Bearer {self.config.token}":
+        access_token = None
+        if self.config.sdk_oauth_enabled:
+            raw_token = auth[7:] if auth.lower().startswith("bearer ") else ""
+            if raw_token and self.token_verifier is not None:
+                access_token = await self.token_verifier.verify_token(raw_token)
+            authorized = access_token is not None
+        else:
+            authorized = not self.config.auth_required or hmac.compare_digest(auth, f"Bearer {self.config.token}")
+        if self.config.auth_required and not authorized:
             await _json_response(
                 send,
                 401,
@@ -182,6 +225,39 @@ class CoreASGI:
                 headers=[(b"www-authenticate", _www_authenticate(scope, self.config).encode("utf-8"))],
             )
             return
+
+        if access_token is not None and "qmt:read" not in access_token.scopes:
+            await _json_response(
+                send,
+                403,
+                error_envelope("insufficient_scope", "required scope: qmt:read"),
+                headers=[
+                    (
+                        b"www-authenticate",
+                        _insufficient_scope_challenge(scope, self.config, "qmt:read").encode("utf-8"),
+                    )
+                ],
+            )
+            return
+
+        if access_token is not None and path == "/mcp" and headers.get(b"mcp-method", b"").decode() == "tools/call":
+            tool_name = headers.get(b"mcp-name", b"").decode()
+            required = self.registry.required_scopes(tool_name)
+            granted = set(access_token.scopes)
+            if required is not None and not self.registry.oauth_authorized(tool_name, granted):
+                missing = next((item for item in required if item not in granted), "qmt:read")
+                await _json_response(
+                    send,
+                    403,
+                    error_envelope("insufficient_scope", f"required scope: {missing}"),
+                    headers=[
+                        (
+                            b"www-authenticate",
+                            _insufficient_scope_challenge(scope, self.config, missing).encode("utf-8"),
+                        )
+                    ],
+                )
+                return
 
         if path == "/healthz":
             await _json_response(send, 200, self.health.to_dict())
@@ -208,8 +284,34 @@ def register_core_tools(mcp: MCPServer, registry: ToolRegistry, health: HealthSt
     )
     def qmt_capabilities() -> dict[str, Any]:
         payload = health.capabilities()
-        payload["tool_visibility"] = registry.visibility_summary()
+        payload["tool_visibility"] = registry.visibility_summary(_current_scopes())
         return payload
+
+
+class AuthorizedMCPServer(MCPServer):
+    """Apply request-specific OAuth visibility on top of startup registration."""
+
+    tool_registry: ToolRegistry | None = None
+
+    async def list_tools(self):
+        tools = await super().list_tools()
+        token = get_access_token()
+        if token is None or self.tool_registry is None:
+            return tools
+        allowed = set(self.tool_registry.oauth_tool_names(set(token.scopes)))
+        return [tool for tool in tools if tool.name in allowed]
+
+    async def call_tool(self, name, arguments, context=None):
+        token = get_access_token()
+        if token is not None and self.tool_registry is not None:
+            required = self.tool_registry.required_scopes(name)
+            if required is not None and not self.tool_registry.oauth_authorized(name, set(token.scopes)):
+                raise MCPError(
+                    code=-32003,
+                    message="Insufficient scope",
+                    data={"required_scopes": list(required)},
+                )
+        return await super().call_tool(name, arguments, context)
 
 
 def _make_warehouse(config: CoreConfig, health: HealthState):
@@ -315,6 +417,7 @@ def register_optional_portfolio(
 
 def create_app(config: CoreConfig | None = None):
     config = config or load_config()
+    config.validate_security()
     _add_xtquant_path(config)
 
     audit = JsonlAuditSink(config.audit_path, config.broker_id)
@@ -327,7 +430,15 @@ def create_app(config: CoreConfig | None = None):
         raise
 
     private_no_cache = CacheHint(ttl_ms=0, scope="private")
-    mcp = MCPServer(
+    token_verifier = build_token_verifier(config) if config.sdk_oauth_enabled else None
+    auth_settings = None
+    if config.sdk_oauth_enabled:
+        auth_settings = AuthSettings(
+            issuer_url=config.oauth_issuer_url,
+            required_scopes=["qmt:read"],
+            resource_server_url=config.oauth_resource_url,
+        )
+    mcp = AuthorizedMCPServer(
         "QMT MCP",
         version=os.environ.get("QMT_MCP_VERSION", "dev"),
         cache_hints={
@@ -338,10 +449,13 @@ def create_app(config: CoreConfig | None = None):
             "resources/templates/list": private_no_cache,
             "resources/read": private_no_cache,
         },
+        auth=auth_settings,
+        token_verifier=token_verifier,
     )
     workers = WorkerPool(config.worker_limit)
     visibility = ToolVisibilityPolicy(config.tool_profile, config.tool_allowlist, config.tool_denylist)
     registry = ToolRegistry(health, audit, workers, visibility)
+    mcp.tool_registry = registry
     register_core_tools(mcp, registry, health)
     warehouse = _make_warehouse(config, health)
     register_optional_xtdata(mcp, registry, health, config, warehouse=warehouse)
@@ -359,7 +473,7 @@ def create_app(config: CoreConfig | None = None):
             stateless_http=False,
             host=config.host,
         )
-    core = CoreASGI(app, config, health)
+    core = CoreASGI(app, config, health, registry, token_verifier)
     # Build (do not start) the background readiness probe / trader connector.
     # main() starts them; tests can drive .step()/.attempt() directly.
     if config.enable_xtdata:
@@ -372,7 +486,8 @@ def main() -> None:
     app, config, health, registry = create_app()
     log(
         f"broker={config.broker_id} mode={config.mcp_mode} host={config.host}:{config.port} "
-        f"transport={config.transport} auth={'on' if config.auth_required else 'loopback-dev'} audit={config.audit_path} "
+        f"transport={config.transport} auth={config.auth_mode if config.auth_required else 'loopback-dev'} "
+        f"audit={config.audit_path} "
         f"tool_profile={config.tool_profile} tools={registry.tool_names()}"
     )
     # Start background readiness probe (always when xtdata is enabled) and the

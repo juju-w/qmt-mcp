@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -21,6 +22,8 @@ type Client struct {
 	httpClient *http.Client
 	verbose    bool
 	session    *mcp.ClientSession
+	oauth      mcpauth.OAuthHandler
+	oauthClose io.Closer
 	initOnce   sync.Once
 	initErr    error
 }
@@ -59,12 +62,19 @@ func NewClient(baseURL, token string, timeout time.Duration, verbose bool) *Clie
 	}
 }
 
+func (c *Client) SetOAuthHandler(handler mcpauth.OAuthHandler, closer io.Closer) {
+	c.oauth = handler
+	c.oauthClose = closer
+}
+
 func (c *Client) Health(ctx context.Context) (map[string]any, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL(c.baseURL), nil)
 	if err != nil {
 		return nil, err
 	}
-	c.addHeaders(req)
+	if err := c.addHeaders(ctx, req); err != nil {
+		return nil, err
+	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, &AppError{Kind: "network", Message: err.Error()}
@@ -189,6 +199,7 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 			&mcp.StreamableClientTransport{
 				Endpoint:             c.baseURL,
 				HTTPClient:           mcpHTTPClient,
+				OAuthHandler:         c.oauth,
 				DisableStandaloneSSE: true,
 			},
 			nil,
@@ -201,10 +212,20 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 }
 
 func (c *Client) Close() error {
+	var closeErr error
 	if c.session == nil {
+		if c.oauthClose != nil {
+			return c.oauthClose.Close()
+		}
 		return nil
 	}
-	return c.session.Close()
+	closeErr = c.session.Close()
+	if c.oauthClose != nil {
+		if err := c.oauthClose.Close(); closeErr == nil {
+			closeErr = err
+		}
+	}
+	return closeErr
 }
 
 func sdkError(err error) error {
@@ -214,10 +235,24 @@ func sdkError(err error) error {
 	return &AppError{Kind: "mcp", Message: err.Error()}
 }
 
-func (c *Client) addHeaders(req *http.Request) {
+func (c *Client) addHeaders(ctx context.Context, req *http.Request) error {
 	if c.token != "" {
 		req.Header.Set("authorization", "Bearer "+c.token)
+		return nil
 	}
+	if c.oauth == nil {
+		return nil
+	}
+	source, err := c.oauth.TokenSource(ctx)
+	if err != nil || source == nil {
+		return err
+	}
+	token, err := source.Token()
+	if err != nil {
+		return err
+	}
+	req.Header.Set("authorization", "Bearer "+token.AccessToken)
+	return nil
 }
 
 type bearerRoundTripper struct {

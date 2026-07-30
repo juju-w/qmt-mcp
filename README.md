@@ -48,6 +48,7 @@
 | `qmtctl` CLI | ✅ 可用 | Go 编译命令行客户端，支持行情/搜索/账户查询 |
 | MCP 协议 | ✅ 双线兼容 | 主推稳定版 `2026-07-28`，同一 `/mcp` 自动兼容 2025 客户端 |
 | MCP 工具契约 / Profile | ✅ 可用 | 结构化结果、行为注解；可按 full/readonly/market/account/core/custom 裁剪工具面 |
+| OAuth 2.1 授权 | ✅ 可用 | static/oauth/hybrid；JWT/JWKS 校验、scope 裁剪、qmtctl PKCE 登录与刷新 |
 
 > **交易/账户权限**：外部 `xtquant` 连交易接口（下单**和**账户查询）需券商开通「程序化交易 /
 > 外部 Python 接口」权限（`m_nPythonConnectNet`）。未开通时只有行情可用。开通通常需满足
@@ -93,7 +94,9 @@
 | `qmt_xttrade_new_purchase_limit` | 新股申购额度 |
 | `qmt_xttrade_ipo_data` | 当日新股申购信息（非账户维度） |
 
-所有工具均为**只读**、带鉴权与审计、返回结构化 JSON（无写/下单/撤单/划转工具）。
+交易与账户工具均为**只读**、带鉴权与审计、返回结构化 JSON（无下单/撤单/
+划转工具）。自定义板块和公式输出是默认关闭的非交易写操作，需显式开关、受管
+命名空间/沙箱，以及 OAuth `qmt:manage` 权限。
 
 > **账户查询（feature 04）** 默认关闭，需显式开启 `QMT_ENABLE_XTTRADE_QUERY=1` **且**配置
 > 账户白名单 `QMT_TRADE_ACCOUNTS`；且仍需券商开通程序化交易权限才能联调成功路径，未开通时
@@ -116,8 +119,9 @@ QMT_MCP_TOOL_DENYLIST=qmt_xtdata_download_*
 ```
 
 支持 `full`、`readonly`、`market`、`account`、`core`、`custom`；`custom`
-必须配置 allowlist。模式和 glob 在进程启动时固定，修改后需重启容器；
-`qmt_health`、`qmt_capabilities` 始终可见。
+必须配置 allowlist。模式和 glob 在进程启动时固定，修改后需重启容器。OAuth
+模式下它们会再与 token scope 取交集；`qmt:admin` 也不能越过启动 Profile 和
+feature gate。
 
 ## 快速开始
 
@@ -125,7 +129,7 @@ QMT_MCP_TOOL_DENYLIST=qmt_xtdata_download_*
 
 ```bash
 cd appliance
-cp .env.example .env                       # 填入 QMT_MCP_TOKEN / BROKER_PACK 等
+cp .env.example .env                       # 填入认证配置 / BROKER_PACK 等
 docker compose build                       # 构建券商中立基础镜像
 scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
 docker compose up -d
@@ -137,6 +141,11 @@ docker compose up -d
 RDP:  <host>:13389   wineuser / 密码见 .env  （用真正的 RDP 客户端，不要用 VNC）
 MCP:  http://<host>:18765/mcp   需 Authorization: Bearer <QMT_MCP_TOKEN>
 ```
+
+默认 `static` 模式与旧部署完全兼容。公网或多用户场景可切换到外部 OAuth
+authorization server 签发 JWT 的 `oauth`/`hybrid` 模式；QMT-MCP 只做 resource
+server，不保存用户密码、不签发 token。完整配置和 scope 表见
+[客户端接入](docs/MCP-CLIENTS.md) 与 [部署加固](appliance/docs/DEPLOY.md)。
 
 也可以用 **qmtctl** CLI 从命令行操作（详见 [`cli/qmtctl/README.md`](cli/qmtctl/README.md)）：
 
@@ -152,6 +161,15 @@ export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
 ./qmtctl option chain --family 300ETF                  # 期权链
 ./qmtctl ref financial 600000.SH --tables Income       # 参考数据
 ./qmtctl account asset --account <id> # 账户资产（需开启 xttrade）
+```
+
+OAuth 模式可以由 qmtctl 完成浏览器 PKCE 登录并安全复用/刷新会话：
+
+```bash
+./qmtctl --url https://qmt.example.com/mcp auth login \
+  --client-id-metadata-url https://client.example.com/qmtctl.json \
+  --scope 'qmt:read qmt:market'
+./qmtctl --url https://qmt.example.com/mcp auth status
 ```
 
 更多：[broker pack 制作与切换](appliance/docs/BROKER-PACK.md) ·

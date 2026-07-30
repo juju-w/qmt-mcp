@@ -1,6 +1,6 @@
 ---
 name: qmt-mcp-ops
-description: Deploy, operate, and troubleshoot the QMT-MCP appliance and qmtctl. Covers broker packs, static bearer and OAuth protected-resource discovery, market subscriptions, account and portfolio queries, options, reference data, managed sectors, formula runtime, and CLI usage. Use for QMT MCP operations, client access, capability discovery, or appliance troubleshooting.
+description: Deploy, operate, and troubleshoot the QMT-MCP appliance and qmtctl. Covers broker packs, static/OAuth/hybrid authorization, market subscriptions, account and portfolio queries, options, reference data, managed sectors, formula runtime, and CLI usage. Use for QMT MCP operations, client access, capability discovery, or appliance troubleshooting.
 ---
 
 # QMT-MCP Operations
@@ -70,13 +70,15 @@ docker compose --env-file broker-b.env -p qmt-b up -d
 
 | Mode | Server responsibility | Client credential |
 |---|---|---|
-| Static bearer | Validate `QMT_MCP_TOKEN` | `QMT_MCP_TOKEN` / `--token` |
-| OAuth discovery | Publish Protected Resource Metadata and 401 challenge | Existing `QMT_MCP_ACCESS_TOKEN` / `--access-token` |
+| `static` | Validate `QMT_MCP_TOKEN` | `QMT_MCP_TOKEN` / `--token` |
+| `oauth` | Publish RFC 9728 metadata; verify external JWT through pinned JWKS; enforce scopes | qmtctl saved login or `QMT_MCP_ACCESS_TOKEN` |
+| `hybrid` | Accept either path; static receives startup-visible admin surface | Either credential |
 
-The server does not implement browser login, authorization-code exchange,
-refresh, dynamic registration, or JWT/JWKS validation. A production OAuth
-authorization server or gateway must issue and validate the access token. See
-`docs/MCP-CLIENTS.md` for Codex, Claude Code, WorkBuddy, and OAuth setup.
+QMT-MCP is the resource server, never the authorization server. An external AS
+owns login and token issuance. qmtctl can run Authorization Code + PKCE using a
+Client ID Metadata Document (preferred), preregistered public client, or explicit
+legacy DCR; it persists refresh rotation and provides status/logout. See
+`docs/MCP-CLIENTS.md` for scope and Codex/Claude Code/WorkBuddy setup.
 
 ## Tool Profiles
 
@@ -96,6 +98,18 @@ surface with `QMT_MCP_TOOL_PROFILE`:
 `QMT_MCP_TOOL_ALLOWLIST` and `QMT_MCP_TOOL_DENYLIST` are comma-separated shell
 globs. Core tools cannot be hidden. Restart after changing the policy and inspect
 `qmt_capabilities.tool_visibility` to confirm the effective counts.
+
+OAuth scopes then intersect this startup surface:
+
+| Scope | Access |
+|---|---|
+| `qmt:read` | required core |
+| `qmt:market` | read-only xtdata |
+| `qmt:account` | xttrade query and portfolio |
+| `qmt:manage` | non-trading mutations in an already granted family |
+| `qmt:admin` | all startup-visible tools |
+
+Neither `qmt:manage` nor `qmt:admin` bypasses feature gates or enables trading.
 
 ## Tool Families
 
@@ -146,7 +160,7 @@ export QMT_MCP_URL=http://127.0.0.1:18765/mcp
 export QMT_MCP_TOKEN=<token>
 ```
 
-For an OAuth or gateway-issued bearer:
+For an existing OAuth bearer:
 
 ```bash
 export QMT_MCP_ACCESS_TOKEN=<access-token>
@@ -156,6 +170,20 @@ qmtctl health
 
 `QMT_MCP_ACCESS_TOKEN` takes precedence over `QMT_MCP_TOKEN`. Equivalent global
 flags are `--url`, `--access-token`/`--token`, `--json`, and `--timeout`.
+
+For browser login with persisted refresh:
+
+```bash
+qmtctl auth login \
+  --client-id-metadata-url https://client.example.com/qmtctl.json \
+  --scope 'qmt:read qmt:market'
+qmtctl auth status
+qmtctl auth logout
+```
+
+Explicit access/static tokens override the saved per-resource OAuth session.
+Use `--auth-store` or `QMTCTL_AUTH_STORE` only when a non-default credential
+store location is required.
 
 | Command family | Typical use |
 |---|---|
@@ -191,12 +219,14 @@ qmtctl smoke --code 510300.SH
 | `/livez` is silent after restart | RDP session has not started MCP autostart |
 | `xttrader.connect()==-1` | Broker has not enabled external/programmatic trading |
 | `not_authorized` on account tools | Flag, account allowlist, or broker permission missing |
-| OAuth discovery works but calls return 401 | Gateway/token validation is not wired to the bearer gate |
+| OAuth discovery works but calls return 401 | Check JWT signature/`kid`, issuer, audience, expiry, client id, and algorithm |
+| OAuth call returns 403 | Token lacks the family or `qmt:manage` scope named by the challenge |
 | Chinese path decoding fails | Image or prefix is missing `zh_CN.GBK` |
 
 ## Security
 
-- Keep bearer credentials only in gitignored environment files or secret stores.
+- Keep bearer credentials only in gitignored environment files, qmtctl's
+  permission-checked store, or a platform secret store.
 - Put remote MCP behind HTTPS; bind RDP locally and reach it through VPN/SSH.
 - Run `appliance/scripts/harden-check.sh` before non-loopback deployment.
 - Keep destructive trading tools out of the default surface.

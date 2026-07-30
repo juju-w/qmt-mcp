@@ -185,8 +185,9 @@ def test_oauth_resource_metadata_and_challenge(fake_xtquant, tmp_path):
     assert status == 401
     header_map = {k.lower(): v for k, v in headers}
     challenge = header_map[b"www-authenticate"].decode()
-    assert 'resource_metadata="https://qmt.example.com/.well-known/oauth-protected-resource"' in challenge
-    assert 'scope="qmt:read qmt:account"' in challenge
+    assert 'resource_metadata="https://qmt.example.com/.well-known/oauth-protected-resource/mcp"' in challenge
+    assert 'scope="qmt:read"' in challenge
+    assert 'resource="https://qmt.example.com/mcp"' in challenge
 
 
 def test_modern_discover_is_stateless_and_cache_hinted(fake_xtquant, tmp_path):

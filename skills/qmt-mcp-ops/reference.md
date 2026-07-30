@@ -12,7 +12,8 @@ qmtctl negotiates this automatically through the official Go SDK.
 
 | Variable | Description |
 |---|---|
-| `QMT_MCP_TOKEN` | Static bearer secret accepted by the MCP server |
+| `QMT_MCP_AUTH_MODE` | `static` (default), `oauth`, or `hybrid` |
+| `QMT_MCP_TOKEN` | Required in static/hybrid; empty is valid in OAuth-only |
 | `BROKER_PACK` | Host path to the QMT terminal, matching xtquant, and optional `broker.yaml` |
 
 Generate a static token with `openssl rand -hex 32`.
@@ -28,18 +29,34 @@ Generate a static token with `openssl rand -hex 32`.
 | `QMT_DB_URL` | empty | PostgreSQL DSN; empty disables persistence |
 | `QMT_DB_USER` / `QMT_DB_PASSWORD` / `QMT_DB_NAME` | `qmt` | Bundled `db` profile settings |
 
-### OAuth protected-resource metadata
+### OAuth protected resource and JWT verification
 
 | Variable | Default | Description |
 |---|---|---|
 | `QMT_MCP_PUBLIC_BASE_URL` | empty | Public HTTPS origin used for metadata URL |
-| `QMT_MCP_OAUTH_AUTHORIZATION_SERVERS` | empty | CSV authorization-server issuer URLs |
-| `QMT_MCP_OAUTH_SCOPES` | `qmt:read` | Space or comma separated supported scopes |
+| `QMT_MCP_OAUTH_ISSUER` | empty | Exact JWT issuer |
+| `QMT_MCP_OAUTH_AUTHORIZATION_SERVERS` | empty | Exactly one URL matching the issuer |
+| `QMT_MCP_OAUTH_JWKS_URL` | empty | Explicit bounded signing-key endpoint |
+| `QMT_MCP_OAUTH_SCOPES` | all five QMT scopes | Space/comma-separated advertised scopes |
 | `QMT_MCP_OAUTH_RESOURCE` | `<public-base>/mcp` | Protected resource identifier |
 | `QMT_MCP_OAUTH_RESOURCE_NAME` | `QMT MCP` | Display name |
+| `QMT_MCP_OAUTH_ALGORITHMS` | `RS256 ES256` | Allowed asymmetric JWT algorithms |
+| `QMT_MCP_OAUTH_CLOCK_SKEW_S` | `30` | JWT time-claim leeway |
+| `QMT_MCP_OAUTH_JWKS_TTL_S` | `300` | Signing-key cache TTL |
+| `QMT_MCP_OAUTH_HTTP_TIMEOUT_S` | `5` | JWKS request timeout |
+| `QMT_MCP_OAUTH_JWKS_MAX_BYTES` | `1048576` | Maximum JWKS response |
 
-These variables publish discovery metadata; they do not add an authorization
-server or JWT verifier.
+OAuth/hybrid requires one secure issuer, authorization server, JWKS URL, and
+resource. HTTPS is mandatory except for loopback development. The external AS
+issues JWTs; QMT-MCP validates them but never issues tokens.
+
+| Scope | Tool surface |
+|---|---|
+| `qmt:read` | required core |
+| `qmt:market` | read-only xtdata |
+| `qmt:account` | xttrade query and portfolio |
+| `qmt:manage` | non-trading mutation in an already granted family |
+| `qmt:admin` | complete startup-visible surface |
 
 ### Tool visibility
 
@@ -50,7 +67,8 @@ server or JWT verifier.
 | `QMT_MCP_TOOL_DENYLIST` | empty | CSV shell globs removed after profile/allowlist selection |
 
 `custom` requires a non-empty allowlist. Core tools always remain available.
-Visibility is fixed for one server process; restart after changes.
+Startup visibility is fixed for one server process; restart after changes.
+OAuth `tools/list` and `tools/call` additionally intersect it with token scopes.
 
 ### Feature gates
 
@@ -81,6 +99,18 @@ Visibility is fixed for one server process; restart after changes.
 | `QMT_MCP_URL` | MCP URL ending in `/mcp` |
 | `QMT_MCP_ACCESS_TOKEN` | Existing OAuth/gateway token; highest precedence |
 | `QMT_MCP_TOKEN` | Static bearer fallback |
+| `QMTCTL_AUTH_STORE` | Optional OAuth session-store path |
+
+qmtctl credential precedence is explicit flag, access-token env, static-token
+env, then saved per-resource OAuth session. Browser login:
+
+```bash
+qmtctl auth login \
+  --client-id-metadata-url https://client.example.com/qmtctl.json \
+  --scope 'qmt:read qmt:market'
+qmtctl auth status
+qmtctl auth logout
+```
 
 ## Broker Pack
 
@@ -194,7 +224,7 @@ docker compose --profile db up -d
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `/livez` | None | Minimal liveness |
-| `/healthz` | Bearer | Readiness and family state |
+| `/healthz` | Static bearer or verified JWT | Readiness and family state |
 | `/.well-known/oauth-protected-resource` | None | Optional OAuth resource metadata |
 
 ## Operational Constraints

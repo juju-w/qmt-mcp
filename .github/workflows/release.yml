@@ -254,7 +254,7 @@ jobs:
           cache-from: |
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/qmt-mcp:buildcache
             type=gha
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/qmt-mcp:buildcache,mode=max,image-manifest=true,oci-mediatypes=true
+          cache-to: ${{ needs.prepare.outputs.publish_latest == 'true' && format('type=registry,ref=ghcr.io/{0}/qmt-mcp:buildcache,mode=max,image-manifest=true,oci-mediatypes=true', github.repository_owner) || '' }}
       - name: Check optional China registry mirror
         id: mirror-config
         env:

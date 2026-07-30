@@ -14,7 +14,9 @@ project constitution's quality gates.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Fixed
+- Historical release retries can read but no longer overwrite the shared
+  BuildKit cache used by the latest release line.
 
 ## [0.4.1] - 2026-07-30
 

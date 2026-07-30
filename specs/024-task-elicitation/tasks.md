@@ -68,7 +68,7 @@
 - [x] T029 Run ruff and Python unit/integration tests.
 - [x] T030 Run Go test/vet/build and six-target cross-compilation.
 - [x] T031 Run selected modern, legacy, 023 Tasks, and 024 MRTR conformance.
-- [ ] T032 Run release policy, actionlint, diff/secret review, and native image
+- [x] T032 Run release policy, actionlint, diff/secret review, and native image
   smoke.
 - [ ] T033 Record evidence in `VERIFICATION.md`, close tasks accurately, and
   deliver through PR, main CI, and release.

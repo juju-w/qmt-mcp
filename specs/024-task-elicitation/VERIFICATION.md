@@ -82,5 +82,15 @@ The new stable checks passed:
 
 ## Remote gates
 
-PR CI, native linux/amd64 image, main CI, and automated release evidence are
-pending delivery.
+PR CI run
+[`30581290887`](https://github.com/juju-w/qmt-mcp/actions/runs/30581290887)
+passed all six required jobs:
+
+- Conventional commit policy: PASS
+- Python lint and unit tests: PASS
+- qmtctl test and build: PASS
+- MCP 2026 and legacy conformance: PASS
+- Secret scan with gitleaks: PASS
+- Native linux/amd64 appliance build: PASS in 2m50s
+
+Main CI and automated release evidence remain pending delivery.

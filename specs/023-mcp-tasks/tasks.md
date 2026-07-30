@@ -55,5 +55,5 @@
 - [x] T031 Run ruff and Python unit/integration tests.
 - [x] T032 Run Go test/vet/build and six-target cross-compilation.
 - [x] T033 Run selected modern, legacy, and Tasks official conformance.
-- [ ] T034 Run release policy, actionlint, diff/secret review, and native image.
-- [ ] T035 Record evidence in `VERIFICATION.md` and close tasks accurately.
+- [x] T034 Run release policy, actionlint, diff/secret review, and native image.
+- [x] T035 Record evidence in `VERIFICATION.md` and close tasks accurately.

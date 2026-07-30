@@ -62,5 +62,16 @@ start.
 
 ## PR gates
 
-GitHub PR CI remains authoritative for the native linux/amd64 BuildKit image
-and full-history gitleaks jobs. Record their successful run before merge.
+GitHub Actions run
+[`30578733379`](https://github.com/juju-w/qmt-mcp/actions/runs/30578733379)
+passed all six jobs on PR #15:
+
+- Conventional commit policy
+- Python lint and unit tests
+- Stable/legacy MCP conformance
+- Full-history gitleaks
+- qmtctl test and build
+- Native linux/amd64 BuildKit appliance image
+
+The image gate completed in 1 minute 56 seconds using the configured persistent
+cache path.

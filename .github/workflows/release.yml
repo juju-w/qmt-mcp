@@ -406,7 +406,6 @@ jobs:
         with:
           token: ${{ secrets.RELEASE_TOKEN || github.token }}
           tag_name: ${{ needs.prepare.outputs.tag }}
-          target_commitish: ${{ needs.prepare.outputs.release_sha }}
           name: ${{ needs.prepare.outputs.tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true

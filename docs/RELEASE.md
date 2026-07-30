@@ -14,6 +14,11 @@ creates `chore(release): vX.Y.Z [skip ci]`, tags it, and then:
 The Release job explicitly requests `contents: write`. If repository policy
 still blocks the default Actions token, configure a fine-grained
 `RELEASE_TOKEN` secret with Contents read/write access to this repository only.
+The workflow creates every tag before publishing its Release and deliberately
+does not send `target_commitish` to the Releases API. GitHub's built-in Actions
+token cannot create a Release when that parameter points to an older commit
+whose `.github/workflows/` content differs from the default branch, even with
+`contents: write`.
 
 ## Build Cache And Layers
 

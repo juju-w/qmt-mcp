@@ -14,7 +14,10 @@ project constitution's quality gates.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Changed
+- GitHub Actions are pinned to current Node 24-compatible releases, removing the
+  Node 20 deprecation path from CI, artifact publishing, image builds, secret
+  scanning, and GitHub Release creation.
 
 ## [0.3.0] - 2026-07-30
 

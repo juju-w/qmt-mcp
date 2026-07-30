@@ -117,6 +117,26 @@ def _request(method: str, request_id: int, *, name: str | None = None):
     return {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}, headers
 
 
+def _task_request(method: str, request_id: int, params: dict):
+    body_params = {
+        **params,
+        "_meta": {
+            **MODERN_META,
+            "io.modelcontextprotocol/clientCapabilities": {"extensions": {"io.modelcontextprotocol/tasks": {}}},
+        },
+    }
+    headers = {
+        "accept": "application/json, text/event-stream",
+        "mcp-protocol-version": "2026-07-28",
+        "mcp-method": method,
+    }
+    if method == "tools/call":
+        headers["mcp-name"] = body_params["name"]
+    else:
+        headers["mcp-name"] = body_params["taskId"]
+    return {"jsonrpc": "2.0", "id": request_id, "method": method, "params": body_params}, headers
+
+
 def _response_json(response):
     if "text/event-stream" not in response.headers.get("content-type", ""):
         return response.json()
@@ -314,6 +334,63 @@ def test_hybrid_static_token_preserves_startup_visible_surface(fake_xtquant, tmp
 
     assert listed.status_code == 200
     assert {tool["name"] for tool in _response_json(listed)["result"]["tools"]} == set(registry.tool_names())
+
+
+def test_oauth_tasks_bind_stable_principal_and_original_scopes(fake_xtquant, tmp_path, monkeypatch):
+    private, public = _key("key-1")
+    _install_jwks(monkeypatch, {"keys": [public]})
+    app, _cfg, _health, _registry = create_app(_config(tmp_path, task_store=str(tmp_path / "oauth-tasks.sqlite3")))
+    create_payload, create_headers = _task_request(
+        "tools/call",
+        1,
+        {
+            "name": "qmt_xtdata_download_history",
+            "arguments": {"code": "510300.SH", "period": "1d"},
+        },
+    )
+    owner = _token(private, "key-1", "qmt:read qmt:market qmt:manage", jti="first")
+
+    with TestClient(app, base_url="https://qmt.example.com") as client:
+        created_response = client.post(
+            "/mcp",
+            json=create_payload,
+            headers={**create_headers, "authorization": f"Bearer {owner}"},
+        )
+        assert created_response.status_code == 200
+        task_id = _response_json(created_response)["result"]["taskId"]
+        get_payload, get_headers = _task_request("tasks/get", 2, {"taskId": task_id})
+
+        refreshed = _token(private, "key-1", "qmt:read qmt:market qmt:manage", jti="refreshed")
+        resumed = client.post(
+            "/mcp",
+            json=get_payload,
+            headers={**get_headers, "authorization": f"Bearer {refreshed}"},
+        )
+        other_subject = _token(
+            private,
+            "key-1",
+            "qmt:read qmt:market qmt:manage",
+            sub="operator-2",
+        )
+        hidden_owner = client.post(
+            "/mcp",
+            json=get_payload,
+            headers={**get_headers, "authorization": f"Bearer {other_subject}"},
+        )
+        reduced = _token(private, "key-1", "qmt:read qmt:market", jti="reduced")
+        hidden_scope = client.post(
+            "/mcp",
+            json=get_payload,
+            headers={**get_headers, "authorization": f"Bearer {reduced}"},
+        )
+
+    assert resumed.status_code == 200
+    assert _response_json(resumed)["result"]["taskId"] == task_id
+    for hidden in (hidden_owner, hidden_scope):
+        assert hidden.status_code == 400
+        document = _response_json(hidden)
+        assert document["error"]["code"] == -32602
+        assert task_id not in hidden.text
 
 
 def test_legacy_tool_call_is_scope_enforced_without_modern_routing_header(fake_xtquant, tmp_path, monkeypatch):

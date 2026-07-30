@@ -16,6 +16,11 @@ Authorization: Bearer <credential>
 接受 gzip 时压缩足够大的 JSON 响应，SSE 不压缩。Codex、Claude Code、
 WorkBuddy 等标准 HTTP 客户端通常无需额外配置。
 
+稳定版还提供 `io.modelcontextprotocol/tasks` 长任务扩展。只有明确声明该扩展
+的 `2026-07-28` 客户端才会收到任务句柄；2025 客户端和未声明扩展的现代客户
+端继续获得同步工具结果。因此工具还没升级的 Codex、Claude Code、WorkBuddy
+不需要改配置，也不会被服务端强行切换执行语义。
+
 最小连通性检查：
 
 ```bash
@@ -104,11 +109,39 @@ feature gate ∩ startup profile/allowlist/denylist ∩ token scope
 `qmt:manage` 也不会独立授予行情、账户或任何交易权限。`tools/list` 会动态过滤，
 `tools/call` 会再次独立校验。
 
+## Tasks 兼容策略
+
+Tasks 用于下载历史数据、批量下载财务数据、批量公式、因子生成和缓存刷新等
+长操作。声明扩展的客户端先收到持久化 task ID，再通过 `tasks/get` 查询、
+`tasks/cancel` 取消；协议没有自定义的 `tasks/list` 或 `tasks/result`。
+
+任务与创建它的 OAuth principal 和原始工具 scope 绑定。刷新后的同一身份可
+继续访问；换用户或丢失原 scope 时统一返回 `-32602`，不泄漏 task 是否存在。
+静态 token 部署使用单一 deployment principal。任务记录不保存工具参数或
+凭证，服务重启会将中断任务明确标为失败。
+
+当前 qmtctl 完整声明并消费 Tasks。Codex、Claude Code 和 WorkBuddy 是否声明
+扩展取决于各自版本；未声明时服务端自动同步回退。不要仅因为客户端能连接
+`2026-07-28` 就假定它已经支持 Tasks。
+
 ## qmtctl
 
 qmtctl 优先使用 `2026-07-28`，对旧服务自动回退到 2025 initialize/session。
 `qmtctl tools` 会合并所有目录页面，并通过 Go 标准 HTTP transport 自动解压
 gzip；不需要分页或压缩参数。
+
+qmtctl 默认 `--task-mode wait`，长工具执行完后仍输出普通工具结果。脱离模式
+会立即输出可恢复的 task ID：
+
+```bash
+qmtctl --task-mode detach --json cache refresh --force
+qmtctl task get tsk_<id>
+qmtctl task wait tsk_<id>
+qmtctl task cancel tsk_<id>
+```
+
+`--timeout` 控制单次 HTTP 请求，`--task-timeout` 控制完整等待周期。需要验证
+旧客户端路径时使用 `--task-mode sync`。
 
 静态 token：
 
@@ -253,6 +286,9 @@ resource metadata；否则使用静态 header。只支持旧 SSE transport 的�
 | OAuth 找不到 AS | 检查公开 HTTPS URL、issuer、authorization servers 和两种 RFC 9728 metadata 路径。 |
 | OAuth 登录后工具很少 | 查看 token scope，再检查 startup Profile、allow/deny 与 feature gate；它们取交集。 |
 | qmtctl 没复用登录 | `auth status` 检查 resource 是否完全相同；显式 token 会覆盖保存的会话。 |
+| 长命令立即返回 task ID | qmtctl 使用了 `--task-mode detach`；用 `task wait <id>` 恢复，或改回默认 `wait`。 |
+| `server does not support MCP Tasks` | 服务端或当前协议未广告扩展；普通命令可用 `--task-mode sync`，显式 `task` 命令需升级服务端。 |
+| `task ... returned insufficient/invalid params` | 检查 task ID、OAuth 身份和创建时所需 scope；服务端会故意隐藏未知与越权的区别。 |
 | 客户端只显示部分工具 | 客户端需支持标准 `nextCursor`；先用 `qmtctl tools --json` 验证完整目录，再升级客户端。 |
 | 能连上但没有行情 | QMT 未登录或 xtdata 未 ready；查看 `qmt_health`。 |
 | Claude Code 看不到工具 | `/mcp` 检查连接和授权，并确认所申请 scope。 |

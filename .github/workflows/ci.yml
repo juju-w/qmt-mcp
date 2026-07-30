@@ -118,6 +118,8 @@ jobs:
           MCP_PORT=18766 \
           QMT_MCP_ALLOW_UNAUTH_LOOPBACK=1 \
           QMT_MCP_ENABLE_XTDATA=0 \
+          QMT_MCP_TASK_CONFORMANCE_FIXTURES=1 \
+          QMT_MCP_TASK_STORE="${RUNNER_TEMP}/qmt-mcp-conformance-tasks.sqlite3" \
           QMT_MCP_AUDIT_PATH="${RUNNER_TEMP}/qmt-mcp-conformance-audit.jsonl" \
             python appliance/mcp/qmt_mcp.py \
               >conformance-results/server.log 2>&1 &
@@ -140,6 +142,21 @@ jobs:
               --url http://127.0.0.1:18766/mcp \
               --spec-version 2026-07-28 \
               --scenario "$scenario" \
+              --output-dir "conformance-results/server-modern-${scenario}"
+          done
+          for scenario in \
+            tasks-lifecycle \
+            tasks-capability-negotiation \
+            tasks-wire-fields \
+            tasks-request-state-removal \
+            tasks-request-headers \
+            tasks-dispatch-and-envelope \
+            tasks-required-task-error; do
+            npx --yes "$CONFORMANCE_PACKAGE" server \
+              --url http://127.0.0.1:18766/mcp \
+              --spec-version 2026-07-28 \
+              --scenario "$scenario" \
+              --force \
               --output-dir "conformance-results/server-modern-${scenario}"
           done
           for scenario in server-initialize ping tools-list; do

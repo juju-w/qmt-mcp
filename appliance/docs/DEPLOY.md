@@ -112,6 +112,30 @@ Set it to `0` when the ingress is the sole compression layer. The middleware
 does not double-compress an already encoded response and emits
 `Vary: Accept-Encoding`.
 
+## Durable task storage
+
+Stable MCP `2026-07-28` clients can opt into durable Tasks for selected
+long-running tools. Older and non-declaring clients remain synchronous.
+
+```env
+QMT_MCP_TASKS_ENABLED=1
+QMT_MCP_TASK_STORE=/broker/cache/mcp-tasks-v1.sqlite3
+QMT_MCP_TASK_TTL_MS=86400000
+QMT_MCP_TASK_POLL_INTERVAL_MS=1000
+QMT_MCP_TASK_MAX_RETAINED=1000
+```
+
+The store contains task lifecycle metadata, owner digests, required scopes,
+and terminal results. It deliberately excludes tool arguments, bearer tokens,
+authorization headers, and raw principal identifiers. Back it up with the
+broker pack if detached tasks must survive host recovery. One SQLite file is
+owned by one MCP server process; do not mount it read-write into multiple
+replicas.
+
+On process startup, previously active tasks become failed with an interruption
+error. Completed, failed, and cancelled records remain available until their
+TTL expires or bounded retention removes the oldest terminal entries.
+
 ## RDP
 
 - Set a strong `QMT_RDP_PASSWORD` (the compose default `qmt` is for dev only).
@@ -122,6 +146,8 @@ does not double-compress an already encoded response and emits
 - The broker pack / userdata MUST live on **real disk**, never tmpfs (RAM
   exhaustion — see 001). 005's entrypoint guard enforces this; until then, verify
   manually.
+- The MCP Tasks SQLite file MUST remain on persistent real disk and MUST NOT be
+  shared by multiple active server instances.
 
 ## Audit
 
@@ -140,6 +166,8 @@ does not double-compress an already encoded response and emits
       ingress must be the only compressor.
 - [ ] RDP bound to loopback / behind VPN.
 - [ ] Broker pack on real disk (not tmpfs).
+- [ ] Task-store persistence, backup policy, TTL, and single-writer ownership
+      are intentional.
 - [ ] Audit log destination is persistent and monitored.
 - [ ] No trade tools exist; optional managed-sector/formula mutations and their
       `qmt:manage` grants are intentional.

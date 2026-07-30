@@ -57,6 +57,29 @@ QMT_MCP_GZIP_MIN_SIZE=1024
 Set `QMT_MCP_GZIP_MIN_SIZE=0` if a reverse proxy should be the only compression
 layer.
 
+## Durable MCP Tasks
+
+For stable MCP `2026-07-28` clients declaring
+`io.modelcontextprotocol/tasks`, selected long-running tools return a durable
+task handle. Supported 2025 clients and modern clients that do not declare the
+extension retain synchronous `tools/call` behavior on the same endpoint.
+
+Task state lives in the broker pack by default:
+
+```env
+QMT_MCP_TASKS_ENABLED=1
+QMT_MCP_TASK_STORE=/broker/cache/mcp-tasks-v1.sqlite3
+QMT_MCP_TASK_TTL_MS=86400000
+QMT_MCP_TASK_POLL_INTERVAL_MS=1000
+QMT_MCP_TASK_MAX_RETAINED=1000
+```
+
+The SQLite store excludes tool arguments, credentials, and raw principal
+identifiers. It retains terminal results until TTL/bounded cleanup. A restart
+marks interrupted work failed rather than leaving it permanently active.
+Keep this file on persistent storage and do not share one store between
+multiple concurrently running MCP server instances.
+
 ## Connect
 
 Use a real RDP client (macOS: **Windows App** / Microsoft Remote Desktop —

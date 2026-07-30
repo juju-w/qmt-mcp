@@ -47,6 +47,7 @@
 | 数据库持久化（PostgreSQL，可选） | ✅ 可用 | 行情数据仓库，read/write-through，off by default |
 | `qmtctl` CLI | ✅ 可用 | Go 编译命令行客户端，支持行情/搜索/账户查询 |
 | MCP 协议 | ✅ 双线兼容 | 主推稳定版 `2026-07-28`，同一 `/mcp` 自动兼容 2025 客户端 |
+| MCP 长任务 | ✅ 可用 | 2026 Tasks 持久化执行；未升级或未声明扩展的客户端继续同步调用 |
 | MCP 工具契约 / Profile | ✅ 可用 | 结构化结果、行为注解；可按 full/readonly/market/account/core/custom 裁剪工具面 |
 | OAuth 2.1 授权 | ✅ 可用 | static/oauth/hybrid；JWT/JWKS 校验、scope 裁剪、qmtctl PKCE 登录与刷新 |
 
@@ -137,6 +138,35 @@ qmtctl 会自动取完全部页面，所以 `qmtctl tools` 的使用方式和输
 ```env
 QMT_MCP_LIST_PAGE_SIZE=50
 QMT_MCP_GZIP_MIN_SIZE=1024
+```
+
+### 长任务与 MCP Tasks
+
+服务端以稳定版 `2026-07-28` 的 `io.modelcontextprotocol/tasks` 扩展承载下载、
+财务数据、批量公式、因子生成和缓存刷新等长操作。声明该扩展的客户端可在断开后
+继续查询或取消任务；2025 客户端以及尚未声明 Tasks 的 Codex、Claude Code、
+WorkBuddy 等客户端仍走原有同步 `tools/call`，无需升级配置。
+
+任务状态默认持久化到 broker pack 内的 SQLite，只保存生命周期、不可逆 owner
+摘要、所需 scope 和终态结果，不保存工具参数、token 或原始用户标识。服务重启
+后未完成任务会明确变成 `failed`；终态记录按 TTL 和数量上限清理：
+
+```env
+QMT_MCP_TASKS_ENABLED=1
+QMT_MCP_TASK_STORE=/broker/cache/mcp-tasks-v1.sqlite3
+QMT_MCP_TASK_TTL_MS=86400000
+QMT_MCP_TASK_POLL_INTERVAL_MS=1000
+QMT_MCP_TASK_MAX_RETAINED=1000
+```
+
+qmtctl 默认等待任务结束并保持原命令输出，也可脱离后续查：
+
+```bash
+qmtctl cache refresh --force
+qmtctl --task-mode detach --json cache refresh --force
+qmtctl task get tsk_<id>
+qmtctl task wait tsk_<id>
+qmtctl task cancel tsk_<id>
 ```
 
 ## 快速开始

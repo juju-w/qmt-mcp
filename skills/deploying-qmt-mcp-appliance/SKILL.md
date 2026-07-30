@@ -164,6 +164,11 @@ complete authorized catalog even when `QMT_MCP_LIST_PAGE_SIZE` is smaller than
 the tool count. Eligible JSON responses use negotiated gzip by default; set
 `QMT_MCP_GZIP_MIN_SIZE=0` only when the ingress owns compression.
 
+Stable `2026-07-28` clients may also use durable Tasks. Keep
+`QMT_MCP_TASK_STORE` on persistent real disk, never share one SQLite file among
+multiple active MCP replicas, and include it in backups when detached task
+recovery matters. Older and non-declaring clients remain synchronous.
+
 Use qmtctl for client-level discovery and smoke checks:
 
 ```bash
@@ -175,11 +180,15 @@ qmtctl auth login \
 qmtctl auth status
 qmtctl health
 qmtctl smoke --code 510300.SH
+qmtctl --task-mode detach --json cache refresh --force
+qmtctl task wait tsk_<id>
 ```
 
 `qmtctl auth discover` needs no token. Login uses Authorization Code + PKCE and
 persists refresh rotation. MCP commands use an explicit access token first,
 then a static token, then the saved per-resource OAuth session.
+qmtctl's default task mode waits and prints the final tool result;
+`--task-mode sync` exercises the old-client compatibility path.
 
 Manual probes worth knowing:
 

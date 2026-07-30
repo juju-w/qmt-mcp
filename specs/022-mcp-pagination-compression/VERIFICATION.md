@@ -53,7 +53,18 @@ No expected-failure file is used.
 - Changed paths contain no `.env`, broker pack, account data, personal
   strategy, screenshots, or local scripts.
 
-## Pending remote gate
+## Remote gate
 
-The PR must pass gitleaks and the native linux/amd64 appliance build/smoke
-before T023 and T024 are closed.
+PR #14 CI run
+[30574419685](https://github.com/juju-w/qmt-mcp/actions/runs/30574419685)
+passed all six jobs:
+
+- native linux/amd64 appliance build and smoke;
+- gitleaks secret scan;
+- conventional commit and release policy;
+- Python lint and unit tests;
+- Go qmtctl test, vet, and build;
+- modern and legacy official MCP conformance.
+
+The native appliance job completed successfully in 2 minutes 2 seconds. No
+remote exceptions or expected-failure allowlist were used.

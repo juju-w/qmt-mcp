@@ -39,5 +39,5 @@
 - [x] T020 Run ruff and Python unit/integration tests.
 - [x] T021 Run Go test/vet/build and six-target cross-compilation.
 - [x] T022 Run selected modern/legacy official conformance.
-- [ ] T023 Run release policy, actionlint, diff/secret review, and native image.
-- [ ] T024 Record evidence in `VERIFICATION.md` and close tasks accurately.
+- [x] T023 Run release policy, actionlint, diff/secret review, and native image.
+- [x] T024 Record evidence in `VERIFICATION.md` and close tasks accurately.

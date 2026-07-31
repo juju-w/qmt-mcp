@@ -199,17 +199,23 @@ qmtctl task update tsk_<id> \
 ```bash
 cd appliance
 cp .env.example .env                       # 填入认证配置 / BROKER_PACK 等
+# 推荐 QMT_DESKTOP_MODE=persistent；RDP 密码至少 12 位且无默认值
 docker compose build                       # 构建券商中立基础镜像
 scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
 docker compose up -d
 ```
 
-连接（登录 RDP 后在 QMT 里登录资金账号，交易需勾选**独立交易/极简模式**）：
+连接（持久桌面会在容器启动时创建；仍需在 QMT 界面登录资金账号，交易需勾选
+**独立交易/极简模式**）：
 
 ```text
-RDP:  <host>:13389   wineuser / 密码见 .env  （用真正的 RDP 客户端，不要用 VNC）
+RDP:  127.0.0.1:13389   wineuser / 密码见 .env  （默认走 SSH/VPN 隧道，不要用 VNC）
 MCP:  http://<host>:18765/mcp   需 Authorization: Bearer <QMT_MCP_TOKEN>
 ```
+
+远程电脑先执行 `ssh -N -L 13389:127.0.0.1:13389 <user>@<host>`，再让
+Windows App 连接本机 `127.0.0.1:13389`。断开后重新连接会回到同一个 QMT、
+MCP 和 Xorg 会话，不会重复启动终端。
 
 默认 `static` 模式与旧部署完全兼容。公网或多用户场景可切换到外部 OAuth
 authorization server 签发 JWT 的 `oauth`/`hybrid` 模式；QMT-MCP 只做 resource

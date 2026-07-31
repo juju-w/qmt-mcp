@@ -1,100 +1,13 @@
 services:
   qmt:
-    build: .
-    image: qmt-appliance-base:local
-    container_name: "qmt-${INSTANCE:-default}"
-    platform: linux/amd64
+    extends:
+      file: docker-compose.common.yml
+      service: qmt-common
     ports:
-      - "${RDP_PORT:-13389}:3389"     # RDP
-      - "${MCP_PORT:-18765}:8765"     # MCP (streamable-http, static/OAuth/hybrid)
-    environment:
-      RDP_SERVER: "yes"
-      USER_NAME: "wineuser"
-      USER_UID: "1000"
-      USER_GID: "1000"
-      QMT_RDP_PASSWORD: "${QMT_RDP_PASSWORD:-qmt}"
-      TZ: "Asia/Shanghai"
-      WINEARCH: "wow64"
-      WINEPREFIX: "/home/wineuser/.wine"
-      BROKER_MOUNT: "/broker"
-      # Authentication (021). `static` remains the backward-compatible default;
-      # OAuth-only intentionally permits an empty static token.
-      QMT_MCP_AUTH_MODE: "${QMT_MCP_AUTH_MODE:-static}"
-      QMT_MCP_TOKEN: "${QMT_MCP_TOKEN:-}"
-      MCP_HOST: "0.0.0.0"
-      MCP_PORT: "8765"
-      # startup-static tool surface (020). Core health/capabilities always stay
-      # visible; allow/deny values are comma-separated shell globs.
-      QMT_MCP_TOOL_PROFILE: "${QMT_MCP_TOOL_PROFILE:-full}"
-      QMT_MCP_TOOL_ALLOWLIST: "${QMT_MCP_TOOL_ALLOWLIST:-}"
-      QMT_MCP_TOOL_DENYLIST: "${QMT_MCP_TOOL_DENYLIST:-}"
-      # Bounded standard tools/list pages and negotiated JSON gzip (022).
-      QMT_MCP_LIST_PAGE_SIZE: "${QMT_MCP_LIST_PAGE_SIZE:-50}"
-      QMT_MCP_GZIP_MIN_SIZE: "${QMT_MCP_GZIP_MIN_SIZE:-1024}"
-      # Stable MCP 2026-07-28 Tasks (023); old clients remain synchronous.
-      QMT_MCP_TASKS_ENABLED: "${QMT_MCP_TASKS_ENABLED:-1}"
-      QMT_MCP_TASK_STORE: "${QMT_MCP_TASK_STORE:-/broker/cache/mcp-tasks-v1.sqlite3}"
-      QMT_MCP_TASK_TTL_MS: "${QMT_MCP_TASK_TTL_MS:-86400000}"
-      QMT_MCP_TASK_POLL_INTERVAL_MS: "${QMT_MCP_TASK_POLL_INTERVAL_MS:-1000}"
-      QMT_MCP_TASK_MAX_RETAINED: "${QMT_MCP_TASK_MAX_RETAINED:-1000}"
-      QMT_MCP_TASK_TOOLS: "${QMT_MCP_TASK_TOOLS:-qmt_xtdata_download_history,qmt_xtdata_download_history_batch,qmt_xtdata_download_financial_data,qmt_xtdata_formula_call_batch,qmt_xtdata_formula_generate_factor,qmt_xtdata_refresh_instrument_cache}"
-      # OAuth resource-server discovery and JWT/JWKS validation. Login and token
-      # issuance stay in an external authorization server.
-      QMT_MCP_PUBLIC_BASE_URL: "${QMT_MCP_PUBLIC_BASE_URL:-}"
-      QMT_MCP_OAUTH_AUTHORIZATION_SERVERS: "${QMT_MCP_OAUTH_AUTHORIZATION_SERVERS:-}"
-      QMT_MCP_OAUTH_ISSUER: "${QMT_MCP_OAUTH_ISSUER:-}"
-      QMT_MCP_OAUTH_JWKS_URL: "${QMT_MCP_OAUTH_JWKS_URL:-}"
-      QMT_MCP_OAUTH_SCOPES: "${QMT_MCP_OAUTH_SCOPES:-qmt:read qmt:market qmt:account qmt:manage qmt:admin}"
-      QMT_MCP_OAUTH_RESOURCE: "${QMT_MCP_OAUTH_RESOURCE:-}"
-      QMT_MCP_OAUTH_RESOURCE_NAME: "${QMT_MCP_OAUTH_RESOURCE_NAME:-QMT MCP}"
-      QMT_MCP_OAUTH_ALGORITHMS: "${QMT_MCP_OAUTH_ALGORITHMS:-RS256 ES256}"
-      QMT_MCP_OAUTH_CLOCK_SKEW_S: "${QMT_MCP_OAUTH_CLOCK_SKEW_S:-30}"
-      QMT_MCP_OAUTH_JWKS_TTL_S: "${QMT_MCP_OAUTH_JWKS_TTL_S:-300}"
-      QMT_MCP_OAUTH_HTTP_TIMEOUT_S: "${QMT_MCP_OAUTH_HTTP_TIMEOUT_S:-5}"
-      QMT_MCP_OAUTH_JWKS_MAX_BYTES: "${QMT_MCP_OAUTH_JWKS_MAX_BYTES:-1048576}"
-      # optional PostgreSQL persistence (012); empty = off. For the bundled `db`
-      # service below use e.g. postgresql://qmt:qmt@db:5432/qmt
-      QMT_DB_URL: "${QMT_DB_URL:-}"
-      # optional read-only account queries (004); off by default. Enable with
-      # QMT_ENABLE_XTTRADE_QUERY=1 and QMT_TRADE_ACCOUNTS=<csv account ids>.
-      QMT_ENABLE_XTTRADE_QUERY: "${QMT_ENABLE_XTTRADE_QUERY:-0}"
-      QMT_TRADE_ACCOUNTS: "${QMT_TRADE_ACCOUNTS:-}"
-      # optional quote subscription/cache tuning (013); defaults are safe for
-      # personal watchlists.
-      QMT_QUOTE_SUBSCRIPTION_STORE: "${QMT_QUOTE_SUBSCRIPTION_STORE:-/broker/cache/quote-subscriptions-v1.json}"
-      QMT_QUOTE_CACHE_MAX_AGE_MS: "${QMT_QUOTE_CACHE_MAX_AGE_MS:-10000}"
-      QMT_QUOTE_SUBSCRIPTION_MAX_CODES: "${QMT_QUOTE_SUBSCRIPTION_MAX_CODES:-100}"
-      QMT_QUOTE_SUBSCRIPTION_MAX_OFFICIAL: "${QMT_QUOTE_SUBSCRIPTION_MAX_OFFICIAL:-50}"
-      QMT_QUOTE_SUBSCRIPTION_MIN_FALLBACK_INTERVAL_S: "${QMT_QUOTE_SUBSCRIPTION_MIN_FALLBACK_INTERVAL_S:-5}"
-      # optional custom sector writes (017); disabled by default and restricted
-      # to managed prefixes.
-      QMT_ENABLE_XTDATA_SECTOR_WRITE: "${QMT_ENABLE_XTDATA_SECTOR_WRITE:-0}"
-      QMT_XTDATA_SECTOR_WRITE_PREFIXES: "${QMT_XTDATA_SECTOR_WRITE_PREFIXES:-MCP/,AI/}"
-      # optional formula runtime (018); disabled by default and requires an
-      # explicit formula allowlist.
-      QMT_ENABLE_FORMULA_RUNTIME: "${QMT_ENABLE_FORMULA_RUNTIME:-0}"
-      QMT_FORMULA_ALLOWLIST: "${QMT_FORMULA_ALLOWLIST:-}"
-      QMT_FORMULA_OUTPUT_SANDBOX: "${QMT_FORMULA_OUTPUT_SANDBOX:-/broker/formula-output}"
-    volumes:
-      # The broker pack: extracted QMT terminal + matching xtquant + broker.yaml.
-      # Mounted READ-WRITE (the terminal persists userdata/logs/config in-tree).
-      # Switch brokers by pointing BROKER_PACK at another pack — no rebuild.
-      - "${BROKER_PACK:?set BROKER_PACK in appliance/.env to a broker pack dir}:/broker"
-    shm_size: "1g"
-    restart: unless-stopped
-    # Reflects MCP liveness via /livez. Reports unhealthy until an operator logs in
-    # over RDP (the MCP autostarts with the desktop session); healthy once serving.
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
-      interval: 30s
-      timeout: 10s
-      start_period: 60s
-      retries: 3
+      - "${RDP_BIND_ADDRESS:-127.0.0.1}:${RDP_PORT:-13389}:3389"
+      - "${MCP_PORT:-18765}:8765"
 
-  # Optional bundled PostgreSQL (012) for market-data warehousing. Behind a profile
-  # so plain `docker compose up` starts NO database. To use it:
-  #   docker compose --profile db up -d
-  # and set in .env:  QMT_DB_URL=postgresql://qmt:qmt@db:5432/qmt
+  # Optional PostgreSQL warehouse. Start with `docker compose --profile db up`.
   db:
     image: postgres:16
     container_name: "qmt-${INSTANCE:-default}-db"
@@ -114,7 +27,8 @@ services:
 
 volumes:
   qmt-pgdata:
+  qmt-rdp-certs:
 
-# Multiple brokers on one host: copy appliance/.env per instance (distinct
-# INSTANCE / RDP_PORT / MCP_PORT / auth credentials / BROKER_PACK) and run with
-# `docker compose --env-file <file> -p <project> up -d`.
+# Multiple brokers on one host: use a distinct env file and Compose project for
+# each instance so ports, broker packs, auth, DB, and RDP certificates stay
+# isolated: `docker compose --env-file broker-a.env -p qmt-a up -d`.

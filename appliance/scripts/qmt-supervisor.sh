@@ -8,17 +8,18 @@ set -uo pipefail
 LOG_PREFIX="[qmt-supervisor]"
 START_MCP="${QMT_START_MCP:-/usr/local/bin/start-mcp.sh}"
 BACKOFF_MAX="${QMT_SUPERVISOR_BACKOFF_MAX_S:-60}"
-PIDFILE="${QMT_SUPERVISOR_PIDFILE:-/tmp/qmt-supervisor.pid}"
+LOCKFILE="${QMT_SUPERVISOR_LOCKFILE:-/run/user/$(id -u)/qmt-mcp-supervisor.lock}"
 
 log() { echo "${LOG_PREFIX} $*" >&2; }
 
-# Single-instance guard: a second autostart firing must not spawn a duplicate.
-if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null; then
-  log "already running (pid $(cat "$PIDFILE")); exiting."
+# Kernel-backed singleton guard. Unlike a PID file, this cannot remain stale
+# after a hard container stop or PID reuse.
+mkdir -p "$(dirname "$LOCKFILE")"
+exec 9>"$LOCKFILE"
+if ! flock -n 9; then
+  log "already running; exiting."
   exit 0
 fi
-echo "$$" > "$PIDFILE"
-trap 'rm -f "$PIDFILE"' EXIT
 
 attempt=0
 log "supervising ${START_MCP} (backoff cap ${BACKOFF_MAX}s)"

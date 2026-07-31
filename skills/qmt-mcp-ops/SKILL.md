@@ -54,8 +54,10 @@ Optional PostgreSQL:
 docker compose --profile db up -d
 ```
 
-After every create or restart, RDP to `<host>:13389` and log into QMT. The MCP
-server autostarts with that desktop session. The endpoint is
+Use `QMT_DESKTOP_MODE=persistent` so every create or restart starts one desktop,
+QMT, and MCP session without an attached client. RDP reconnects reuse that
+session; the broker terminal may still require an interactive account login
+before xtdata becomes ready. The endpoint is
 `http://<host>:18765/mcp`; use TLS for any non-local connection.
 
 Run multiple brokers with one env file, project name, and port pair per
@@ -285,7 +287,7 @@ qmtctl smoke --code 510300.SH
 |---|---|
 | Exit code 10-14 | Broker-pack discovery failure; inspect `detect-broker` logs |
 | `nodrv_CreateWindow` | Wine base drift or damaged prefix; use the pinned date tag |
-| `/livez` is silent after restart | RDP session has not started MCP autostart |
+| `/livez` is silent after restart | Persistent desktop failed; inspect status/logs. In `manual`, connect RDP first |
 | `xttrader.connect()==-1` | Broker has not enabled external/programmatic trading |
 | `not_authorized` on account tools | Flag, account allowlist, or broker permission missing |
 | OAuth discovery works but calls return 401 | Check JWT signature/`kid`, issuer, audience, expiry, client id, and algorithm |

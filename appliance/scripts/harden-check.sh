@@ -11,8 +11,11 @@ set -euo pipefail
 
 ENV_FILE="${1:-appliance/.env}"
 if [ -f "$ENV_FILE" ]; then
+  set -a
+  # Operator-selected env file is intentional.
   # shellcheck disable=SC1090
-  set -a; . "$ENV_FILE"; set +a
+  . "$ENV_FILE"
+  set +a
 fi
 
 fail=0
@@ -20,6 +23,12 @@ warn=0
 err()  { printf '  [FAIL] %s\n' "$1"; fail=$((fail + 1)); }
 note() { printf '  [WARN] %s\n' "$1"; warn=$((warn + 1)); }
 ok()   { printf '  [ok]   %s\n' "$1"; }
+is_enabled() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    1 | yes | true | on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 echo "harden-check: QMT-MCP appliance pre-flight"
 echo "(env source: ${ENV_FILE}$([ -f "$ENV_FILE" ] || echo ' [not found, using process env]'))"
@@ -77,15 +86,70 @@ if [ "$AUTH_MODE" = "oauth" ] || [ "$AUTH_MODE" = "hybrid" ]; then
   fi
 fi
 
-# 2) RDP password (default in compose is 'qmt').
-RDP_PW="${QMT_RDP_PASSWORD:-}"
-if [ -z "$RDP_PW" ] || [ "$RDP_PW" = "qmt" ]; then
-  err "QMT_RDP_PASSWORD is empty or the default 'qmt' — set a strong password."
-elif [ "${#RDP_PW}" -lt 12 ]; then
-  note "QMT_RDP_PASSWORD is short (< 12 chars)."
+# 2) Persistent desktop and RDP credential policy (026).
+DESKTOP_MODE="${QMT_DESKTOP_MODE:-manual}"
+case "$DESKTOP_MODE" in
+  manual | persistent) ok "Desktop mode is ${DESKTOP_MODE}." ;;
+  *) err "QMT_DESKTOP_MODE must be manual or persistent." ;;
+esac
+
+RDP_PW=""
+if [ -n "${QMT_RDP_PASSWORD_FILE:-}" ]; then
+  if [ ! -f "$QMT_RDP_PASSWORD_FILE" ] || [ -L "$QMT_RDP_PASSWORD_FILE" ] || [ ! -r "$QMT_RDP_PASSWORD_FILE" ]; then
+    err "QMT_RDP_PASSWORD_FILE must be a readable regular file."
+  else
+    if secret_mode="$(stat -c '%a' "$QMT_RDP_PASSWORD_FILE" 2>/dev/null)"; then
+      :
+    else
+      secret_mode="$(stat -f '%Lp' "$QMT_RDP_PASSWORD_FILE")"
+    fi
+    if (( (8#$secret_mode & 077) != 0 )); then
+      err "QMT_RDP_PASSWORD_FILE must not grant group/other permissions."
+    fi
+    IFS= read -r RDP_PW < "$QMT_RDP_PASSWORD_FILE" || [ -n "$RDP_PW" ]
+    ok "RDP password is file-backed."
+  fi
 else
-  ok "QMT_RDP_PASSWORD set and non-default."
+  RDP_PW="${QMT_RDP_PASSWORD:-}"
+  note "RDP password uses an environment variable; a mounted secret file is safer."
 fi
+if [ -z "$RDP_PW" ] || [ "$RDP_PW" = "qmt" ] || [ "$RDP_PW" = "changeme" ] || [ "$RDP_PW" = "password" ]; then
+  err "RDP password is empty or a well-known default — set a unique password."
+elif [ "${#RDP_PW}" -lt 12 ]; then
+  err "RDP password is too short (${#RDP_PW} chars); use >= 12 chars."
+else
+  ok "RDP password is set, non-default, and >= 12 chars."
+fi
+
+RDP_BIND="${RDP_BIND_ADDRESS:-127.0.0.1}"
+case "$RDP_BIND" in
+  127.0.0.1 | ::1 | localhost) ok "RDP publication is loopback-only." ;;
+  *)
+    case "${QMT_RDP_ALLOW_LAN:-0}" in
+      1 | yes | true | on) note "RDP is intentionally published to ${RDP_BIND}; keep it on a trusted LAN/VPN." ;;
+      *) err "Non-loopback RDP publication requires QMT_RDP_ALLOW_LAN=1." ;;
+    esac
+    ;;
+esac
+
+if is_enabled "${QMT_RDP_DRIVE_REDIRECTION:-0}"; then
+  if is_enabled "${QMT_RDP_ALLOW_UNSAFE_CHANNELS:-0}"; then
+    note "RDP drive redirection is explicitly enabled."
+  else
+    err "RDP drive redirection requires QMT_RDP_ALLOW_UNSAFE_CHANNELS=1."
+  fi
+else
+  ok "RDP drive redirection is disabled."
+fi
+
+case "${QMT_RDP_CERT_MODE:-generated}" in
+  generated | self-signed) ok "RDP uses a persisted per-instance certificate." ;;
+  mounted | provided)
+    [ -r "${QMT_RDP_CERT_FILE:-}" ] || err "QMT_RDP_CERT_FILE is required and must be readable."
+    [ -r "${QMT_RDP_KEY_FILE:-}" ] || err "QMT_RDP_KEY_FILE is required and must be readable."
+    ;;
+  *) err "QMT_RDP_CERT_MODE must be generated or mounted." ;;
+esac
 
 # 3) Network exposure: 0.0.0.0 bind is only safe behind a TLS reverse proxy.
 HOST="${MCP_HOST:-0.0.0.0}"
@@ -103,7 +167,7 @@ if [ "$PROXIED" != "1" ]; then
 fi
 
 # 5) RDP should not be on the public internet.
-note "Ensure the RDP port is NOT published to the public internet (tunnel/VPN/loopback)."
+note "RDP is TLS-only but must still stay off the public internet (tunnel/VPN/loopback)."
 
 echo "harden-check: ${fail} failure(s), ${warn} warning(s)."
 [ "$fail" -eq 0 ] || { echo "harden-check: FAILED — fix the [FAIL] items before exposing."; exit 1; }

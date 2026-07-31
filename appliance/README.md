@@ -15,6 +15,7 @@ generic runtime, on a native `linux/amd64` host:
 - CJK fonts on the Linux desktop **and** inside the Wine prefix
 - Windows Python 3.12 installed into the Wine prefix (downloaded at build time)
 - official `mcp` Python SDK / `uvicorn` for the MCP server; `detect-broker` to resolve the pack
+- source-built, checksum-pinned xrdp 0.10.6.1 + xorgxrdp 0.10.5 (TLS-only)
 - `8765` serves the read-only QMT **MCP** server (bearer-token; see root README)
 
 Because nothing broker-specific is baked in, the build context stays tiny and the
@@ -35,7 +36,7 @@ docker compose up -d          # mount a broker pack at /broker (see root README)
 Ports (host → container):
 
 ```text
-13389 → 3389   RDP
+127.0.0.1:13389 → 3389   RDP (loopback by default)
 18765 → 8765   MCP (bearer-token)
 ```
 
@@ -95,16 +96,34 @@ polling-only, disconnected, and not-yet-upgraded clients. qmtctl selects this
 path automatically and returns to server-guided polling if the stream cannot
 continue.
 
+## Desktop lifecycle
+
+`QMT_DESKTOP_MODE=persistent` is the recommended default. Container startup
+creates one Xorg/XFCE session and launches QMT plus MCP before an RDP client is
+attached. Disconnecting and reconnecting returns to the same processes; it does
+not create a second terminal. `manual` retains the old login-triggered behavior
+as a rollback mode.
+
+The desktop can start unattended, but the broker terminal may still present its
+own login dialog. Until that login succeeds, `/livez` is available while
+`qmt_health.xtdata` reports `degraded` or `awaiting_login`.
+
 ## Connect
 
 Use a real RDP client (macOS: **Windows App** / Microsoft Remote Desktop —
 *not* VNC / Screen Sharing, which fail xrdp's X.224 handshake):
 
 ```text
-host: <nas-ip>:13389
+host: 127.0.0.1:13389
 user: wineuser
-pass: <QMT_RDP_PASSWORD from .env>   # the compose default `qmt` is dev-only
+pass: <QMT_RDP_PASSWORD from .env>
 ```
+
+The base Compose file binds RDP to loopback. From another machine, create a
+tunnel first: `ssh -N -L 13389:127.0.0.1:13389 <user>@<nas>`.
+There is no password default: use at least 12 random characters, preferably via
+an owner-only mounted secret file. Direct LAN publication requires both a
+non-loopback `RDP_BIND_ADDRESS` and `QMT_RDP_ALLOW_LAN=1`.
 
 ## Verify the base stack
 
@@ -138,6 +157,10 @@ The broker pack is mounted read-write at `/broker`, so the QMT login /
 `userdata_mini` persist in the pack across container recreation. Keep the pack on
 **real disk** (never tmpfs) — see the root README.
 
+The generated RDP certificate persists in the project-scoped
+`qmt-rdp-certs` volume. The live desktop survives client disconnects, but a
+container restart intentionally creates a fresh desktop session.
+
 ## Customising versions
 
 ```bash
@@ -151,7 +174,6 @@ broker pack, not the image.)
 ## Non-goals
 
 - noVNC/browser desktop
-- high-performance remote desktop
 - live trading endpoints
 - running MiniQMT outside the container while xtquant runs inside
 - exposing trading privileges directly to agents

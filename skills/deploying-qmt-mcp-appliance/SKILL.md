@@ -10,10 +10,11 @@ operations, tool tables, and `qmtctl` usage see **qmt-mcp-ops**.
 
 ## Core principle
 
-Three things break a first deploy, and none of them announce themselves clearly:
-the **broker pack is incomplete** (the QMT installer ships no `xtquant`), the
-**scripts have CRLF endings** (baked into the image, not visible in `git diff`), and
-the **MCP only starts on RDP desktop login** (so a correct deploy still looks dead).
+Three things commonly break a first deploy: the **broker pack is incomplete**
+(the QMT installer ships no `xtquant`), the **scripts have CRLF endings** (baked
+into the image, not visible in `git diff`), and desktop lifecycle is misunderstood.
+Recommended `persistent` mode starts MCP at boot; only rollback-compatible
+`manual` mode waits for the first RDP login.
 
 ## Pre-flight
 
@@ -95,11 +96,15 @@ but isn't: `detect-broker` walks `CLIENT_NAMES` in priority order and the first 
 **exactly one** hit wins, so `XtItClient.exe` resolves. Pin it in `broker.yaml` anyway
 for reproducibility. `userdata_mini` need not exist — it's created at login.
 
-## Gotcha 4: a healthy deploy looks dead
+## Gotcha 4: desktop mode changes startup readiness
 
-MCP and the QMT terminal are launched by **XFCE autostart on RDP login**, not by the
-entrypoint. So after `up -d` (and after every `restart`): container is `unhealthy`,
-`/livez` returns nothing, no process listening inside. **This is by design.**
+With `QMT_DESKTOP_MODE=persistent`, the entrypoint creates one Xorg/XFCE session
+at boot. XFCE autostart launches QMT and MCP, so `/livez` becomes ready without
+an attached RDP client and reconnects return to the same processes. Check
+`/run/qmt/desktop/status.json` when startup stalls.
+
+With rollback-compatible `manual`, QMT and MCP still launch only after the first
+RDP desktop login. In that mode an initially unhealthy container is expected.
 
 To verify the server headlessly without an RDP session:
 
@@ -109,8 +114,9 @@ docker exec -u wineuser -d <container> bash -lc \
 sleep 50 && docker exec <container> cat /tmp/sup.log   # expect "Application startup complete"
 ```
 
-`xtdata: degraded` + `无法连接xtquant服务` and `xttrade: not_authorized` persist until a
-human logs into the *terminal* over RDP. Not a deploy fault — don't chase it.
+In either mode, `xtdata: degraded` + `无法连接xtquant服务` and
+`xttrade: not_authorized` can persist until a human logs into the *broker
+terminal* over RDP. Desktop startup and broker authentication are separate.
 
 ## Remote deploy from a Windows workstation
 

@@ -215,12 +215,49 @@ jobs:
           context: appliance
           file: appliance/Dockerfile
           platforms: linux/amd64
+          # The Dockerfile defaults to the 1ms mirror for domestic users. GitHub
+          # runners use Google's Docker Hub mirror so a partial domestic mirror
+          # cannot leave the manifest pointing at a missing content layer.
+          build-args: |
+            WINE_BASE=mirror.gcr.io/scottyhardy/docker-wine:stable-11.0-20260531@sha256:76ef7a9f6170428f2753376c31974427163f23ac7f2d0314b0b451af1f4f43ca
+            XRDP_BUILD_BASE=mirror.gcr.io/library/ubuntu:24.04@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf
           push: false
           outputs: type=cacheonly
           cache-from: |
             type=gha,scope=appliance-ci
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/qmt-mcp:buildcache
           cache-to: type=gha,scope=appliance-ci,mode=max
+      - name: Verify Compose security defaults
+        env:
+          BROKER_PACK: /tmp/qmt-broker-pack
+          QMT_MCP_TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        run: |
+          set -euo pipefail
+          docker compose -f appliance/docker-compose.yml config --format json > /tmp/qmt-compose.json
+          docker compose -f appliance/docker-compose.tls.yml config --format json > /tmp/qmt-compose-tls.json
+          python3 - <<'PY'
+          import json
+
+          def service(path):
+              with open(path, encoding="utf-8") as handle:
+                  return json.load(handle)["services"]["qmt"]
+
+          base = service("/tmp/qmt-compose.json")
+          tls = service("/tmp/qmt-compose-tls.json")
+
+          for qmt in (base, tls):
+              assert "no-new-privileges:true" in qmt["security_opt"]
+              assert qmt["cap_drop"] == ["ALL"]
+              assert set(qmt["cap_add"]) == {
+                  "CHOWN", "DAC_OVERRIDE", "KILL", "SETGID", "SETUID"
+              }
+              assert qmt["environment"]["QMT_RDP_PASSWORD"] == ""
+              rdp = [port for port in qmt["ports"] if port["target"] == 3389]
+              assert len(rdp) == 1 and rdp[0]["host_ip"] == "127.0.0.1"
+
+          assert any(port["target"] == 8765 for port in base["ports"])
+          assert all(port["target"] != 8765 for port in tls["ports"])
+          PY
 
   secret-scan:
     name: Secret scan (gitleaks)

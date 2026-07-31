@@ -54,9 +54,30 @@ Optional PostgreSQL:
 docker compose --profile db up -d
 ```
 
-After every create or restart, RDP to `<host>:13389` and log into QMT. The MCP
-server autostarts with that desktop session. The endpoint is
-`http://<host>:18765/mcp`; use TLS for any non-local connection.
+In the default `rdp` display mode, RDP to `<host>:13389` and log into QMT after
+every create or restart: the MCP server autostarts with that desktop session, so
+until someone logs in there is no MCP. Set `QMT_DISPLAY_MODE=vnc` to have the MCP
+start unattended (see below). The endpoint is `http://<host>:18765/mcp`; use TLS
+for any non-local connection.
+
+### Display modes (`QMT_DISPLAY_MODE`)
+
+| Mode | MCP availability | Desktop |
+|---|---|---|
+| `rdp` (default) | Only after an RDP login starts the XFCE autostart | RDP `<host>:13389` |
+| `vnc` | Unattended — `start-vnc.sh` owns Xvfb + x11vnc + QMT + the MCP supervisor under PID 1 | VNC `<host>:15900` |
+| `both` | Unattended (same as `vnc`) | VNC + RDP |
+
+`vnc` costs ~9 MB image and ~87 MB RAM, plus ~170 MB for `xfwm4` + `xfdesktop` +
+`xfce4-panel`; `QMT_VNC_DESKTOP=0` serves a bare X root window instead (no window
+decorations on QMT dialogs). The VNC desktop is always password-protected via
+`QMT_VNC_PASSWORD`, defaulting to `QMT_RDP_PASSWORD`. Prefer `vnc` over `both`: an
+RDP login creates a separate X session whose autostart spawns a second QMT
+terminal.
+
+Either mode still needs the **one-off interactive QMT account login** done by hand
+on the desktop; that cannot be automated. Enable independent-trading / minimal
+mode there if account queries are needed.
 
 Run multiple brokers with one env file, project name, and port pair per
 instance:
@@ -284,8 +305,12 @@ qmtctl smoke --code 510300.SH
 | Symptom | Likely cause / action |
 |---|---|
 | Exit code 10-14 | Broker-pack discovery failure; inspect `detect-broker` logs |
+| Exit code 21 / 22 | Invalid `QMT_DISPLAY_MODE`, or `vnc`/`both` with no VNC/RDP password set |
+| Exit code 30-34 | VNC session failure; Xvfb, x11vnc, or the MCP supervisor died — see `~/.vnc/*.log` |
 | `nodrv_CreateWindow` | Wine base drift or damaged prefix; use the pinned date tag |
-| `/livez` is silent after restart | RDP session has not started MCP autostart |
+| `/livez` is silent after restart | `rdp` mode: RDP session has not started MCP autostart; switch to `QMT_DISPLAY_MODE=vnc` for login-free startup |
+| VNC desktop is black / QMT windows have no title bars | No window manager; keep `QMT_VNC_DESKTOP=1` so `xfwm4`+`xfdesktop`+`xfce4-panel` start |
+| `audit sink is not writable` | Broker pack not owned by uid 1000; `chown -R 1000:1000 <pack>` |
 | `xttrader.connect()==-1` | Broker has not enabled external/programmatic trading |
 | `not_authorized` on account tools | Flag, account allowlist, or broker permission missing |
 | OAuth discovery works but calls return 401 | Check JWT signature/`kid`, issuer, audience, expiry, client id, and algorithm |

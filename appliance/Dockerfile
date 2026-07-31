@@ -6,7 +6,7 @@
 #   - CJK fonts (Linux desktop + inside the Wine prefix)
 #   - official MCP SDK + uvicorn + numpy/pandas (MCP + xtdata deps)
 #   - the read-only QMT MCP launcher + scripts + XFCE autostart
-#   - xrdp desktop
+#   - xrdp desktop (default) and x11vnc for the headless Xvfb session mode
 #   - detect-broker tooling (python3 + python3-yaml)
 #
 # It contains NO QMT terminal, NO xtquant, NO broker data. Those are supplied at
@@ -42,6 +42,8 @@ ENV WINEARCH=wow64 \
 # Aliyun mirror for the Ubuntu archive (noble deb822). unrar handles the RAR5
 # xtquant used by make-broker-pack; 7z handles the NSIS terminal installer.
 # python3 + python3-yaml power detect-broker. NO xtquant, NO terminal here.
+# x11vnc serves the Xvfb desktop in QMT_DISPLAY_MODE=vnc (~9 MB with deps); the
+# xrdp path from the base image stays untouched and is still the default.
 RUN set -eux; \
     for f in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do \
       [ -f "$f" ] && sed -i \
@@ -55,6 +57,7 @@ RUN set -eux; \
         p7zip-full unrar \
         python3 python3-yaml \
         locales \
+        x11vnc \
         fonts-noto-cjk fonts-wqy-microhei fonts-wqy-zenhei; \
     grep -qxF 'zh_CN.GBK GBK' /etc/locale.gen || echo 'zh_CN.GBK GBK' >> /etc/locale.gen; \
     locale-gen zh_CN.GBK; \
@@ -145,12 +148,17 @@ RUN set -eux; \
 
 USER root
 WORKDIR /
-EXPOSE 3389 8765
+EXPOSE 3389 5900 8765
 
-# Healthcheck (005): probe the unauthenticated /livez. NOTE: the MCP is started by
-# the XFCE autostart on RDP login, so the container reports unhealthy until an
-# operator logs in over RDP and the session/MCP come up — this accurately reflects
-# "MCP serving". The supervisor then keeps it up; a crash flips unhealthy briefly.
+# Healthcheck (005): probe the unauthenticated /livez.
+#
+# QMT_DISPLAY_MODE=rdp (default): the MCP is started by the XFCE autostart on RDP
+# login, so the container reports unhealthy until an operator logs in over RDP and
+# the session/MCP come up — this accurately reflects "MCP serving".
+#
+# QMT_DISPLAY_MODE=vnc|both: start-vnc.sh brings up Xvfb + the MCP supervisor as
+# PID 1's child, so the container goes healthy on its own with no login at all.
+# In both cases the supervisor keeps the MCP up; a crash flips unhealthy briefly.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD /usr/local/bin/healthcheck.sh
 

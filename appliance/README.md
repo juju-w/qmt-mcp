@@ -36,8 +36,38 @@ Ports (host → container):
 
 ```text
 13389 → 3389   RDP
+15900 → 5900   VNC   (only served when QMT_DISPLAY_MODE=vnc|both)
 18765 → 8765   MCP (bearer-token)
 ```
+
+## Display modes
+
+`QMT_DISPLAY_MODE` picks the graphical stack. This matters because it decides
+whether the MCP needs a human to log in first.
+
+| Mode | MCP availability | Desktop access |
+|---|---|---|
+| `rdp` (default) | **Only after an RDP login** — the XFCE autostart launches QMT + MCP, so the container stays unhealthy until someone logs in | RDP |
+| `vnc` | **Automatic** — `start-vnc.sh` runs Xvfb + x11vnc + QMT + the MCP supervisor as children of PID 1, so `up -d` / restarts come up healthy unattended | VNC |
+| `both` | Automatic (same as `vnc`) | VNC + RDP |
+
+`vnc` costs ~9 MB image size and ~87 MB RAM (Xvfb + x11vnc) over `rdp`, plus
+~170 MB for the XFCE window manager, desktop and panel.
+
+The VNC session runs `xfwm4` + `xfdesktop` + `xfce4-panel` (not the full
+`xfce4-session`, which needs D-Bus and a login session). Without a window manager
+the desktop is a bare black root window and QMT's windows get no title bars — set
+`QMT_VNC_DESKTOP=0` only if you deliberately want that. D-Bus warnings in
+`~/.vnc/*.log` ("Failed to connect to session manager", "Failed to get system
+bus", `org.xfce.SessionManager` unknown) are expected and harmless.
+
+> `both` caveat: an RDP login creates a *separate* X session whose autostart would
+> launch a second QMT terminal. The MCP is protected by the supervisor's pidfile,
+> the terminal is not — prefer `vnc` unless you specifically need the RDP path.
+
+Either way, the **one-off interactive QMT account login** still has to be done by
+hand on the desktop; it cannot be automated. After that the credentials live in
+the pack's `userdata_mini/`.
 
 ## MCP transport controls
 
@@ -97,8 +127,9 @@ continue.
 
 ## Connect
 
-Use a real RDP client (macOS: **Windows App** / Microsoft Remote Desktop —
-*not* VNC / Screen Sharing, which fail xrdp's X.224 handshake):
+**RDP** (`rdp`/`both` modes) — use a real RDP client (macOS: **Windows App** /
+Microsoft Remote Desktop — *not* VNC / Screen Sharing, which fail xrdp's X.224
+handshake):
 
 ```text
 host: <nas-ip>:13389
@@ -106,9 +137,17 @@ user: wineuser
 pass: <QMT_RDP_PASSWORD from .env>   # the compose default `qmt` is dev-only
 ```
 
+**VNC** (`vnc`/`both` modes) — any VNC client; the desktop is always
+password-protected (`QMT_VNC_PASSWORD`, defaulting to `QMT_RDP_PASSWORD`):
+
+```text
+host: <nas-ip>:15900
+pass: <QMT_VNC_PASSWORD or QMT_RDP_PASSWORD from .env>
+```
+
 ## Verify the base stack
 
-Inside the RDP desktop terminal (or `docker exec -u wineuser`):
+Inside the desktop terminal (or `docker exec -u wineuser`):
 
 ```bash
 verify-xtquant.sh        # prints Python version; xtquant is provided by the pack
@@ -150,7 +189,8 @@ broker pack, not the image.)
 
 ## Non-goals
 
-- noVNC/browser desktop
+- noVNC / browser desktop (raw VNC via `QMT_DISPLAY_MODE=vnc` is supported; the
+  websockify + web-UI stack pulls ~53 extra packages and is deliberately omitted)
 - high-performance remote desktop
 - live trading endpoints
 - running MiniQMT outside the container while xtquant runs inside

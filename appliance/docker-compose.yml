@@ -6,6 +6,7 @@ services:
     platform: linux/amd64
     ports:
       - "${RDP_PORT:-13389}:3389"     # RDP
+      - "${VNC_PORT:-15900}:5900"     # VNC (only served when QMT_DISPLAY_MODE=vnc|both)
       - "${MCP_PORT:-18765}:8765"     # MCP (streamable-http, static/OAuth/hybrid)
     environment:
       RDP_SERVER: "yes"
@@ -13,6 +14,20 @@ services:
       USER_UID: "1000"
       USER_GID: "1000"
       QMT_RDP_PASSWORD: "${QMT_RDP_PASSWORD:-qmt}"
+      # Which graphical stack to run:
+      #   rdp  (default) QMT + MCP start from the XFCE autostart on RDP login —
+      #                  i.e. the MCP is unavailable until a human logs in.
+      #   vnc            headless Xvfb + x11vnc; QMT + MCP are owned by PID 1, so
+      #                  the MCP comes up on its own with no login at all. Use a
+      #                  VNC client only for the one-off QMT account login.
+      #   both           xrdp in the background plus the headless VNC session.
+      QMT_DISPLAY_MODE: "${QMT_DISPLAY_MODE:-rdp}"
+      # VNC desktop password; defaults to QMT_RDP_PASSWORD. Never served unauthenticated.
+      QMT_VNC_PASSWORD: "${QMT_VNC_PASSWORD:-}"
+      QMT_VNC_GEOMETRY: "${QMT_VNC_GEOMETRY:-1440x900x24}"
+      # 1 (default) = run XFCE (xfwm4 + xfdesktop) inside the VNC session so QMT
+      # windows have decorations and the desktop is not a bare black root window.
+      QMT_VNC_DESKTOP: "${QMT_VNC_DESKTOP:-1}"
       TZ: "Asia/Shanghai"
       WINEARCH: "wow64"
       WINEPREFIX: "/home/wineuser/.wine"

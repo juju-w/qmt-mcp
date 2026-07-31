@@ -1,6 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Display mode (validated early so a typo fails before any service starts):
+#   rdp  (default) — base-image xrdp only; QMT + MCP start from the XFCE autostart
+#                    on RDP login. Unchanged legacy behaviour.
+#   vnc            — headless Xvfb + x11vnc, with QMT + MCP owned by PID 1. The
+#                    container self-heals to healthy with no login at all.
+#   both           — xrdp in the background AND the headless VNC session.
+QMT_DISPLAY_MODE="${QMT_DISPLAY_MODE:-rdp}"
+case "$QMT_DISPLAY_MODE" in
+  rdp | vnc | both) ;;
+  *)
+    echo "[qmt-entrypoint] FATAL: invalid QMT_DISPLAY_MODE='${QMT_DISPLAY_MODE}' (expected rdp|vnc|both)." >&2
+    exit 21
+    ;;
+esac
+
+# The VNC desktop is adjacent to a live brokerage terminal, so it is always
+# password-protected. Fall back to the RDP password so a `vnc` deployment needs
+# one fewer secret; fail closed if neither is set.
+if [ "$QMT_DISPLAY_MODE" != "rdp" ]; then
+  QMT_VNC_PASSWORD="${QMT_VNC_PASSWORD:-${QMT_RDP_PASSWORD:-}}"
+  if [ -z "$QMT_VNC_PASSWORD" ]; then
+    echo "[qmt-entrypoint] FATAL: QMT_DISPLAY_MODE=${QMT_DISPLAY_MODE} needs QMT_VNC_PASSWORD (or QMT_RDP_PASSWORD) set." >&2
+    exit 22
+  fi
+  export QMT_VNC_PASSWORD
+fi
+
 # 0) Storage guard (005): the broker pack / userdata should live on real disk; a
 #    RAM-backed mount (tmpfs/ramfs) can exhaust memory. Warn by default; set
 #    QMT_ENFORCE_REALDISK=1 to fail closed.
@@ -86,9 +113,45 @@ if [ -d /opt/qmt-mcp ]; then
     echo "QMT_USERDATA_WIN='${QMT_USERDATA_WIN:-}'"
     echo "QMT_XTQUANT_DIR_WIN='${QMT_XTQUANT_DIR_WIN:-}'"
     echo "QMT_MCP_MODE='${QMT_MCP_MODE:-readonly}'"
+    echo "QMT_DISPLAY_MODE='${QMT_DISPLAY_MODE}'"
+    echo "QMT_VNC_DISPLAY='${QMT_VNC_DISPLAY:-20}'"
+    echo "QMT_VNC_PORT='${QMT_VNC_PORT:-5900}'"
+    echo "QMT_VNC_GEOMETRY='${QMT_VNC_GEOMETRY:-1440x900x24}'"
+    echo "QMT_VNC_PASSWORD='${QMT_VNC_PASSWORD:-}'"
+    echo "QMT_VNC_DESKTOP='${QMT_VNC_DESKTOP:-1}'"
   } > /opt/qmt-mcp/mcp.env
   chown "${USER_UID:-1000}:${USER_GID:-1000}" /opt/qmt-mcp/mcp.env 2>/dev/null || true
   chmod 600 /opt/qmt-mcp/mcp.env 2>/dev/null || true
 fi
 
-exec /usr/bin/entrypoint "$@"
+# 4) Hand off to the display stack.
+#
+# rdp: unchanged — the base entrypoint runs xrdp in the foreground as PID 1 and
+# the XFCE autostart brings up QMT + MCP once an operator logs in.
+if [ "$QMT_DISPLAY_MODE" = "rdp" ]; then
+  exec /usr/bin/entrypoint "$@"
+fi
+
+# vnc / both: run the headless session as wineuser. The XFCE autostart never
+# fires here (nobody logs into a desktop), so start-vnc.sh owns Xvfb + x11vnc +
+# QMT + the MCP supervisor directly — that is what makes the MCP available
+# without any interactive login.
+#
+# `both` additionally starts xrdp in the background so an operator can still get
+# in over RDP; note that an RDP login lands in a SEPARATE X session from the VNC
+# screen, and its autostart would spawn a second QMT/MCP. qmt-supervisor.sh has a
+# pidfile guard so the MCP stays single-instance; the QMT terminal does not, so
+# prefer `vnc` unless you specifically need the RDP path.
+if [ "$QMT_DISPLAY_MODE" = "both" ]; then
+  if [ -f /usr/sbin/xrdp ]; then
+    rm -f /var/run/xrdp/xrdp-sesman.pid /var/run/xrdp/xrdp.pid
+    /usr/sbin/xrdp-sesman
+    /usr/sbin/xrdp
+    echo "[qmt-entrypoint] xrdp started in background (mode=both)" >&2
+  else
+    echo "[qmt-entrypoint] WARNING: xrdp absent in this image; continuing with VNC only." >&2
+  fi
+fi
+
+echo "[qmt-entrypoint] display mode=${QMT_DISPLAY_MODE}; handing off to start-vnc.sh as ${USER_NAME:-wineuser}" >&2
+exec gosu "${USER_NAME:-wineuser}" /usr/local/bin/start-vnc.sh

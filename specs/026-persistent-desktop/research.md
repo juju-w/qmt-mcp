@@ -4,15 +4,33 @@
 
 ## Decision
 
-Proceed with one patched xrdp/xorgxrdp stack and test whether
-`xrdp-sesrun -F 0` can pre-create the same Xorg session an operator later
-reattaches to. This is the preferred architecture, but it remains behind a
-native amd64 POC gate because the upstream man page describes `xrdp-sesrun` as
-a session launcher useful for testing.
+Proceed with one patched xrdp/xorgxrdp stack. The native amd64 POC proved that
+`xrdp-sesrun -F 0` pre-creates the same Xorg session an operator later
+reattaches to, without exposing the password in argv or creating a second QMT.
 
 Do not merge PR #19 as implemented. Its useful requirement is unattended
 desktop startup; VNC, a second display protocol, and the `both` mode are not
 required to meet that requirement.
+
+## Native POC Outcome
+
+The blocking POC and production acceptance completed on the native NAS:
+
+- pinned xrdp 0.10.6.1 and xorgxrdp 0.10.5 built from verified upstream
+  archives and passed the in-image gate;
+- `xrdp-sesrun -F 0` created display `:10` before a client connected;
+- FreeRDP TLS attach, disconnect, reattach, and 1280x800 to 1600x900 resize
+  preserved the Xorg, QMT, MCP, and supervisor process identities;
+- classic RDP security was rejected while TLS authentication succeeded;
+- a disconnected, logged-in real QMT session remained ready for more than 30
+  minutes with zero container restarts;
+- ten forced container generations each reached ready in about eight seconds
+  with one Xorg, one QMT root, one MCP, one xrdp, and one sesman process;
+- manual mode created no desktop until a real TLS RDP login, then launched one
+  desktop, QMT, and MCP as the rollback design requires;
+- `cap-drop=ALL` works with only `CHOWN`, `DAC_OVERRIDE`, `KILL`, `SETGID`, and
+  `SETUID`. Removing `DAC_OVERRIDE` correctly failed against the real host-owned
+  broker pack; removing `FOWNER` did not affect startup or clean shutdown.
 
 ## Production Baseline Observed
 
@@ -169,18 +187,13 @@ only runtime artifacts, and assert versions during the image smoke.
 The currently pinned Wine base must remain date-stamped. A deliberate base bump
 may be evaluated separately, but it does not replace the xrdp version gate.
 
-## Open POC Questions
+## Resolved Questions and Residual Work
 
-- Does `xrdp-sesrun` create a session that Windows App reattaches to without a
-  second Xorg process?
-- Does reattachment survive resolution, monitor, and color-depth changes?
-- What process owns the disconnected session and how should PID 1 supervise it?
-- Does XFCE autostart run identically for a sesrun-created session?
-- Does QMT preserve its login state after container recreate with the same
-  broker pack and Wine prefix?
-- Which GFX codec gives the best QMT interaction on the native NAS CPU?
-- Which Linux capabilities are actually required after sudo removal and
-  TLS/certificate hardening?
+The session, reattachment, resolution, PID 1, XFCE autostart, broker-state, and
+Linux capability questions all passed on native amd64. QMT preserves its saved
+account/password selection but can still present its normal manual login
+button after recreation; this is intentionally not automated by the image.
 
-No implementation phase may begin until the first four questions pass on
-native amd64. A failure requires revising the plan, not silently adding VNC.
+The selected xrdp 0.10 GFX path was responsive during real QMT login and resize
+acceptance. A controlled xrdp 0.9 versus 0.10 CPU/bandwidth benchmark remains a
+separate performance evidence task; no VNC fallback is implied by that work.

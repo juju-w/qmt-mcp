@@ -65,9 +65,11 @@ container exits, nothing left listening) when:
 | 14 | xtquant unresolved (0 or >1 — set `xtquant.path`) |
 
 ## Login & MCP
-Log into the QMT terminal manually over RDP (`<host>:RDP_PORT`, user `wineuser`).
-The MCP (`<host>:MCP_PORT/mcp`, bearer `QMT_MCP_TOKEN`) starts with the desktop
-session; its trader tools come live after login (read-only by default).
+In recommended `QMT_DESKTOP_MODE=persistent`, the desktop, QMT process, and MCP
+start at container boot. Connect over the loopback RDP tunnel when the broker
+terminal needs interactive login (`127.0.0.1:RDP_PORT`, user `wineuser`). MCP is
+already reachable, but xtdata remains degraded until that broker login succeeds.
+`manual` mode retains the older first-RDP-login startup path.
 
 ## Apple Silicon
 Build/run only under emulation; QMT native services may hit the Rosetta AVX

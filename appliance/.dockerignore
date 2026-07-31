@@ -4,6 +4,10 @@
 ._*
 .env
 mcp/**/__pycache__
+mcp/.venv/
+mcp/.ruff_cache/
+mcp/.pytest_cache/
+mcp/tests/
 # broker packs are mounted at runtime, never part of the image build context
 brokers/*/pack/
 workspace/**

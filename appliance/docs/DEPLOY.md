@@ -1,7 +1,8 @@
 # Deployment & Hardening
 
-The dev `docker-compose.yml` publishes the MCP and RDP ports directly and ships a
-weak default RDP password — convenient on a loopback box, **unsafe if exposed**.
+The base `docker-compose.yml` publishes MCP directly, binds RDP to loopback, and
+has no RDP password default. Any non-loopback publication must be an intentional
+LAN/VPN exception and is **unsafe on the public internet**.
 This guide covers deploying the appliance where others (or agents on other hosts)
 can reach it.
 
@@ -34,6 +35,9 @@ operator ──VPN/tunnel──> 127.0.0.1:3389 (RDP, loopback only)
   network. (`docker-compose.tls.yml` + `deploy/Caddyfile.example`.)
 - RDP is bound to loopback; reach it through a VPN/SSH tunnel, never the public
   internet.
+- The container drops all Linux capabilities and restores only `CHOWN`,
+  `DAC_OVERRIDE`, `KILL`, `SETGID`, and `SETUID`, with
+  `no-new-privileges` enforced. Preserve this policy in deployment overrides.
 
 ## Authentication modes
 
@@ -138,8 +142,16 @@ TTL expires or bounded retention removes the oldest terminal entries.
 
 ## RDP
 
-- Set a strong `QMT_RDP_PASSWORD` (the compose default `qmt` is for dev only).
-- Bind to loopback (`127.0.0.1:3389`) and tunnel in; do not publish RDP publicly.
+- Use `QMT_DESKTOP_MODE=persistent` so QMT/MCP start before a client connects and
+  reconnects reuse the single Xorg session. Keep `manual` only as a rollback.
+- Set a unique password of at least 12 characters. Prefer an owner-only mounted
+  `QMT_RDP_PASSWORD_FILE`; environment input is retained for compatibility.
+- The runtime uses pinned xrdp 0.10.6.1/xorgxrdp 0.10.5, TLS 1.2/1.3 only, a
+  per-instance certificate, one allowed session, and a non-sudo desktop user.
+- Clipboard, drive, audio, RemoteApp, and video channels default off. Enabling
+  drive or unrestricted clipboard requires `QMT_RDP_ALLOW_UNSAFE_CHANNELS=1`.
+- Bind to loopback (`127.0.0.1:13389`) and tunnel in. A non-loopback bind also
+  requires `QMT_RDP_ALLOW_LAN=1`; never publish RDP to the public internet.
 
 ## Storage
 
@@ -160,7 +172,7 @@ TTL expires or bounded retention removes the oldest terminal entries.
 - [ ] Auth mode is intentional; static/hybrid token is random and >= 32 chars.
 - [ ] OAuth/hybrid pins one HTTPS issuer, JWKS URL, resource, asymmetric
       algorithm allowlist, and only the scopes actually needed.
-- [ ] `QMT_RDP_PASSWORD` is strong and non-default.
+- [ ] RDP password is unique, >= 12 characters, and preferably file-backed.
 - [ ] MCP reachable only via TLS proxy (not host-published on a LAN).
 - [ ] Compression ownership is intentional; app gzip is disabled if the
       ingress must be the only compressor.

@@ -1,0 +1,98 @@
+# Shared QMT service definition. Deployment files extend this service and own
+# only their host publication topology, avoiding environment/security drift.
+services:
+  qmt-common:
+    build: .
+    image: qmt-appliance-base:local
+    container_name: "qmt-${INSTANCE:-default}"
+    platform: linux/amd64
+    environment:
+      RDP_SERVER: "yes"
+      USER_NAME: "wineuser"
+      USER_UID: "1000"
+      USER_GID: "1000"
+      USER_SUDO: "no"
+      INSTANCE: "${INSTANCE:-default}"
+      RDP_BIND_ADDRESS: "${RDP_BIND_ADDRESS:-127.0.0.1}"
+      QMT_DESKTOP_MODE: "${QMT_DESKTOP_MODE:-manual}"
+      QMT_RDP_PASSWORD: "${QMT_RDP_PASSWORD:-}"
+      QMT_RDP_PASSWORD_FILE: "${QMT_RDP_PASSWORD_FILE:-}"
+      QMT_RDP_GEOMETRY: "${QMT_RDP_GEOMETRY:-1440x900x32}"
+      QMT_RDP_CLIPBOARD: "${QMT_RDP_CLIPBOARD:-none}"
+      QMT_RDP_DRIVE_REDIRECTION: "${QMT_RDP_DRIVE_REDIRECTION:-0}"
+      QMT_RDP_ALLOW_UNSAFE_CHANNELS: "${QMT_RDP_ALLOW_UNSAFE_CHANNELS:-0}"
+      QMT_RDP_ALLOW_LAN: "${QMT_RDP_ALLOW_LAN:-0}"
+      QMT_RDP_CERT_MODE: "${QMT_RDP_CERT_MODE:-generated}"
+      QMT_RDP_CERT_FILE: "${QMT_RDP_CERT_FILE:-}"
+      QMT_RDP_KEY_FILE: "${QMT_RDP_KEY_FILE:-}"
+      QMT_RDP_BOOT_RETRIES: "${QMT_RDP_BOOT_RETRIES:-3}"
+      QMT_RDP_BOOT_BACKOFF_S: "${QMT_RDP_BOOT_BACKOFF_S:-5}"
+      TZ: "Asia/Shanghai"
+      WINEARCH: "wow64"
+      WINEPREFIX: "/home/wineuser/.wine"
+      BROKER_MOUNT: "/broker"
+      QMT_MCP_AUTH_MODE: "${QMT_MCP_AUTH_MODE:-static}"
+      QMT_MCP_TOKEN: "${QMT_MCP_TOKEN:-}"
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "8765"
+      QMT_MCP_TOOL_PROFILE: "${QMT_MCP_TOOL_PROFILE:-full}"
+      QMT_MCP_TOOL_ALLOWLIST: "${QMT_MCP_TOOL_ALLOWLIST:-}"
+      QMT_MCP_TOOL_DENYLIST: "${QMT_MCP_TOOL_DENYLIST:-}"
+      QMT_MCP_LIST_PAGE_SIZE: "${QMT_MCP_LIST_PAGE_SIZE:-50}"
+      QMT_MCP_GZIP_MIN_SIZE: "${QMT_MCP_GZIP_MIN_SIZE:-1024}"
+      QMT_MCP_TASKS_ENABLED: "${QMT_MCP_TASKS_ENABLED:-1}"
+      QMT_MCP_TASK_STORE: "${QMT_MCP_TASK_STORE:-/broker/cache/mcp-tasks-v1.sqlite3}"
+      QMT_MCP_TASK_TTL_MS: "${QMT_MCP_TASK_TTL_MS:-86400000}"
+      QMT_MCP_TASK_POLL_INTERVAL_MS: "${QMT_MCP_TASK_POLL_INTERVAL_MS:-1000}"
+      QMT_MCP_TASK_MAX_RETAINED: "${QMT_MCP_TASK_MAX_RETAINED:-1000}"
+      QMT_MCP_TASK_TOOLS: "${QMT_MCP_TASK_TOOLS:-qmt_xtdata_download_history,qmt_xtdata_download_history_batch,qmt_xtdata_download_financial_data,qmt_xtdata_formula_call_batch,qmt_xtdata_formula_generate_factor,qmt_xtdata_refresh_instrument_cache}"
+      QMT_MCP_PUBLIC_BASE_URL: "${QMT_MCP_PUBLIC_BASE_URL:-}"
+      QMT_MCP_OAUTH_AUTHORIZATION_SERVERS: "${QMT_MCP_OAUTH_AUTHORIZATION_SERVERS:-}"
+      QMT_MCP_OAUTH_ISSUER: "${QMT_MCP_OAUTH_ISSUER:-}"
+      QMT_MCP_OAUTH_JWKS_URL: "${QMT_MCP_OAUTH_JWKS_URL:-}"
+      QMT_MCP_OAUTH_SCOPES: "${QMT_MCP_OAUTH_SCOPES:-qmt:read qmt:market qmt:account qmt:manage qmt:admin}"
+      QMT_MCP_OAUTH_RESOURCE: "${QMT_MCP_OAUTH_RESOURCE:-}"
+      QMT_MCP_OAUTH_RESOURCE_NAME: "${QMT_MCP_OAUTH_RESOURCE_NAME:-QMT MCP}"
+      QMT_MCP_OAUTH_ALGORITHMS: "${QMT_MCP_OAUTH_ALGORITHMS:-RS256 ES256}"
+      QMT_MCP_OAUTH_CLOCK_SKEW_S: "${QMT_MCP_OAUTH_CLOCK_SKEW_S:-30}"
+      QMT_MCP_OAUTH_JWKS_TTL_S: "${QMT_MCP_OAUTH_JWKS_TTL_S:-300}"
+      QMT_MCP_OAUTH_HTTP_TIMEOUT_S: "${QMT_MCP_OAUTH_HTTP_TIMEOUT_S:-5}"
+      QMT_MCP_OAUTH_JWKS_MAX_BYTES: "${QMT_MCP_OAUTH_JWKS_MAX_BYTES:-1048576}"
+      QMT_DB_URL: "${QMT_DB_URL:-}"
+      QMT_ENABLE_XTTRADE_QUERY: "${QMT_ENABLE_XTTRADE_QUERY:-0}"
+      QMT_TRADE_ACCOUNTS: "${QMT_TRADE_ACCOUNTS:-}"
+      QMT_QUOTE_SUBSCRIPTION_STORE: "${QMT_QUOTE_SUBSCRIPTION_STORE:-/broker/cache/quote-subscriptions-v1.json}"
+      QMT_QUOTE_CACHE_MAX_AGE_MS: "${QMT_QUOTE_CACHE_MAX_AGE_MS:-10000}"
+      QMT_QUOTE_SUBSCRIPTION_MAX_CODES: "${QMT_QUOTE_SUBSCRIPTION_MAX_CODES:-100}"
+      QMT_QUOTE_SUBSCRIPTION_MAX_OFFICIAL: "${QMT_QUOTE_SUBSCRIPTION_MAX_OFFICIAL:-50}"
+      QMT_QUOTE_SUBSCRIPTION_MIN_FALLBACK_INTERVAL_S: "${QMT_QUOTE_SUBSCRIPTION_MIN_FALLBACK_INTERVAL_S:-5}"
+      QMT_ENABLE_XTDATA_SECTOR_WRITE: "${QMT_ENABLE_XTDATA_SECTOR_WRITE:-0}"
+      QMT_XTDATA_SECTOR_WRITE_PREFIXES: "${QMT_XTDATA_SECTOR_WRITE_PREFIXES:-MCP/,AI/}"
+      QMT_ENABLE_FORMULA_RUNTIME: "${QMT_ENABLE_FORMULA_RUNTIME:-0}"
+      QMT_FORMULA_ALLOWLIST: "${QMT_FORMULA_ALLOWLIST:-}"
+      QMT_FORMULA_OUTPUT_SANDBOX: "${QMT_FORMULA_OUTPUT_SANDBOX:-/broker/formula-output}"
+    volumes:
+      - "${BROKER_PACK:?set BROKER_PACK in appliance/.env to a broker pack dir}:/broker"
+      - "qmt-rdp-certs:/var/lib/qmt-rdp"
+    shm_size: "1g"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Proven on the native NAS with the real broker pack. DAC_OVERRIDE is
+      # required when host pack ownership differs; KILL is required for clean
+      # shutdown of the non-root Xorg/Wine process tree.
+      - CHOWN
+      - DAC_OVERRIDE
+      - KILL
+      - SETGID
+      - SETUID
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3

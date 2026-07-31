@@ -54,8 +54,8 @@ echo "verify-mcp: ${BASE}"
 if curl -fsS --max-time 5 "${BASE}/livez" 2>/dev/null | grep -q '"ok": *true'; then
   ok "/livez reports live."
 else
-  err "/livez unreachable. MCP starts on RDP desktop login — start the supervisor:"
-  printf '         docker exec -u wineuser -d <container> bash -lc "nohup /usr/local/bin/qmt-supervisor.sh > /tmp/sup.log 2>&1"\n'
+  err "/livez unreachable. Inspect container logs and /run/qmt/desktop/status.json."
+  printf '         In QMT_DESKTOP_MODE=manual, connect RDP once to start XFCE autostart.\n'
   echo "verify-mcp: ${fail} failure(s) — aborting (nothing listening)."
   exit 1
 fi

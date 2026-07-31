@@ -25,7 +25,11 @@ Generate a static token with `openssl rand -hex 32`.
 | `INSTANCE` | `default` | Container suffix |
 | `RDP_PORT` | `13389` | Host RDP port |
 | `MCP_PORT` | `18765` | Host MCP port |
-| `QMT_RDP_PASSWORD` | `qmt` | RDP password; change outside development |
+| `RDP_BIND_ADDRESS` | `127.0.0.1` | RDP host bind; non-loopback also needs `QMT_RDP_ALLOW_LAN=1` |
+| `QMT_DESKTOP_MODE` | `manual` | `persistent` is recommended; `manual` is rollback-compatible |
+| `QMT_RDP_PASSWORD` | empty | Compatibility input; unique >= 12 chars, file-backed preferred |
+| `QMT_RDP_PASSWORD_FILE` | empty | Owner-only in-container password file |
+| `QMT_RDP_CLIPBOARD` | `none` | `none`, text-only `text`, or unsafe-gated `all` |
 | `QMT_DB_URL` | empty | PostgreSQL DSN; empty disables persistence |
 | `QMT_DB_USER` / `QMT_DB_PASSWORD` / `QMT_DB_NAME` | `qmt` | Bundled `db` profile settings |
 

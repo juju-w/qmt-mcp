@@ -1,7 +1,7 @@
 # Quickstart: Secure Persistent Desktop
 
-This document describes the intended operator flow after implementation. The
-026 branch is specification-only until the native session POC passes.
+This document describes the implemented operator flow. The native session POC,
+real QMT acceptance, and hardened NAS rollout passed on 2026-08-01.
 
 ## Immediate Containment for Existing Deployments
 
@@ -30,8 +30,20 @@ QMT_RDP_CLIPBOARD=none
 QMT_RDP_DRIVE_REDIRECTION=0
 ```
 
-Compose mounts the password as a secret and keeps a per-instance RDP
-certificate volume. No default password is supplied.
+The shared Compose service keeps a per-instance RDP certificate volume and has
+no password default. `QMT_RDP_PASSWORD_FILE` is a container path, so mount the
+owner-only host file with a small local override:
+
+```yaml
+services:
+  qmt:
+    volumes:
+      - ${QMT_RDP_PASSWORD_HOST_FILE:?set the host secret path}:/run/secrets/qmt_rdp_password:ro
+```
+
+Set `QMT_RDP_PASSWORD_HOST_FILE` to the host file and keep
+`QMT_RDP_PASSWORD_FILE=/run/secrets/qmt_rdp_password`. Environment input remains
+available for compatibility but is visible in container metadata.
 
 ## First QMT Login
 

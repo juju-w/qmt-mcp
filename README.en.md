@@ -43,7 +43,7 @@ never needs to know the raw QMT code:
 
 | Capability | State | Notes |
 |---|---|---|
-| Launch QMT terminal + RDP login | ✅ | terminal + MCP auto-start after login |
+| Persistent QMT desktop + RDP reconnect | ✅ | terminal + MCP start at boot; reconnects reuse one TLS-only session |
 | Market data `xtdata` (snapshot/bars/instruments/sectors/calendar) | ✅ ready | MCP tools return structured JSON (11/11 verified live) |
 | **Fuzzy instrument search** (name/pinyin/alias/sector/theme) | ✅ ready | the agent locates instruments without knowing QMT codes |
 | Read-only account queries `xttrade` | ⚠️ needs broker permission | degrades to `not_authorized` (no crash) when not enabled |
@@ -191,18 +191,24 @@ qmtctl task update tsk_<id> \
 ```bash
 cd appliance
 cp .env.example .env                       # fill in authentication / BROKER_PACK / ...
+# Keep QMT_DESKTOP_MODE=persistent and set a unique RDP password (12+ chars).
 docker compose build                       # build the broker-neutral base image
 scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
 docker compose up -d
 ```
 
-Connect (after RDP login, log into your account in QMT; trading needs the
-**independent-trading / minimal** mode):
+Connect (the desktop starts with the container; log into your account in QMT
+when prompted, and use **independent-trading / minimal** mode for trading):
 
 ```text
-RDP:  <host>:13389   wineuser / password in .env  (use a real RDP client, not VNC)
+RDP:  127.0.0.1:13389   wineuser / password in .env  (SSH/VPN tunnel; not VNC)
 MCP:  http://<host>:18765/mcp   with Authorization: Bearer <QMT_MCP_TOKEN>
 ```
+
+From another machine, first run
+`ssh -N -L 13389:127.0.0.1:13389 <user>@<host>`, then connect Windows App to
+`127.0.0.1:13389`. Disconnecting and reconnecting preserves the same QMT, MCP,
+and Xorg processes.
 
 The default `static` mode is upgrade-compatible. Public or multi-user
 deployments can use an external authorization server with `oauth` or `hybrid`;

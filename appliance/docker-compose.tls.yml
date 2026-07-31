@@ -1,70 +1,20 @@
-# Hardened TLS deployment example (standalone — use INSTEAD of docker-compose.yml).
+# Hardened standalone topology. The shared service definition lives in
+# docker-compose.common.yml; this file owns only host publication and Caddy.
 #
 #   docker compose -f docker-compose.tls.yml up -d
-#
-# Differences vs. the dev docker-compose.yml:
-#   - The MCP port (8765) is NOT published to the host. Caddy reaches it on the
-#     internal compose network as `qmt:8765`, so the raw bearer endpoint is never
-#     exposed on the LAN.
-#   - RDP is bound to loopback only (127.0.0.1) — tunnel/VPN in for the desktop.
-#   - A Caddy reverse proxy terminates TLS and publishes 80/443.
-#
-# Run scripts/harden-check.sh first. Provide ./Caddyfile (from
-# deploy/Caddyfile.example) and set a real domain + email + authentication.
-
 services:
   qmt:
-    build: .
-    image: qmt-appliance-base:local
+    extends:
+      file: docker-compose.common.yml
+      service: qmt-common
     container_name: "qmt-${INSTANCE:-tls}"
-    platform: linux/amd64
-    # MCP (8765) intentionally NOT published — internal-only, reached by caddy.
     ports:
-      - "127.0.0.1:${RDP_PORT:-13389}:3389"   # RDP: loopback only
+      - "127.0.0.1:${RDP_PORT:-13389}:3389"
     expose:
       - "8765"
     environment:
-      RDP_SERVER: "yes"
-      USER_NAME: "wineuser"
-      USER_UID: "1000"
-      USER_GID: "1000"
-      QMT_RDP_PASSWORD: "${QMT_RDP_PASSWORD:?set a strong QMT_RDP_PASSWORD in .env}"
-      TZ: "Asia/Shanghai"
-      WINEARCH: "wow64"
-      WINEPREFIX: "/home/wineuser/.wine"
-      BROKER_MOUNT: "/broker"
-      QMT_MCP_AUTH_MODE: "${QMT_MCP_AUTH_MODE:-static}"
-      QMT_MCP_TOKEN: "${QMT_MCP_TOKEN:-}"
       QMT_BEHIND_TLS_PROXY: "1"
-      MCP_HOST: "0.0.0.0"
-      MCP_PORT: "8765"
-      QMT_MCP_TOOL_PROFILE: "${QMT_MCP_TOOL_PROFILE:-full}"
-      QMT_MCP_TOOL_ALLOWLIST: "${QMT_MCP_TOOL_ALLOWLIST:-}"
-      QMT_MCP_TOOL_DENYLIST: "${QMT_MCP_TOOL_DENYLIST:-}"
-      QMT_MCP_LIST_PAGE_SIZE: "${QMT_MCP_LIST_PAGE_SIZE:-50}"
-      QMT_MCP_GZIP_MIN_SIZE: "${QMT_MCP_GZIP_MIN_SIZE:-1024}"
-      QMT_MCP_TASKS_ENABLED: "${QMT_MCP_TASKS_ENABLED:-1}"
-      QMT_MCP_TASK_STORE: "${QMT_MCP_TASK_STORE:-/broker/cache/mcp-tasks-v1.sqlite3}"
-      QMT_MCP_TASK_TTL_MS: "${QMT_MCP_TASK_TTL_MS:-86400000}"
-      QMT_MCP_TASK_POLL_INTERVAL_MS: "${QMT_MCP_TASK_POLL_INTERVAL_MS:-1000}"
-      QMT_MCP_TASK_MAX_RETAINED: "${QMT_MCP_TASK_MAX_RETAINED:-1000}"
-      QMT_MCP_TASK_TOOLS: "${QMT_MCP_TASK_TOOLS:-qmt_xtdata_download_history,qmt_xtdata_download_history_batch,qmt_xtdata_download_financial_data,qmt_xtdata_formula_call_batch,qmt_xtdata_formula_generate_factor,qmt_xtdata_refresh_instrument_cache}"
-      QMT_MCP_PUBLIC_BASE_URL: "${QMT_MCP_PUBLIC_BASE_URL:-}"
-      QMT_MCP_OAUTH_AUTHORIZATION_SERVERS: "${QMT_MCP_OAUTH_AUTHORIZATION_SERVERS:-}"
-      QMT_MCP_OAUTH_ISSUER: "${QMT_MCP_OAUTH_ISSUER:-}"
-      QMT_MCP_OAUTH_JWKS_URL: "${QMT_MCP_OAUTH_JWKS_URL:-}"
-      QMT_MCP_OAUTH_SCOPES: "${QMT_MCP_OAUTH_SCOPES:-qmt:read qmt:market qmt:account qmt:manage qmt:admin}"
-      QMT_MCP_OAUTH_RESOURCE: "${QMT_MCP_OAUTH_RESOURCE:-}"
-      QMT_MCP_OAUTH_RESOURCE_NAME: "${QMT_MCP_OAUTH_RESOURCE_NAME:-QMT MCP}"
-      QMT_MCP_OAUTH_ALGORITHMS: "${QMT_MCP_OAUTH_ALGORITHMS:-RS256 ES256}"
-      QMT_MCP_OAUTH_CLOCK_SKEW_S: "${QMT_MCP_OAUTH_CLOCK_SKEW_S:-30}"
-      QMT_MCP_OAUTH_JWKS_TTL_S: "${QMT_MCP_OAUTH_JWKS_TTL_S:-300}"
-      QMT_MCP_OAUTH_HTTP_TIMEOUT_S: "${QMT_MCP_OAUTH_HTTP_TIMEOUT_S:-5}"
-      QMT_MCP_OAUTH_JWKS_MAX_BYTES: "${QMT_MCP_OAUTH_JWKS_MAX_BYTES:-1048576}"
-    volumes:
-      - "${BROKER_PACK:?set BROKER_PACK in .env to a broker pack dir}:/broker"
-    shm_size: "1g"
-    restart: unless-stopped
+      RDP_BIND_ADDRESS: "127.0.0.1"
 
   caddy:
     image: caddy:2
@@ -81,5 +31,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  qmt-rdp-certs:
   caddy_data:
   caddy_config:

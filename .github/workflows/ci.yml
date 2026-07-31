@@ -221,6 +221,37 @@ jobs:
             type=gha,scope=appliance-ci
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/qmt-mcp:buildcache
           cache-to: type=gha,scope=appliance-ci,mode=max
+      - name: Verify Compose security defaults
+        env:
+          BROKER_PACK: /tmp/qmt-broker-pack
+          QMT_MCP_TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        run: |
+          set -euo pipefail
+          docker compose -f appliance/docker-compose.yml config --format json > /tmp/qmt-compose.json
+          docker compose -f appliance/docker-compose.tls.yml config --format json > /tmp/qmt-compose-tls.json
+          python3 - <<'PY'
+          import json
+
+          def service(path):
+              with open(path, encoding="utf-8") as handle:
+                  return json.load(handle)["services"]["qmt"]
+
+          base = service("/tmp/qmt-compose.json")
+          tls = service("/tmp/qmt-compose-tls.json")
+
+          for qmt in (base, tls):
+              assert "no-new-privileges:true" in qmt["security_opt"]
+              assert qmt["cap_drop"] == ["ALL"]
+              assert set(qmt["cap_add"]) == {
+                  "CHOWN", "DAC_OVERRIDE", "KILL", "SETGID", "SETUID"
+              }
+              assert qmt["environment"]["QMT_RDP_PASSWORD"] == ""
+              rdp = [port for port in qmt["ports"] if port["target"] == 3389]
+              assert len(rdp) == 1 and rdp[0]["host_ip"] == "127.0.0.1"
+
+          assert any(port["target"] == 8765 for port in base["ports"])
+          assert all(port["target"] != 8765 for port in tls["ports"])
+          PY
 
   secret-scan:
     name: Secret scan (gitleaks)

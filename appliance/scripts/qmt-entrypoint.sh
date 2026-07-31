@@ -24,16 +24,71 @@ fi
 # shellcheck disable=SC1091
 . /run/qmt/broker.env
 
-# 2) RDP password. We pre-create wineuser at BUILD time (for Wine provisioning),
-#    so the base entrypoint finds the user already present and SKIPS useradd —
-#    meaning it never applies USER_PASSWD. Set the password directly each start.
-if [ -z "${USER_PASSWD:-}" ] && [ -n "${QMT_RDP_PASSWORD:-}" ]; then
-  USER_PASSWD="$(openssl passwd -1 -salt qmt "${QMT_RDP_PASSWORD}")"
-  export USER_PASSWD
+# 2) Secure RDP setup (026). Password files are preferred so the credential is
+#    absent from Docker metadata. Environment input remains for compatibility.
+DESKTOP_MODE="${QMT_DESKTOP_MODE:-manual}"
+case "$DESKTOP_MODE" in
+  manual | persistent) ;;
+  *) echo "[qmt-entrypoint] ERROR: QMT_DESKTOP_MODE must be manual or persistent" >&2; exit 21 ;;
+esac
+
+RDP_BIND_ADDRESS="${RDP_BIND_ADDRESS:-127.0.0.1}"
+case "$RDP_BIND_ADDRESS" in
+  127.0.0.1 | ::1 | localhost) ;;
+  *)
+    case "${QMT_RDP_ALLOW_LAN:-0}" in
+      1 | yes | true | on) ;;
+      *)
+        echo "[qmt-entrypoint] ERROR: non-loopback RDP bind requires QMT_RDP_ALLOW_LAN=1" >&2
+        exit 22
+        ;;
+    esac
+    ;;
+esac
+
+RDP_PASSWORD=""
+if [ -n "${QMT_RDP_PASSWORD_FILE:-}" ]; then
+  if [ ! -f "$QMT_RDP_PASSWORD_FILE" ] || [ -L "$QMT_RDP_PASSWORD_FILE" ] || [ ! -r "$QMT_RDP_PASSWORD_FILE" ]; then
+    echo "[qmt-entrypoint] ERROR: QMT_RDP_PASSWORD_FILE must be a readable regular file" >&2
+    exit 23
+  fi
+  secret_mode="$(stat -c '%a' "$QMT_RDP_PASSWORD_FILE")"
+  if (( (8#$secret_mode & 077) != 0 )); then
+    echo "[qmt-entrypoint] ERROR: QMT_RDP_PASSWORD_FILE must not grant group/other permissions" >&2
+    exit 23
+  fi
+  IFS= read -r RDP_PASSWORD < "$QMT_RDP_PASSWORD_FILE" || [ -n "$RDP_PASSWORD" ]
+else
+  RDP_PASSWORD="${QMT_RDP_PASSWORD:-}"
 fi
-if [ -n "${QMT_RDP_PASSWORD:-}" ]; then
-  echo "${USER_NAME:-wineuser}:${QMT_RDP_PASSWORD}" | chpasswd
+
+case "$RDP_PASSWORD" in
+  '' | qmt | changeme | password)
+    echo "[qmt-entrypoint] ERROR: set a unique RDP password (file-backed preferred)" >&2
+    exit 23
+    ;;
+esac
+if [ "${#RDP_PASSWORD}" -lt 12 ]; then
+  echo "[qmt-entrypoint] ERROR: RDP password must be at least 12 characters" >&2
+  exit 23
 fi
+
+printf '%s:%s\n' "${USER_NAME:-wineuser}" "$RDP_PASSWORD" | chpasswd
+unset RDP_PASSWORD
+
+# Never grant the desktop account sudo in this appliance. The inherited base
+# entrypoint enforces this flag before starting xrdp.
+export USER_SUDO=no
+/usr/local/bin/configure-xrdp.sh
+
+# Containers do not run pam_systemd, so the per-user runtime directory is not
+# created automatically. XFCE autostart uses it for flock-backed QMT/MCP
+# singletons; create it before the session starts with the same ownership and
+# permissions systemd-logind would use.
+RUNTIME_UID="${USER_UID:-1000}"
+RUNTIME_GID="${USER_GID:-1000}"
+install -d -m 0700 -o "$RUNTIME_UID" -g "$RUNTIME_GID" "/run/user/${RUNTIME_UID}"
+install -d -m 1777 /tmp/.ICE-unix
 
 # 3) Bridge runtime + resolved config to the RDP/XFCE session (which does not
 #    reliably inherit container env). start-mcp.sh / start-qmt.sh source this.
@@ -86,9 +141,17 @@ if [ -d /opt/qmt-mcp ]; then
     echo "QMT_USERDATA_WIN='${QMT_USERDATA_WIN:-}'"
     echo "QMT_XTQUANT_DIR_WIN='${QMT_XTQUANT_DIR_WIN:-}'"
     echo "QMT_MCP_MODE='${QMT_MCP_MODE:-readonly}'"
+    echo "QMT_DESKTOP_MODE='${DESKTOP_MODE}'"
   } > /opt/qmt-mcp/mcp.env
   chown "${USER_UID:-1000}:${USER_GID:-1000}" /opt/qmt-mcp/mcp.env 2>/dev/null || true
   chmod 600 /opt/qmt-mcp/mcp.env 2>/dev/null || true
+fi
+
+if [ "$DESKTOP_MODE" = "persistent" ]; then
+  # The base entrypoint starts xrdp and sesman first. Keep the desktop
+  # supervisor as PID 1 so container health follows the long-lived session.
+  export RUN_AS_ROOT=yes
+  exec /usr/bin/entrypoint /usr/local/bin/persistent-desktop-supervisor.sh
 fi
 
 exec /usr/bin/entrypoint "$@"

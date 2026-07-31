@@ -37,6 +37,7 @@
 | 023 MCP Tasks | ✅ 完成——主推 2026-07-28 Tasks，持久化生命周期、qmtctl 等待/脱离/同步，旧客户端同步兼容 |
 | 024 MCP 任务多轮输入 | ✅ 完成——标准 inputRequests、部分回答、MRTR→Task 组合、qmtctl 显式响应，旧客户端同步兼容 |
 | 025 MCP 任务状态通知 | ✅ 完成——2026-07-28 `subscriptions/listen` + `notifications/tasks`，qmtctl 通知优先/轮询回退 |
+| 026 安全持久桌面 | 🟡 实现中——xrdp 0.10 TLS-only、启动预建单会话、断线重连、loopback 默认与 manual 回滚 |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。
@@ -94,6 +95,9 @@ registry._tools['qmt_xtdata_snapshot']['callable'](codes=['000001.SZ'])
 7. **client 探测优先级**：真实 QMT 树里 `bin.x64` 同时有 `XtItClient.exe`(投研版) 和
    `XtMiniQmt.exe`。投研版 + 独立交易会拉起 `XtMiniQmt linkMini`。detect-broker 按优先级选
    `XtItClient.exe`；独立的 `XtMiniQmt.exe` 直接启在 wine 下不一定稳。
+8. **持久桌面和券商登录是两层状态**：`QMT_DESKTOP_MODE=persistent` 会在容器启动时创建唯一
+   Xorg/XFCE 会话并启动 QMT/MCP，RDP 重连不应更换这些 PID；但券商登录窗口仍可能等待人工操作，
+   此时 `/livez` 正常而 `qmt_health.xtdata` 为 degraded。不要把 MCP 存活误报成行情 ready。
 
 ## 安全 / 开源前必做
 

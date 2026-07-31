@@ -38,7 +38,9 @@ Tasks 路径启用，不影响旧客户端。
 curl -fsS https://qmt.example.com/livez
 ```
 
-容器创建或重启后，需要先 RDP 登录一次桌面，MCP 才会随会话 autostart。
+推荐的 `QMT_DESKTOP_MODE=persistent` 会在容器启动时创建桌面并启动 MCP，不需要
+先连接 RDP；但券商 QMT 仍可能要求人工登录，此前行情工具会报告 degraded。
+兼容模式 `manual` 才需要先 RDP 登录来触发 autostart。
 
 ## 认证模式
 
@@ -339,7 +341,7 @@ resource metadata；否则使用静态 header。只支持旧 SSE transport 的�
 
 | 现象 | 处理 |
 |---|---|
-| `connection refused` | 先 RDP 登录桌面并等待 MCP autostart。 |
+| `connection refused` | 检查容器健康和 `QMT_DESKTOP_MODE`；仅 `manual` 模式需要先 RDP 登录。 |
 | `401 invalid_token` | 检查签名、`kid`、issuer、resource audience、时间和 JWT 算法；服务端不会在错误里泄漏细节。 |
 | `403 insufficient_scope` | 按 challenge 申请缺少的 family/management scope，重新登录。 |
 | OAuth 找不到 AS | 检查公开 HTTPS URL、issuer、authorization servers 和两种 RFC 9728 metadata 路径。 |

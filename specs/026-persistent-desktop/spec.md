@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-31
 
-**Status**: Draft - research complete; native amd64 session-reattach POC required
+**Status**: Implemented and native-amd64 verified on 2026-08-01
 
 **Depends on**: 001 (broker pack), 005 (supervision/readiness), 010
 (deployment hardening), and 011 (release/image delivery).

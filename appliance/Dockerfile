@@ -22,7 +22,70 @@
 # prefixes that fail to load a display driver (nodrv_CreateWindow). Bump this tag
 # deliberately when upgrading the base (optionally append @sha256:... for a hard
 # pin).
-FROM docker.1ms.run/scottyhardy/docker-wine:stable-11.0-20260531
+ARG WINE_BASE=docker.1ms.run/scottyhardy/docker-wine:stable-11.0-20260531
+ARG XRDP_BUILD_BASE=docker.1ms.run/library/ubuntu:24.04
+
+# Ubuntu 24.04 still packages xrdp 0.9.x. Build the current patched releases
+# from the signed upstream release artifacts instead of inheriting that package.
+# Keep this in a separate stage so the compiler toolchain never reaches runtime.
+FROM ${XRDP_BUILD_BASE} AS xrdp-builder
+
+ARG XRDP_VERSION=0.10.6.1
+ARG XRDP_SHA256=2f7beb5a3b2529c8d72dc0df9b8cdca31ab0e0c14d1e3421210f5e6ec0ab3b75
+ARG XORGXRDP_VERSION=0.10.5
+ARG XORGXRDP_SHA256=a5d03435f0ef48bf3d5010e63d9264f2334e7063cba3ecd8d4c0a15616a4f712
+
+RUN set -eux; \
+    for f in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do \
+      [ -f "$f" ] && sed -i \
+        -e 's|http://archive.ubuntu.com/ubuntu|http://mirrors.aliyun.com/ubuntu|g' \
+        -e 's|http://security.ubuntu.com/ubuntu|http://mirrors.aliyun.com/ubuntu|g' \
+        "$f" || true; \
+    done; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        build-essential ca-certificates curl \
+        autoconf automake libtool pkg-config nasm \
+        libfuse3-dev libjpeg-dev libopus-dev libpam0g-dev libpixman-1-dev \
+        libssl-dev libx11-dev libxfixes-dev libxrandr-dev xserver-xorg-dev; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    mkdir -p /build /opt/xrdp-root; \
+    curl -fsSL --retry 3 \
+      "https://github.com/neutrinolabs/xrdp/releases/download/v${XRDP_VERSION}/xrdp-${XRDP_VERSION}.tar.gz" \
+      -o /build/xrdp.tar.gz; \
+    echo "${XRDP_SHA256}  /build/xrdp.tar.gz" | sha256sum -c -; \
+    tar -xzf /build/xrdp.tar.gz -C /build; \
+    cd "/build/xrdp-${XRDP_VERSION}"; \
+    ./configure \
+      --prefix=/usr \
+      --sysconfdir=/etc \
+      --localstatedir=/var \
+      --with-systemdsystemunitdir=/lib/systemd/system \
+      --enable-fuse \
+      --enable-jpeg \
+      --enable-opus \
+      --enable-pixman; \
+    make -j"$(nproc)"; \
+    make install; \
+    make DESTDIR=/opt/xrdp-root install
+
+RUN set -eux; \
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig; \
+    test "$(pkg-config --modversion xrdp)" = "$XRDP_VERSION"; \
+    curl -fsSL --retry 3 \
+      "https://github.com/neutrinolabs/xorgxrdp/releases/download/v${XORGXRDP_VERSION}/xorgxrdp-${XORGXRDP_VERSION}.tar.gz" \
+      -o /build/xorgxrdp.tar.gz; \
+    echo "${XORGXRDP_SHA256}  /build/xorgxrdp.tar.gz" | sha256sum -c -; \
+    tar -xzf /build/xorgxrdp.tar.gz -C /build; \
+    cd "/build/xorgxrdp-${XORGXRDP_VERSION}"; \
+    ./configure --prefix=/usr --sysconfdir=/etc; \
+    make -j"$(nproc)"; \
+    make DESTDIR=/opt/xrdp-root install
+
+FROM ${WINE_BASE} AS wine-runtime
 
 # ---- pinned versions / sources (override with --build-arg) ----
 ARG PY_VERSION=3.12.10
@@ -50,12 +113,16 @@ RUN set -eux; \
         "$f" || true; \
     done; \
     apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y xrdp xorgxrdp; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         curl wget git unzip ca-certificates \
         p7zip-full unrar \
         python3 python3-yaml \
         locales \
+        libfuse3-3 libjpeg-turbo8 libopus0 libpixman-1-0 \
         fonts-noto-cjk fonts-wqy-microhei fonts-wqy-zenhei; \
+    getent group xrdp >/dev/null || groupadd --system xrdp; \
+    getent passwd xrdp >/dev/null || useradd --system --gid xrdp --home-dir /run/xrdp --shell /usr/sbin/nologin xrdp; \
     grep -qxF 'zh_CN.GBK GBK' /etc/locale.gen || echo 'zh_CN.GBK GBK' >> /etc/locale.gen; \
     locale-gen zh_CN.GBK; \
     apt-get clean; \
@@ -77,7 +144,7 @@ COPY mcp/requirements.txt /tmp/qmt-mcp-requirements.txt
 RUN groupadd --gid 1000 wineuser \
  && useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home --home-dir /home/wineuser wineuser
 
-# ---- XFCE autostart for the MCP launcher (starts on RDP login) ----
+# ---- XFCE autostart for the MCP launcher (starts with the desktop session) ----
 RUN install -d -o wineuser -g wineuser /home/wineuser/.config/autostart \
  && printf '%s\n' \
       '[Desktop Entry]' \
@@ -128,9 +195,43 @@ RUN set -eux; \
     xvfb-run -a wine "$PY_WIN_DIR\\python.exe" -c "from importlib.metadata import version; import mcp, uvicorn, numpy, pandas; print('mcp', version('mcp'))"; \
     wineserver -k || true
 
-# ---- frequently changing application source ----
+# Keep the expensive Wine/Python prefix independent from xrdp and application
+# changes. Future desktop security updates now rebuild only the source builder
+# and these short final layers.
+FROM wine-runtime AS runtime
+
+ARG XRDP_VERSION=0.10.6.1
+ARG XORGXRDP_VERSION=0.10.5
+
 USER root
+
+# Patched xrdp/xorgxrdp binaries and configs built above. The Ubuntu 0.9 package
+# metadata is removed so scanners and later apt operations cannot mistake or
+# overwrite the effective runtime. Copy explicit usr-merge-safe roots: the
+# source install also stages unused systemd units under /lib, while the Wine
+# base exposes /lib as a symlink to /usr/lib.
+COPY --from=xrdp-builder /opt/xrdp-root/usr/ /usr/
+COPY --from=xrdp-builder /opt/xrdp-root/etc/ /etc/
+RUN set -eux; \
+    rm -f /etc/xrdp/cert.pem /etc/xrdp/key.pem /etc/xrdp/rsakeys.ini; \
+    /usr/sbin/xrdp --version | grep -F '0.10.6.1'; \
+    test -x /usr/bin/xrdp-sesrun; \
+    test -f /usr/lib/xorg/modules/libxorgxrdp.so; \
+    install -d /usr/share/qmt; \
+    printf '%s\n' "$XRDP_VERSION" > /usr/share/qmt/xrdp.version; \
+    printf '%s\n' "$XORGXRDP_VERSION" > /usr/share/qmt/xorgxrdp.version
+
+# Appliance-owned policy. Runtime setup fills the per-instance certificate and
+# the explicitly selected clipboard/drive policy before xrdp starts.
+COPY config/xrdp/ /etc/xrdp/
+
+# ---- frequently changing application source ----
 COPY --chmod=0755 scripts/ /usr/local/bin/
+
+# Fail the image build itself if the patched desktop boundary regresses. This
+# keeps CI from loading a multi-gigabyte Wine image merely to run the same gate.
+RUN /usr/local/bin/verify-desktop-image.sh
+
 COPY --chown=wineuser:wineuser mcp/ /opt/qmt-mcp/
 
 # Build-time application smoke (NO xtquant — it comes from the broker pack).
@@ -147,10 +248,9 @@ USER root
 WORKDIR /
 EXPOSE 3389 8765
 
-# Healthcheck (005): probe the unauthenticated /livez. NOTE: the MCP is started by
-# the XFCE autostart on RDP login, so the container reports unhealthy until an
-# operator logs in over RDP and the session/MCP come up — this accurately reflects
-# "MCP serving". The supervisor then keeps it up; a crash flips unhealthy briefly.
+# Healthcheck (005/026): persistent mode creates the desktop at boot, so /livez
+# comes up without waiting for an RDP client. Manual mode retains the historical
+# behaviour and stays unhealthy until the first desktop login starts MCP.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD /usr/local/bin/healthcheck.sh
 

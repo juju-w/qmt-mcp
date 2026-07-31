@@ -22,8 +22,12 @@
 # prefixes that fail to load a display driver (nodrv_CreateWindow). Bump this tag
 # deliberately when upgrading the base (optionally append @sha256:... for a hard
 # pin).
-ARG WINE_BASE=docker.1ms.run/scottyhardy/docker-wine:stable-11.0-20260531
-ARG XRDP_BUILD_BASE=docker.1ms.run/library/ubuntu:24.04
+ARG WINE_BASE=docker.1ms.run/scottyhardy/docker-wine:stable-11.0-20260531@sha256:76ef7a9f6170428f2753376c31974427163f23ac7f2d0314b0b451af1f4f43ca
+ARG XRDP_BUILD_BASE=docker.1ms.run/library/ubuntu:24.04@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf
+
+# CI overrides these args with Google's Docker Hub mirror. The default mirror
+# keeps local/NAS cold builds usable in mainland China; both paths resolve the
+# same pinned manifests.
 
 # Ubuntu 24.04 still packages xrdp 0.9.x. Build the current patched releases
 # from the signed upstream release artifacts instead of inheriting that package.

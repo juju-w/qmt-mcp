@@ -215,6 +215,12 @@ jobs:
           context: appliance
           file: appliance/Dockerfile
           platforms: linux/amd64
+          # The Dockerfile defaults to the 1ms mirror for domestic users. GitHub
+          # runners use Google's Docker Hub mirror so a partial domestic mirror
+          # cannot leave the manifest pointing at a missing content layer.
+          build-args: |
+            WINE_BASE=mirror.gcr.io/scottyhardy/docker-wine:stable-11.0-20260531@sha256:76ef7a9f6170428f2753376c31974427163f23ac7f2d0314b0b451af1f4f43ca
+            XRDP_BUILD_BASE=mirror.gcr.io/library/ubuntu:24.04@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf
           push: false
           outputs: type=cacheonly
           cache-from: |

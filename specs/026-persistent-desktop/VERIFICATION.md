@@ -69,6 +69,25 @@ recorded here.
   certificate.
 - Manual QMT login completed over TLS RDP. `qmt_health` reported logged-in and
   xtdata ready, and a real `qmt_xtdata_snapshot` call for `510500.SH` succeeded.
+- The isolated production Compose project was attached to the existing external
+  PostgreSQL network with a deployment-private override. After restarting only
+  the supervised MCP child, health reported `database=connected` with the
+  `marketdata` domain while the Xorg and QMT process identities stayed intact.
+
+## Merge and Release
+
+- PR #20 merged as `7a9c667b5f5dd3c616b69e0424928650143b57d8` after all six
+  PR checks passed. Main CI run `30652768718` then completed all six jobs,
+  including the native appliance build and Compose security assertions.
+- Automated release run `30653489470` completed successfully and published
+  `v0.12.0`, six qmtctl archives for Windows, macOS, and Linux on amd64/arm64,
+  `SHA256SUMS`, and the linux/amd64 GHCR appliance manifest
+  `sha256:1b7c7ae72abe0b96beaefea9c16c7f6c73c9759e605892e03f9cf0b97ed90578`.
+- Production remains on the functionally accepted native image rather than a
+  cosmetic retag: the NAS-to-GHCR path repeatedly timed out on the 827 MiB Wine
+  prefix blob at about 0.12 MiB/s. The running image contains the released
+  desktop behavior, is healthy with zero restarts, and passed a fresh qmtctl
+  snapshot after the release.
 
 ## Residual Evidence
 
@@ -77,3 +96,5 @@ recorded here.
   disconnect, reconnect, and resize showed no observed usability regression.
 - T008-T010 retain optional stub, macOS-client recording, and fault-injection
   coverage beyond the completed real-broker FreeRDP acceptance.
+- T039 retains broader unit-level race, stale-state, and abrupt-kill fault
+  injection beyond the completed native lifecycle and unsafe-fixture gates.

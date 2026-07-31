@@ -114,7 +114,7 @@
   Compose, secret-scan, image-smoke, and cross-build gates.
 - [x] T043 Record evidence in `VERIFICATION.md`, update the checklist, and open
   a Conventional Commit PR without merging PR #19 wholesale.
-- [ ] T044 After approval, merge only with green PR CI, observe main CI and the
+- [x] T044 After approval, merge only with green PR CI, observe main CI and the
   automated release to terminal success, then roll out to NAS with a backup and
   verify the hardened listener and persistent session.
 

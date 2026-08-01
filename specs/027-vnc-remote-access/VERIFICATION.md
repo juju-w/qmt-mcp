@@ -12,15 +12,15 @@ desktop capture is recorded here.
 ## Image and Build
 
 - Final candidate image ID:
-  `sha256:ddd50f71d1b6de54303c7939f582aa2c5569d490a6aed2c8fd88975c23059699`.
-- Runtime size/layers: 6,046,987,527 bytes / 28 layers.
+  `sha256:a48f323aa0193a0de4d0909c4fed0e11c0380484d129543d15eee78f3f20dca8`.
+- Runtime size/layers: 6,046,987,745 bytes / 28 layers.
 - Exact Ubuntu Noble packages `x11vnc=0.9.16-10` and
   `tigervnc-tools=1.13.1+dfsg-2build2` were installed after the expensive
   Wine/Python layer.
-- The final native rebuild completed in 13 seconds with the Wine, Python, xrdp,
-  xorgxrdp, and VNC package layers cached. The final image gate passed exact
-  versions, x11vnc policy support, source-tool absence, and the existing xrdp
-  security checks.
+- The review-fix native rebuild completed in 25 seconds with the Wine, Python,
+  xrdp, xorgxrdp, and VNC package layers cached. The final image gate passed
+  exact versions, x11vnc policy support, source-tool absence, and the existing
+  xrdp security checks.
 - The image does not expose port 5900 in metadata. Only the explicit VNC
   Compose override publishes it, on host loopback port 15900 by default.
 
@@ -43,6 +43,10 @@ desktop capture is recorded here.
 
 - Killing x11vnc changed only its PID, from 276 to 1726. Xorg, QMT, MCP, xrdp,
   and the container remained running with their original identities.
+- Automated review found that the first implementation restarted a previously
+  healthy adapter at the monitor interval. The corrected lifecycle first
+  publishes degraded state and waits the configured restart backoff; the
+  behavior test requires at least 1.8 seconds for a two-second setting.
 - A newly authenticated VNC client connected after the isolated restart and
   received the same desktop.
 - The first restricted-capability deployment exposed a `chmod`/`chown` order
@@ -62,6 +66,8 @@ desktop capture is recorded here.
 - The auth file was mode 0600 and exactly eight bytes after stdin filter
   generation. No plaintext VNC password appeared in x11vnc argv, desktop
   status, `mcp.env`, or logs.
+- Password validation rejects case-insensitive `password`, `changeme`, and
+  `12345678` effective prefixes even when the caller appends ignored suffixes.
 - File transfer, remote commands, and clipboard exchange were disabled. Default
   and TLS Compose renderings publish no VNC port; the VNC rendering publishes
   exactly `127.0.0.1:15900`.
@@ -89,3 +95,7 @@ desktop capture is recorded here.
   remain available for rollback.
 - PR CI, main CI, automated release, released-image rollout, and the credited
   PR #19 response will be appended after delivery reaches terminal success.
+- PR #22 passed all six checks and merged. Its first main CI was deliberately
+  cancelled before release after automated review identified the effective
+  password-prefix and runtime-backoff issues; both are fixed and retested in a
+  follow-up PR before release.

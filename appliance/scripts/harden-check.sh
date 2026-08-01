@@ -184,13 +184,16 @@ if is_enabled "${QMT_VNC_ENABLED:-0}"; then
     note "VNC falls back to the RDP password; a unique file-backed VNC secret is safer."
   fi
 
-  if [ -z "$VNC_PW" ] || [ "$VNC_PW" = "qmt" ] || [ "$VNC_PW" = "vnc" ] || \
-     [ "$VNC_PW" = "changeme" ] || [ "$VNC_PW" = "password" ]; then
-    err "VNC password is empty or a well-known default."
-  elif [ "${#VNC_PW}" -lt 8 ]; then
+  if [ "${#VNC_PW}" -lt 8 ]; then
     err "VNC password is too short (${#VNC_PW} chars); use >= 8 chars."
   else
-    ok "VNC password is set, non-default, and >= 8 chars."
+    VNC_PW_LOWER="$(printf '%s' "$VNC_PW" | tr '[:upper:]' '[:lower:]')"
+    case "$VNC_PW_LOWER" in
+      password* | changeme* | 12345678*)
+        err "Effective VNC password matches a well-known 8-character default."
+        ;;
+      *) ok "VNC password is set, non-default, and >= 8 chars." ;;
+    esac
   fi
 
   VNC_BIND="${VNC_BIND_ADDRESS:-127.0.0.1}"

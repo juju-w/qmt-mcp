@@ -91,6 +91,8 @@ def test_entrypoint_and_supervisor_do_not_copy_or_argv_expose_secret() -> None:
     assert "tigervncpasswd -f" in entrypoint
     assert "x11vnc -storepasswd" not in entrypoint
     assert 'echo "QMT_VNC_PASSWORD=' not in entrypoint
+    assert 'case "$VNC_PASSWORD_LOWER" in' in entrypoint
+    assert "password* | changeme* | 12345678*" in entrypoint
     assert "rm -rf /run/qmt/vnc" not in entrypoint
     assert "rm -f /run/qmt/vnc/passwd" in entrypoint
     assert entrypoint.index('chmod 0600 "$vnc_password_tmp"') < entrypoint.index(
@@ -135,6 +137,12 @@ def test_hardening_rejects_manual_mode_wildcard_and_weak_secret() -> None:
     weak = _preflight(QMT_VNC_PASSWORD="short")
     assert weak.returncode == 1
     assert "VNC password is too short" in weak.stdout
+
+    for default_prefix in ("password-random", "PassWord-random", "changeme-unique", "12345678-random"):
+        unsafe = _preflight(QMT_VNC_PASSWORD=default_prefix)
+        assert unsafe.returncode == 1
+        assert "well-known 8-character default" in unsafe.stdout
+        assert default_prefix not in unsafe.stdout + unsafe.stderr
 
 
 def test_hardening_accepts_owner_only_vnc_password_file(tmp_path: Path) -> None:
@@ -229,7 +237,7 @@ while True:
             "QMT_VNC_PORT": str(vnc_port),
             "QMT_VNC_AUTH_FILE": str(auth),
             "QMT_VNC_XAUTHORITY": str(xauth),
-            "QMT_VNC_RESTART_BACKOFF_S": "1",
+            "QMT_VNC_RESTART_BACKOFF_S": "2",
         }
     )
 
@@ -251,11 +259,18 @@ while True:
         assert initial["vnc_state"] == "ready"
         first_vnc_pid = int(initial["vnc_pid"])
 
+        killed_at = time.monotonic()
         os.kill(first_vnc_pid, signal.SIGTERM)
+        degraded = _wait_status(
+            status_file,
+            lambda state: state.get("vnc_ready") is False and state.get("vnc_pid") is None,
+        )
+        assert degraded["xorg_pid"] == xorg.pid
         recovered = _wait_status(
             status_file,
             lambda state: state.get("vnc_ready") is True and state.get("vnc_pid") not in (None, first_vnc_pid),
         )
+        assert time.monotonic() - killed_at >= 1.8
         assert recovered["xorg_pid"] == xorg.pid
         assert supervisor.poll() is None
         assert xorg.poll() is None

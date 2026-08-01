@@ -55,9 +55,9 @@
 - [x] T021 Alternate RDP and VNC, reconnect with saved credentials, kill
   x11vnc, and prove one shared display plus stable Xorg/QMT/MCP identities.
 - [x] T022 Run live MCP health/xtdata smoke and record redacted verification.
-- [ ] T023 Commit with Conventional Commits, open a credited PR, and observe
+- [x] T023 Commit with Conventional Commits, open a credited PR, and observe
   PR CI to terminal success.
-- [ ] T024 Merge, observe main CI and automated release, deploy the released
+- [x] T024 Merge, observe main CI and automated release, deploy the released
   behavior safely to NAS, and verify rollback remains available.
-- [ ] T025 Reply to and close PR #19 as superseded, crediting adopted ideas and
+- [x] T025 Reply to and close PR #19 as superseded, crediting adopted ideas and
   linking the released same-session implementation.

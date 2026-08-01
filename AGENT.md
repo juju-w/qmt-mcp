@@ -38,7 +38,7 @@
 | 024 MCP 任务多轮输入 | ✅ 完成——标准 inputRequests、部分回答、MRTR→Task 组合、qmtctl 显式响应，旧客户端同步兼容 |
 | 025 MCP 任务状态通知 | ✅ 完成——2026-07-28 `subscriptions/listen` + `notifications/tasks`，qmtctl 通知优先/轮询回退 |
 | 026 安全持久桌面 | ✅ 完成——xrdp 0.10 TLS-only、启动预建单会话、断线重连、loopback 默认与 manual 回滚 |
-| 027 VNC 远程访问 | 🟡 实现中——可保存凭据/移动端 raw VNC，复用 026 的唯一 Xorg/QMT 会话，默认关闭与 loopback |
+| 027 VNC 远程访问 | ✅ 完成——可保存凭据/移动端 raw VNC，复用 026 的唯一 Xorg/QMT 会话，默认关闭与 loopback |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。

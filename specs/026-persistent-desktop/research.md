@@ -4,6 +4,13 @@
 
 ## Decision
 
+> **Superseded in part by Spec 027 (2026-08-01):** 026 correctly rejected PR
+> #19's separate Xvfb and duplicate-QMT `both` implementation for its own
+> unattended-start scope. The contributor later clarified an independent VNC
+> client requirement (saved credentials and Android/lightweight clients). 027
+> adds raw VNC to this same persistent Xorg session without changing the 026
+> lifecycle or singleton decision.
+
 Proceed with one patched xrdp/xorgxrdp stack. The native amd64 POC proved that
 `xrdp-sesrun -F 0` pre-creates the same Xorg session an operator later
 reattaches to, without exposing the password in argv or creating a second QMT.

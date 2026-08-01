@@ -14,7 +14,8 @@ Three things commonly break a first deploy: the **broker pack is incomplete**
 (the QMT installer ships no `xtquant`), the **scripts have CRLF endings** (baked
 into the image, not visible in `git diff`), and desktop lifecycle is misunderstood.
 Recommended `persistent` mode starts MCP at boot; only rollback-compatible
-`manual` mode waits for the first RDP login.
+`manual` mode waits for the first RDP login. Optional VNC is a client adapter to
+that persistent display, not another headless QMT stack.
 
 ## Pre-flight
 
@@ -117,6 +118,13 @@ sleep 50 && docker exec <container> cat /tmp/sup.log   # expect "Application sta
 In either mode, `xtdata: degraded` + `无法连接xtquant服务` and
 `xttrade: not_authorized` can persist until a human logs into the *broker
 terminal* over RDP. Desktop startup and broker authentication are separate.
+
+When retained credentials or Android access are needed, add
+`docker-compose.vnc.yml`. It requires persistent mode and shares the exact Xorg,
+QMT, and MCP identities with RDP. Keep port 15900 on loopback and tunnel it;
+raw VNC is not encrypted, and classic authentication uses only the first eight
+password characters. If `/run/qmt/desktop/status.json` reports
+`vnc_state=degraded`, inspect x11vnc logs without restarting QMT/MCP first.
 
 ## Remote deploy from a Windows workstation
 

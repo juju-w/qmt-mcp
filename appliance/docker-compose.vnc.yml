@@ -1,0 +1,13 @@
+# Optional raw-VNC access to the existing persistent Xorg/QMT desktop.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.vnc.yml up -d
+#
+# Raw VNC is not transport-encrypted. Keep the default loopback bind and reach
+# it through an SSH tunnel or trusted VPN. This override does not create a
+# second display or QMT process.
+services:
+  qmt:
+    environment:
+      QMT_VNC_ENABLED: "1"
+    ports:
+      - "${VNC_BIND_ADDRESS:-127.0.0.1}:${VNC_PORT:-15900}:5900"

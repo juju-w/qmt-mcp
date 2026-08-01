@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+is_enabled() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    1 | yes | true | on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # 0) Storage guard (005): the broker pack / userdata should live on real disk; a
 #    RAM-backed mount (tmpfs/ramfs) can exhaust memory. Warn by default; set
 #    QMT_ENFORCE_REALDISK=1 to fail closed.
@@ -32,6 +39,17 @@ case "$DESKTOP_MODE" in
   *) echo "[qmt-entrypoint] ERROR: QMT_DESKTOP_MODE must be manual or persistent" >&2; exit 21 ;;
 esac
 
+VNC_ENABLED=0
+if is_enabled "${QMT_VNC_ENABLED:-0}"; then
+  VNC_ENABLED=1
+fi
+export QMT_VNC_ENABLED="$VNC_ENABLED"
+
+if [ "$VNC_ENABLED" = "1" ] && [ "$DESKTOP_MODE" != "persistent" ]; then
+  echo "[qmt-entrypoint] ERROR: VNC access requires QMT_DESKTOP_MODE=persistent" >&2
+  exit 24
+fi
+
 RDP_BIND_ADDRESS="${RDP_BIND_ADDRESS:-127.0.0.1}"
 case "$RDP_BIND_ADDRESS" in
   127.0.0.1 | ::1 | localhost) ;;
@@ -45,6 +63,37 @@ case "$RDP_BIND_ADDRESS" in
     esac
     ;;
 esac
+
+if [ "$VNC_ENABLED" = "1" ]; then
+  VNC_BIND_ADDRESS="${VNC_BIND_ADDRESS:-127.0.0.1}"
+  case "$VNC_BIND_ADDRESS" in
+    127.0.0.1 | ::1 | localhost) ;;
+    *)
+      if ! is_enabled "${QMT_VNC_ALLOW_LAN:-0}"; then
+        echo "[qmt-entrypoint] ERROR: non-loopback VNC bind requires QMT_VNC_ALLOW_LAN=1" >&2
+        exit 25
+      fi
+      ;;
+  esac
+
+  case "${QMT_VNC_CLIPBOARD:-none}" in
+    none | text) ;;
+    *)
+      echo "[qmt-entrypoint] ERROR: QMT_VNC_CLIPBOARD must be none or text" >&2
+      exit 26
+      ;;
+  esac
+  case "${QMT_VNC_RESTART_BACKOFF_S:-2}" in
+    '' | *[!0-9]*)
+      echo "[qmt-entrypoint] ERROR: QMT_VNC_RESTART_BACKOFF_S must be an integer from 1 to 60" >&2
+      exit 26
+      ;;
+  esac
+  if [ "${QMT_VNC_RESTART_BACKOFF_S:-2}" -lt 1 ] || [ "${QMT_VNC_RESTART_BACKOFF_S:-2}" -gt 60 ]; then
+    echo "[qmt-entrypoint] ERROR: QMT_VNC_RESTART_BACKOFF_S must be an integer from 1 to 60" >&2
+    exit 26
+  fi
+fi
 
 RDP_PASSWORD=""
 if [ -n "${QMT_RDP_PASSWORD_FILE:-}" ]; then
@@ -73,6 +122,59 @@ if [ "${#RDP_PASSWORD}" -lt 12 ]; then
   exit 23
 fi
 
+RUNTIME_UID="${USER_UID:-1000}"
+RUNTIME_GID="${USER_GID:-1000}"
+
+if [ "$VNC_ENABLED" = "1" ]; then
+  VNC_PASSWORD=""
+  if [ -n "${QMT_VNC_PASSWORD_FILE:-}" ]; then
+    if [ ! -f "$QMT_VNC_PASSWORD_FILE" ] || [ -L "$QMT_VNC_PASSWORD_FILE" ] || [ ! -r "$QMT_VNC_PASSWORD_FILE" ]; then
+      echo "[qmt-entrypoint] ERROR: QMT_VNC_PASSWORD_FILE must be a readable regular file" >&2
+      exit 27
+    fi
+    vnc_secret_mode="$(stat -c '%a' "$QMT_VNC_PASSWORD_FILE")"
+    if (( (8#$vnc_secret_mode & 077) != 0 )); then
+      echo "[qmt-entrypoint] ERROR: QMT_VNC_PASSWORD_FILE must not grant group/other permissions" >&2
+      exit 27
+    fi
+    IFS= read -r VNC_PASSWORD < "$QMT_VNC_PASSWORD_FILE" || [ -n "$VNC_PASSWORD" ]
+  elif [ -n "${QMT_VNC_PASSWORD:-}" ]; then
+    VNC_PASSWORD="$QMT_VNC_PASSWORD"
+  else
+    VNC_PASSWORD="$RDP_PASSWORD"
+  fi
+
+  case "$VNC_PASSWORD" in
+    '' | qmt | vnc | changeme | password)
+      echo "[qmt-entrypoint] ERROR: set a unique VNC password (file-backed preferred)" >&2
+      exit 27
+      ;;
+  esac
+  if [ "${#VNC_PASSWORD}" -lt 8 ]; then
+    echo "[qmt-entrypoint] ERROR: VNC password must be at least 8 characters" >&2
+    exit 27
+  fi
+
+  install -d -m 0700 -o "$RUNTIME_UID" -g "$RUNTIME_GID" /run/qmt/vnc
+  vnc_password_tmp="$(mktemp /run/qmt/vnc/passwd.XXXXXX)"
+  if ! printf '%s\n' "$VNC_PASSWORD" | tigervncpasswd -f > "$vnc_password_tmp"; then
+    rm -f "$vnc_password_tmp"
+    echo "[qmt-entrypoint] ERROR: unable to create the VNC authentication file" >&2
+    exit 27
+  fi
+  # The runtime intentionally lacks CAP_FOWNER, so set the mode before the
+  # root-owned temporary file is handed to the desktop user.
+  chmod 0600 "$vnc_password_tmp"
+  chown "$RUNTIME_UID:$RUNTIME_GID" "$vnc_password_tmp"
+  mv -f "$vnc_password_tmp" /run/qmt/vnc/passwd
+  unset VNC_PASSWORD QMT_VNC_PASSWORD
+else
+  # Remove only the auth artifact owned by this entrypoint. Do not recursively
+  # touch the runtime directory in case an operator mounted something there.
+  rm -f /run/qmt/vnc/passwd
+  rmdir /run/qmt/vnc 2>/dev/null || true
+fi
+
 printf '%s:%s\n' "${USER_NAME:-wineuser}" "$RDP_PASSWORD" | chpasswd
 unset RDP_PASSWORD
 
@@ -85,8 +187,6 @@ export USER_SUDO=no
 # created automatically. XFCE autostart uses it for flock-backed QMT/MCP
 # singletons; create it before the session starts with the same ownership and
 # permissions systemd-logind would use.
-RUNTIME_UID="${USER_UID:-1000}"
-RUNTIME_GID="${USER_GID:-1000}"
 install -d -m 0700 -o "$RUNTIME_UID" -g "$RUNTIME_GID" "/run/user/${RUNTIME_UID}"
 install -d -m 1777 /tmp/.ICE-unix
 

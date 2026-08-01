@@ -60,6 +60,20 @@ session; the broker terminal may still require an interactive account login
 before xtdata becomes ready. The endpoint is
 `http://<host>:18765/mcp`; use TLS for any non-local connection.
 
+For clients that retain VNC credentials or for lightweight Android access, add
+the opt-in same-session adapter:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.vnc.yml up -d
+ssh -N -L 15900:127.0.0.1:15900 <host>
+```
+
+RDP and VNC then show the same persistent Xorg/QMT desktop. Raw VNC is not
+encrypted and classic authentication uses only the first eight password
+characters; keep it loopback-only behind SSH/VPN. Prefer a unique mounted
+`QMT_VNC_PASSWORD_FILE`. File transfer, remote commands, and clipboard are off
+by default.
+
 Run multiple brokers with one env file, project name, and port pair per
 instance:
 
@@ -288,6 +302,8 @@ qmtctl smoke --code 510300.SH
 | Exit code 10-14 | Broker-pack discovery failure; inspect `detect-broker` logs |
 | `nodrv_CreateWindow` | Wine base drift or damaged prefix; use the pinned date tag |
 | `/livez` is silent after restart | Persistent desktop failed; inspect status/logs. In `manual`, connect RDP first |
+| VNC connection is refused | Ensure the VNC Compose override and persistent mode are active; inspect `vnc_state` in desktop status |
+| VNC works but RDP differs | This is a regression: both protocols must attach to the display recorded in desktop status; check for an unsupported separate Xvfb/session |
 | `xttrader.connect()==-1` | Broker has not enabled external/programmatic trading |
 | `not_authorized` on account tools | Flag, account allowlist, or broker permission missing |
 | OAuth discovery works but calls return 401 | Check JWT signature/`kid`, issuer, audience, expiry, client id, and algorithm |
@@ -302,7 +318,8 @@ qmtctl smoke --code 510300.SH
 
 - Keep bearer credentials only in gitignored environment files, qmtctl's
   permission-checked store, or a platform secret store.
-- Put remote MCP behind HTTPS; bind RDP locally and reach it through VPN/SSH.
+- Put remote MCP behind HTTPS; bind RDP and optional raw VNC locally and reach
+  them through VPN/SSH.
 - Run `appliance/scripts/harden-check.sh` before non-loopback deployment.
 - Keep destructive trading tools out of the default surface.
 - Do not commit broker binaries, account identifiers, `.env`, or personal

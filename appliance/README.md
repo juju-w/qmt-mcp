@@ -4,7 +4,8 @@
 > model, and MCP usage, see the [root README](../README.md).
 
 Self-contained QMT/MiniQMT image on Wine, based on
-[`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine), served over RDP.
+[`scottyhardy/docker-wine`](https://github.com/scottyhardy/docker-wine), served
+over RDP with optional same-session VNC access.
 
 The image is a **broker-neutral base**: it contains **NO** QMT terminal, **NO**
 `xtquant`, and **NO** broker data. Those proprietary pieces are supplied at
@@ -16,6 +17,7 @@ generic runtime, on a native `linux/amd64` host:
 - Windows Python 3.12 installed into the Wine prefix (downloaded at build time)
 - official `mcp` Python SDK / `uvicorn` for the MCP server; `detect-broker` to resolve the pack
 - source-built, checksum-pinned xrdp 0.10.6.1 + xorgxrdp 0.10.5 (TLS-only)
+- opt-in x11vnc adapter for saved-credential and lightweight/mobile clients
 - `8765` serves the read-only QMT **MCP** server (bearer-token; see root README)
 
 Because nothing broker-specific is baked in, the build context stays tiny and the
@@ -37,6 +39,7 @@ Ports (host → container):
 
 ```text
 127.0.0.1:13389 → 3389   RDP (loopback by default)
+127.0.0.1:15900 → 5900   VNC (optional override, loopback by default)
 18765 → 8765   MCP (bearer-token)
 ```
 
@@ -108,10 +111,14 @@ The desktop can start unattended, but the broker terminal may still present its
 own login dialog. Until that login succeeds, `/livez` is available while
 `qmt_health.xtdata` reports `degraded` or `awaiting_login`.
 
+Optional VNC does not own another display. x11vnc attaches to this same
+persistent Xorg session, so RDP and VNC observe one XFCE, QMT, and MCP process
+tree. VNC is invalid in rollback-compatible `manual` mode.
+
 ## Connect
 
-Use a real RDP client (macOS: **Windows App** / Microsoft Remote Desktop —
-*not* VNC / Screen Sharing, which fail xrdp's X.224 handshake):
+For RDP, use a real RDP client (macOS: **Windows App** / Microsoft Remote
+Desktop; a VNC client cannot connect to the RDP port):
 
 ```text
 host: 127.0.0.1:13389
@@ -125,9 +132,26 @@ There is no password default: use at least 12 random characters, preferably via
 an owner-only mounted secret file. Direct LAN publication requires both a
 non-loopback `RDP_BIND_ADDRESS` and `QMT_RDP_ALLOW_LAN=1`.
 
+For a VNC client that can retain its credential, including lightweight Android
+clients, enable the explicit override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.vnc.yml up -d
+ssh -N -L 15900:127.0.0.1:15900 <user>@<nas>
+```
+
+Connect the VNC client to `127.0.0.1:15900`. Use a unique owner-only
+`QMT_VNC_PASSWORD_FILE`; if no VNC secret is supplied, the resolved RDP password
+is used. The password-file path must be supplied through a deployment-specific
+Compose secret or read-only bind; the base file does not mount arbitrary host
+secrets. Classic VNC authentication uses only the first eight characters and raw
+VNC is not transport-encrypted. Keep the host bind on loopback and use SSH/VPN;
+public exposure is unsupported. File transfer, remote commands, and clipboard
+are disabled by default.
+
 ## Verify the base stack
 
-Inside the RDP desktop terminal (or `docker exec -u wineuser`):
+Inside either remote desktop (or `docker exec -u wineuser`):
 
 ```bash
 verify-xtquant.sh        # prints Python version; xtquant is provided by the pack
@@ -173,7 +197,7 @@ broker pack, not the image.)
 
 ## Non-goals
 
-- noVNC/browser desktop
+- noVNC/browser desktop (native raw VNC is optional)
 - live trading endpoints
 - running MiniQMT outside the container while xtquant runs inside
 - exposing trading privileges directly to agents

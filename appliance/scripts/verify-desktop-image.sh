@@ -26,6 +26,16 @@ done
 ldd /usr/sbin/xrdp | grep -q 'libssl' || fail "xrdp lacks TLS linkage"
 pass "xrdp, sesman, xorgxrdp, and TLS linkage"
 
+for binary in x11vnc tigervncpasswd; do
+  command -v "$binary" >/dev/null 2>&1 || fail "missing optional VNC runtime utility: ${binary}"
+done
+[ "$(dpkg-query -W -f='${Version}' x11vnc)" = "0.9.16-10" ] || fail "unexpected x11vnc package version"
+[ "$(dpkg-query -W -f='${Version}' tigervnc-tools)" = "1.13.1+dfsg-2build2" ] || fail "unexpected tigervnc-tools package version"
+x11vnc_help="$(x11vnc -help 2>&1 || :)"
+grep -aFq -- '-notightfilexfer' "$(command -v x11vnc)" || fail "x11vnc lacks TightVNC file-transfer policy flag"
+grep -Fq -- '-nocmds' <<< "$x11vnc_help" || fail "x11vnc lacks command suppression flag"
+pass "x11vnc and stdin-capable VNC password utility"
+
 grep -Fxq 'security_layer=tls' /etc/xrdp/xrdp.ini || fail "TLS-only policy missing"
 grep -Fxq 'ssl_protocols=TLSv1.2, TLSv1.3' /etc/xrdp/xrdp.ini || fail "TLS floor missing"
 grep -Fxq 'rdpdr=false' /etc/xrdp/xrdp.ini || fail "drive channel is not closed"

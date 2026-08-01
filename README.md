@@ -19,7 +19,7 @@
 
 ```text
 不可变基础镜像 ghcr.io/juju-w/qmt-mcp           运行时挂载
-(Wine wow64 + Win Python 3.12 + MCP + xrdp)  ◄── broker pack → /broker
+(Wine wow64 + Win Python 3.12 + MCP + xrdp/VNC) ◄── broker pack → /broker
 —— 券商中立，不含任何终端/xtquant/账户数据         (券商 QMT 终端 + xtquant + broker.yaml)
 ```
 
@@ -40,7 +40,7 @@
 
 | 能力 | 状态 | 说明 |
 |---|---|---|
-| 启动 QMT 终端 + RDP 登录 | ✅ | 登录后自动拉起终端 + MCP |
+| 持久 QMT 桌面 + RDP/VNC | ✅ | 启动即拉起终端 + MCP；RDP 与可选 VNC 共用单会话 |
 | 行情 `xtdata`（快照/K线/合约/板块/日历） | ✅ 可用 | MCP 工具返回结构化 JSON（11/11 实测通过） |
 | **合约模糊搜索**（中文名/拼音/别名/板块/主题） | ✅ 可用 | Agent 不必知道 QMT 代码即可定位合约 |
 | 账户只读查询 `xttrade` | ⚠️ 需券商权限 | 未开通时报 `not_authorized` 优雅降级，不崩溃 |
@@ -203,19 +203,24 @@ cp .env.example .env                       # 填入认证配置 / BROKER_PACK �
 docker compose build                       # 构建券商中立基础镜像
 scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
 docker compose up -d
+# 可选：增加可保存凭据、适合 Android/轻量客户端的 VNC 入口
+# docker compose -f docker-compose.yml -f docker-compose.vnc.yml up -d
 ```
 
 连接（持久桌面会在容器启动时创建；仍需在 QMT 界面登录资金账号，交易需勾选
 **独立交易/极简模式**）：
 
 ```text
-RDP:  127.0.0.1:13389   wineuser / 密码见 .env  （默认走 SSH/VPN 隧道，不要用 VNC）
+RDP:  127.0.0.1:13389   wineuser / 密码见 .env
+VNC:  127.0.0.1:15900   可选 override；密码可由客户端保存
 MCP:  http://<host>:18765/mcp   需 Authorization: Bearer <QMT_MCP_TOKEN>
 ```
 
-远程电脑先执行 `ssh -N -L 13389:127.0.0.1:13389 <user>@<host>`，再让
-Windows App 连接本机 `127.0.0.1:13389`。断开后重新连接会回到同一个 QMT、
-MCP 和 Xorg 会话，不会重复启动终端。
+桌面端优先用 RDP；需要客户端保存凭据或 Android 轻量接入时启用 VNC override。
+远程电脑先建立 `ssh -N -L 13389:127.0.0.1:13389 -L 15900:127.0.0.1:15900
+<user>@<host>`，再连接本机相应端口。两种协议看到同一个 QMT/Xorg 会话，
+不会重复启动终端。raw VNC 不加密传输且认证只使用密码前 8 个字符，禁止直接
+暴露到公网。
 
 默认 `static` 模式与旧部署完全兼容。公网或多用户场景可切换到外部 OAuth
 authorization server 签发 JWT 的 `oauth`/`hybrid` 模式；QMT-MCP 只做 resource

@@ -14,7 +14,7 @@ desktop capture is recorded here.
 - Final candidate image ID:
   `sha256:a48f323aa0193a0de4d0909c4fed0e11c0380484d129543d15eee78f3f20dca8`.
 - GitHub Actions published `ghcr.io/juju-w/qmt-mcp:0.13.0` and `latest` with
-  multi-architecture manifest digest
+  linux/amd64 image manifest digest
   `sha256:33134dbf9079c8d07552fe22b4b27d28f38d1e7817f8e5dc356e4870939e171b`.
 - Runtime size/layers: 6,046,987,745 bytes / 28 layers.
 - Exact Ubuntu Noble packages `x11vnc=0.9.16-10` and

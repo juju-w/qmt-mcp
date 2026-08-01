@@ -4,7 +4,7 @@
 
 **Target**: Native linux/amd64 NAS
 
-**Result**: Implementation and native acceptance passed; PR delivery pending
+**Result**: Passed and released as v0.13.0
 
 No host address, account identifier, token, password, broker credential, or
 desktop capture is recorded here.
@@ -13,6 +13,9 @@ desktop capture is recorded here.
 
 - Final candidate image ID:
   `sha256:a48f323aa0193a0de4d0909c4fed0e11c0380484d129543d15eee78f3f20dca8`.
+- GitHub Actions published `ghcr.io/juju-w/qmt-mcp:0.13.0` and `latest` with
+  multi-architecture manifest digest
+  `sha256:33134dbf9079c8d07552fe22b4b27d28f38d1e7817f8e5dc356e4870939e171b`.
 - Runtime size/layers: 6,046,987,745 bytes / 28 layers.
 - Exact Ubuntu Noble packages `x11vnc=0.9.16-10` and
   `tigervnc-tools=1.13.1+dfsg-2build2` were installed after the expensive
@@ -38,6 +41,9 @@ desktop capture is recorded here.
 - RDP and VNC tests preserved Xorg PID 216, QMT PID 372, MCP PID 387, and the
   same schema-version-2 desktop status. The container restart count remained
   zero.
+- The post-release production recreation authenticated through VNC at 1440x900
+  and reported one ready persistent display `:10`, one QMT, one MCP, and zero
+  container restarts.
 
 ## Failure Isolation
 
@@ -47,6 +53,10 @@ desktop capture is recorded here.
   healthy adapter at the monitor interval. The corrected lifecycle first
   publishes degraded state and waits the configured restart backoff; the
   behavior test requires at least 1.8 seconds for a two-second setting.
+- The released behavior was fault-injected on the production NAS. Killing
+  x11vnc changed PID 259 to 2850; recovery took 2,985 ms after degraded state
+  was observed with a two-second backoff. Xorg PID 219, QMT PID 1471, MCP PID
+  403, and container restart count zero were unchanged.
 - A newly authenticated VNC client connected after the isolated restart and
   received the same desktop.
 - The first restricted-capability deployment exposed a `chmod`/`chown` order
@@ -56,10 +66,10 @@ desktop capture is recorded here.
 
 ## MCP and Security Acceptance
 
-- `qmtctl health` passed after the manual broker login and reported xtdata
-  `ready`.
-- A real `qmtctl snapshot 510300.SH` call succeeded with a structured live
-  quote response.
+- `qmtctl health` passed after the manual broker login and reported MCP ready,
+  PostgreSQL connected, QMT logged in, and xtdata `ready`.
+- A real `qmtctl snapshot --live 510300.SH` call returned a non-null five-level
+  quote from `get_full_tick`, not the cache fallback.
 - The hardening audit reported zero failures. Expected warnings cover the
   compatibility environment-backed RDP password, VNC fallback, raw-VNC tunnel
   requirement, and the deployment-private MCP TLS boundary.
@@ -85,17 +95,32 @@ desktop capture is recorded here.
 - Release-policy tests: 7 passed.
 - actionlint 1.7.12, ShellCheck, Bash syntax, Compose JSON assertions, and
   `git diff --check`: passed.
+- PR #22 CI run `30687293131` passed all six jobs. Its first main run
+  `30687461284` was intentionally cancelled before release when automated
+  review found two P2 issues.
+- PR #23 CI run `30687661484` passed all six jobs after the password-prefix and
+  runtime-backoff fixes. A new Codex review reported no major issues.
+- Main CI run `30687802834` passed all six jobs. Automated release run
+  `30687911545` completed resolve/tag, GHCR publication, six qmtctl platform
+  builds, checksums, and the GitHub Release.
 
 ## Rollout and Rollback
 
 - The accepted VNC behavior is running in the isolated production Compose
   project with RDP and VNC bound to host loopback and MCP retaining its existing
   publication policy.
-- The previous deployment directory, container fallback, and pre-027 image tag
-  remain available for rollback.
-- PR CI, main CI, automated release, released-image rollout, and the credited
-  PR #19 response will be appended after delivery reaches terminal success.
-- PR #22 passed all six checks and merged. Its first main CI was deliberately
-  cancelled before release after automated review identified the effective
-  password-prefix and runtime-backoff issues; both are fixed and retested in a
-  follow-up PR before release.
+- PR #22 merged as `0cc21577d0d094209faf76a59f719d368f91a73e`; PR #23 merged
+  as `7e9a1d7d30fc96bc21e16f411b06fdac04cd967c`. The automated release commit
+  is `c3ffa1df0c1f4196dcdfe918817225d81683209b`.
+- Release [v0.13.0](https://github.com/juju-w/qmt-mcp/releases/tag/v0.13.0)
+  contains darwin, linux, and windows qmtctl artifacts for amd64 and arm64 plus
+  `SHA256SUMS`.
+- The NAS could not complete its direct GHCR pull because two incremental
+  layers repeatedly timed out. Production therefore uses the native amd64
+  image built from the released fix commit and independently passed through the
+  same image gate; the public release manifest remains available for normal
+  deployments.
+- The prior production image is tagged `rollback-pre-v0.13.0`, and the pre-027
+  deployment directory and image tag also remain available.
+- PR #19 received a credited delivery reply linking #22, #23, and v0.13.0, then
+  closed as superseded by the released same-session implementation.

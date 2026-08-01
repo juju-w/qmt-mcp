@@ -1,8 +1,10 @@
 # Deployment & Hardening
 
 The base `docker-compose.yml` publishes MCP directly, binds RDP to loopback, and
-has no RDP password default. Any non-loopback publication must be an intentional
-LAN/VPN exception and is **unsafe on the public internet**.
+has no RDP password default. Optional VNC is enabled only through
+`docker-compose.vnc.yml` and is also loopback-bound. Any non-loopback desktop
+publication must be an intentional LAN/VPN exception and is **unsafe on the
+public internet**.
 This guide covers deploying the appliance where others (or agents on other hosts)
 can reach it.
 
@@ -17,24 +19,27 @@ What the appliance guards:
 - The **MCP endpoint** can read market data and (if enabled, with broker
   permission) query account state. It accepts a static bearer, a verified OAuth
   JWT, or both according to the configured auth mode.
-- The **RDP desktop** is where a human logs into the live QMT terminal — i.e. it
-  is adjacent to a real brokerage login.
+- The **RDP/VNC desktop** is where a human logs into the live QMT terminal —
+  i.e. it is adjacent to a real brokerage login.
 
 Primary risks: an unauthenticated/weakly-authenticated MCP on an open network; a
 bearer credential sniffed over plain HTTP; an over-scoped token; or an exposed
-RDP port brute-forced to reach a trading session.
+remote-desktop port brute-forced to reach a trading session.
 
 ## Recommended topology
 
 ```text
 agent ──HTTPS──> Caddy (TLS, :443) ──http──> qmt:8765 (MCP, internal only)
-operator ──VPN/tunnel──> 127.0.0.1:3389 (RDP, loopback only)
+operator ──VPN/tunnel──> 127.0.0.1:13389 (RDP, loopback only)
+                         127.0.0.1:15900 (optional VNC, same Xorg session)
 ```
 
 - MCP is **not** published to the host; the TLS proxy reaches it on the compose
   network. (`docker-compose.tls.yml` + `deploy/Caddyfile.example`.)
 - RDP is bound to loopback; reach it through a VPN/SSH tunnel, never the public
   internet.
+- VNC is disabled by default. Its override binds loopback and attaches to the
+  existing persistent desktop; it never starts a second QMT.
 - The container drops all Linux capabilities and restores only `CHOWN`,
   `DAC_OVERRIDE`, `KILL`, `SETGID`, and `SETUID`, with
   `no-new-privileges` enforced. Preserve this policy in deployment overrides.
@@ -153,6 +158,23 @@ TTL expires or bounded retention removes the oldest terminal entries.
 - Bind to loopback (`127.0.0.1:13389`) and tunnel in. A non-loopback bind also
   requires `QMT_RDP_ALLOW_LAN=1`; never publish RDP to the public internet.
 
+## Optional VNC
+
+- Use VNC when retained client credentials or lightweight Android/mobile
+  clients improve the operator workflow. RDP remains the performance default.
+- Start it with `docker compose -f docker-compose.yml -f
+  docker-compose.vnc.yml up -d`; VNC requires `QMT_DESKTOP_MODE=persistent`.
+- Prefer an owner-only `QMT_VNC_PASSWORD_FILE`. Classic VNC authentication uses
+  only the first eight characters, and its password file is obfuscated rather
+  than encrypted.
+- Raw VNC has no transport encryption. Keep `VNC_BIND_ADDRESS=127.0.0.1` and
+  tunnel port 15900 through SSH/VPN. A LAN bind requires
+  `QMT_VNC_ALLOW_LAN=1`; internet publication is unsupported.
+- File transfer, x11vnc remote commands, and clipboard exchange are disabled by
+  default. `QMT_VNC_CLIPBOARD=text` is the only supported clipboard opt-in.
+- RDP and VNC connect to one Xorg/XFCE/QMT session. Killing x11vnc must change
+  only the VNC PID and status fields.
+
 ## Storage
 
 - The broker pack / userdata MUST live on **real disk**, never tmpfs (RAM
@@ -173,10 +195,13 @@ TTL expires or bounded retention removes the oldest terminal entries.
 - [ ] OAuth/hybrid pins one HTTPS issuer, JWKS URL, resource, asymmetric
       algorithm allowlist, and only the scopes actually needed.
 - [ ] RDP password is unique, >= 12 characters, and preferably file-backed.
+- [ ] If VNC is enabled, its password is unique/file-backed and access is
+      loopback-tunnelled; only the first eight characters are relied upon.
 - [ ] MCP reachable only via TLS proxy (not host-published on a LAN).
 - [ ] Compression ownership is intentional; app gzip is disabled if the
       ingress must be the only compressor.
 - [ ] RDP bound to loopback / behind VPN.
+- [ ] Optional VNC bound to loopback / behind VPN and not publicly exposed.
 - [ ] Broker pack on real disk (not tmpfs).
 - [ ] Task-store persistence, backup policy, TTL, and single-writer ownership
       are intentional.

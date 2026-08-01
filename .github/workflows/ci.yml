@@ -235,6 +235,10 @@ jobs:
           set -euo pipefail
           docker compose -f appliance/docker-compose.yml config --format json > /tmp/qmt-compose.json
           docker compose -f appliance/docker-compose.tls.yml config --format json > /tmp/qmt-compose-tls.json
+          docker compose \
+            -f appliance/docker-compose.yml \
+            -f appliance/docker-compose.vnc.yml \
+            config --format json > /tmp/qmt-compose-vnc.json
           python3 - <<'PY'
           import json
 
@@ -244,8 +248,9 @@ jobs:
 
           base = service("/tmp/qmt-compose.json")
           tls = service("/tmp/qmt-compose-tls.json")
+          vnc = service("/tmp/qmt-compose-vnc.json")
 
-          for qmt in (base, tls):
+          for qmt in (base, tls, vnc):
               assert "no-new-privileges:true" in qmt["security_opt"]
               assert qmt["cap_drop"] == ["ALL"]
               assert set(qmt["cap_add"]) == {
@@ -257,6 +262,13 @@ jobs:
 
           assert any(port["target"] == 8765 for port in base["ports"])
           assert all(port["target"] != 8765 for port in tls["ports"])
+          assert all(port["target"] != 5900 for port in base["ports"])
+          assert all(port["target"] != 5900 for port in tls["ports"])
+          vnc_ports = [port for port in vnc["ports"] if port["target"] == 5900]
+          assert len(vnc_ports) == 1
+          assert vnc_ports[0]["host_ip"] == "127.0.0.1"
+          assert vnc_ports[0]["published"] == "15900"
+          assert vnc["environment"]["QMT_VNC_ENABLED"] == "1"
           PY
 
   secret-scan:

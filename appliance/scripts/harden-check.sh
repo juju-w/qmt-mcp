@@ -151,7 +151,71 @@ case "${QMT_RDP_CERT_MODE:-generated}" in
   *) err "QMT_RDP_CERT_MODE must be generated or mounted." ;;
 esac
 
-# 3) Network exposure: 0.0.0.0 bind is only safe behind a TLS reverse proxy.
+# 3) Optional VNC client access (027). Raw VNC is an authenticated adapter to
+# the persistent desktop, not a second X/QMT session.
+if is_enabled "${QMT_VNC_ENABLED:-0}"; then
+  if [ "$DESKTOP_MODE" != "persistent" ]; then
+    err "VNC access requires QMT_DESKTOP_MODE=persistent."
+  else
+    ok "VNC attaches to persistent desktop mode."
+  fi
+
+  VNC_PW=""
+  if [ -n "${QMT_VNC_PASSWORD_FILE:-}" ]; then
+    if [ ! -f "$QMT_VNC_PASSWORD_FILE" ] || [ -L "$QMT_VNC_PASSWORD_FILE" ] || [ ! -r "$QMT_VNC_PASSWORD_FILE" ]; then
+      err "QMT_VNC_PASSWORD_FILE must be a readable regular file."
+    else
+      if vnc_secret_mode="$(stat -c '%a' "$QMT_VNC_PASSWORD_FILE" 2>/dev/null)"; then
+        :
+      else
+        vnc_secret_mode="$(stat -f '%Lp' "$QMT_VNC_PASSWORD_FILE")"
+      fi
+      if (( (8#$vnc_secret_mode & 077) != 0 )); then
+        err "QMT_VNC_PASSWORD_FILE must not grant group/other permissions."
+      fi
+      IFS= read -r VNC_PW < "$QMT_VNC_PASSWORD_FILE" || [ -n "$VNC_PW" ]
+      ok "VNC password is file-backed."
+    fi
+  elif [ -n "${QMT_VNC_PASSWORD:-}" ]; then
+    VNC_PW="$QMT_VNC_PASSWORD"
+    note "VNC password uses an environment variable; a mounted secret file is safer."
+  else
+    VNC_PW="$RDP_PW"
+    note "VNC falls back to the RDP password; a unique file-backed VNC secret is safer."
+  fi
+
+  if [ -z "$VNC_PW" ] || [ "$VNC_PW" = "qmt" ] || [ "$VNC_PW" = "vnc" ] || \
+     [ "$VNC_PW" = "changeme" ] || [ "$VNC_PW" = "password" ]; then
+    err "VNC password is empty or a well-known default."
+  elif [ "${#VNC_PW}" -lt 8 ]; then
+    err "VNC password is too short (${#VNC_PW} chars); use >= 8 chars."
+  else
+    ok "VNC password is set, non-default, and >= 8 chars."
+  fi
+
+  VNC_BIND="${VNC_BIND_ADDRESS:-127.0.0.1}"
+  case "$VNC_BIND" in
+    127.0.0.1 | ::1 | localhost) ok "VNC publication is loopback-only." ;;
+    *)
+      if is_enabled "${QMT_VNC_ALLOW_LAN:-0}"; then
+        note "VNC is intentionally published to ${VNC_BIND}; keep it on a trusted LAN/VPN."
+      else
+        err "Non-loopback VNC publication requires QMT_VNC_ALLOW_LAN=1."
+      fi
+      ;;
+  esac
+
+  case "${QMT_VNC_CLIPBOARD:-none}" in
+    none) ok "VNC clipboard exchange is disabled." ;;
+    text) note "VNC text clipboard exchange is explicitly enabled." ;;
+    *) err "QMT_VNC_CLIPBOARD must be none or text." ;;
+  esac
+  note "Raw VNC is not transport-encrypted and uses only the first 8 password characters; use SSH/VPN."
+else
+  ok "VNC access is disabled."
+fi
+
+# 4) Network exposure: 0.0.0.0 bind is only safe behind a TLS reverse proxy.
 HOST="${MCP_HOST:-0.0.0.0}"
 PROXIED="${QMT_BEHIND_TLS_PROXY:-0}"
 if [ "$HOST" = "0.0.0.0" ] && [ "$PROXIED" != "1" ]; then
@@ -161,12 +225,12 @@ else
   ok "MCP exposure looks intentional (loopback or declared TLS proxy)."
 fi
 
-# 4) TLS reminder for non-proxied public bind.
+# 5) TLS reminder for non-proxied public bind.
 if [ "$PROXIED" != "1" ]; then
   note "No TLS proxy declared — bearer credentials over plain HTTP are sniffable on a LAN."
 fi
 
-# 5) RDP should not be on the public internet.
+# 6) Remote desktop should not be on the public internet.
 note "RDP is TLS-only but must still stay off the public internet (tunnel/VPN/loopback)."
 
 echo "harden-check: ${fail} failure(s), ${warn} warning(s)."

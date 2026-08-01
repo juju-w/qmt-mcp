@@ -206,8 +206,21 @@ FROM wine-runtime AS runtime
 
 ARG XRDP_VERSION=0.10.6.1
 ARG XORGXRDP_VERSION=0.10.5
+ARG X11VNC_VERSION=0.9.16-10
+ARG TIGERVNC_TOOLS_VERSION=1.13.1+dfsg-2build2
 
 USER root
+
+# VNC is installed after the expensive Wine/Python prefix so desktop-adapter
+# changes retain that multi-gigabyte cache. Both Noble package versions are
+# pinned; no VNC server runs unless the explicit Compose override enables it.
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      "x11vnc=${X11VNC_VERSION}" \
+      "tigervnc-tools=${TIGERVNC_TOOLS_VERSION}"; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
 
 # Patched xrdp/xorgxrdp binaries and configs built above. The Ubuntu 0.9 package
 # metadata is removed so scanners and later apt operations cannot mistake or

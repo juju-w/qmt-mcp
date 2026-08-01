@@ -42,6 +42,11 @@ curl -fsS https://qmt.example.com/livez
 先连接 RDP；但券商 QMT 仍可能要求人工登录，此前行情工具会报告 degraded。
 兼容模式 `manual` 才需要先 RDP 登录来触发 autostart。
 
+需要客户端保存桌面密码或使用 Android/轻量客户端时，可叠加
+`docker-compose.vnc.yml`。VNC 与 RDP 连接同一个持久 Xorg/QMT，不会创建第二个
+终端。raw VNC 不加密且认证只使用密码前 8 个字符，必须保持回环绑定并通过
+SSH/VPN 访问；这与 MCP 的 static/OAuth 认证是两条独立安全边界。
+
 ## 认证模式
 
 | 模式 | 适用场景 | 服务端接受的凭证 |
@@ -342,6 +347,7 @@ resource metadata；否则使用静态 header。只支持旧 SSE transport 的�
 | 现象 | 处理 |
 |---|---|
 | `connection refused` | 检查容器健康和 `QMT_DESKTOP_MODE`；仅 `manual` 模式需要先 RDP 登录。 |
+| VNC 无法连接 | 确认使用了 `docker-compose.vnc.yml`、persistent 模式和回环隧道，并查看 desktop status 的 `vnc_state`。 |
 | `401 invalid_token` | 检查签名、`kid`、issuer、resource audience、时间和 JWT 算法；服务端不会在错误里泄漏细节。 |
 | `403 insufficient_scope` | 按 challenge 申请缺少的 family/management scope，重新登录。 |
 | OAuth 找不到 AS | 检查公开 HTTPS URL、issuer、authorization servers 和两种 RFC 9728 metadata 路径。 |

@@ -43,7 +43,7 @@ never needs to know the raw QMT code:
 
 | Capability | State | Notes |
 |---|---|---|
-| Persistent QMT desktop + RDP reconnect | ✅ | terminal + MCP start at boot; reconnects reuse one TLS-only session |
+| Persistent QMT desktop + RDP/VNC | ✅ | terminal + MCP start at boot; RDP and optional VNC share one session |
 | Market data `xtdata` (snapshot/bars/instruments/sectors/calendar) | ✅ ready | MCP tools return structured JSON (11/11 verified live) |
 | **Fuzzy instrument search** (name/pinyin/alias/sector/theme) | ✅ ready | the agent locates instruments without knowing QMT codes |
 | Read-only account queries `xttrade` | ⚠️ needs broker permission | degrades to `not_authorized` (no crash) when not enabled |
@@ -195,20 +195,24 @@ cp .env.example .env                       # fill in authentication / BROKER_PAC
 docker compose build                       # build the broker-neutral base image
 scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
 docker compose up -d
+# Optional saved-credential/mobile VNC access:
+# docker compose -f docker-compose.yml -f docker-compose.vnc.yml up -d
 ```
 
 Connect (the desktop starts with the container; log into your account in QMT
 when prompted, and use **independent-trading / minimal** mode for trading):
 
 ```text
-RDP:  127.0.0.1:13389   wineuser / password in .env  (SSH/VPN tunnel; not VNC)
+RDP:  127.0.0.1:13389   wineuser / password in .env
+VNC:  127.0.0.1:15900   optional override; clients may retain its credential
 MCP:  http://<host>:18765/mcp   with Authorization: Bearer <QMT_MCP_TOKEN>
 ```
 
-From another machine, first run
-`ssh -N -L 13389:127.0.0.1:13389 <user>@<host>`, then connect Windows App to
-`127.0.0.1:13389`. Disconnecting and reconnecting preserves the same QMT, MCP,
-and Xorg processes.
+Prefer RDP for desktop performance; enable the VNC override for retained client
+credentials or lightweight Android access. Tunnel either port over SSH/VPN.
+Both protocols expose the same QMT/Xorg session. Raw VNC is not encrypted and
+classic authentication uses only the first eight password characters, so never
+publish it directly to the internet.
 
 The default `static` mode is upgrade-compatible. Public or multi-user
 deployments can use an external authorization server with `oauth` or `hybrid`;

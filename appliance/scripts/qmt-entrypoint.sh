@@ -144,16 +144,17 @@ if [ "$VNC_ENABLED" = "1" ]; then
     VNC_PASSWORD="$RDP_PASSWORD"
   fi
 
-  case "$VNC_PASSWORD" in
-    '' | qmt | vnc | changeme | password)
-      echo "[qmt-entrypoint] ERROR: set a unique VNC password (file-backed preferred)" >&2
-      exit 27
-      ;;
-  esac
   if [ "${#VNC_PASSWORD}" -lt 8 ]; then
     echo "[qmt-entrypoint] ERROR: VNC password must be at least 8 characters" >&2
     exit 27
   fi
+  VNC_PASSWORD_LOWER="$(printf '%s' "$VNC_PASSWORD" | tr '[:upper:]' '[:lower:]')"
+  case "$VNC_PASSWORD_LOWER" in
+    password* | changeme* | 12345678*)
+      echo "[qmt-entrypoint] ERROR: effective VNC password matches a well-known default" >&2
+      exit 27
+      ;;
+  esac
 
   install -d -m 0700 -o "$RUNTIME_UID" -g "$RUNTIME_GID" /run/qmt/vnc
   vnc_password_tmp="$(mktemp /run/qmt/vnc/passwd.XXXXXX)"
@@ -167,7 +168,7 @@ if [ "$VNC_ENABLED" = "1" ]; then
   chmod 0600 "$vnc_password_tmp"
   chown "$RUNTIME_UID:$RUNTIME_GID" "$vnc_password_tmp"
   mv -f "$vnc_password_tmp" /run/qmt/vnc/passwd
-  unset VNC_PASSWORD QMT_VNC_PASSWORD
+  unset VNC_PASSWORD VNC_PASSWORD_LOWER QMT_VNC_PASSWORD
 else
   # Remove only the auth artifact owned by this entrypoint. Do not recursively
   # touch the runtime directory in case an operator mounted something there.

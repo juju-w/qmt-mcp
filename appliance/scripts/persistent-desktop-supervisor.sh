@@ -310,6 +310,7 @@ while true; do
         wait "$vnc_pid" 2>/dev/null || true
         log "VNC adapter exited; persistent desktop and MCP remain running"
         vnc_pid=""
+        next_vnc_restart=$(( $(date +%s) + VNC_RESTART_BACKOFF ))
       fi
       now="$(date +%s)"
       if [ "$now" -ge "$next_vnc_restart" ]; then

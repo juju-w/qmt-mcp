@@ -27,7 +27,9 @@
    symlink, and no group/other permissions.
 2. Otherwise use non-empty `QMT_VNC_PASSWORD`.
 3. Otherwise deliberately fall back to the already-resolved RDP password.
-4. Reject empty, known-default, or fewer-than-eight-character values.
+4. Reject fewer-than-eight-character values and any value whose effective first
+   eight characters match a known default, regardless of case or ignored
+   suffixes.
 5. Pipe the value to `tigervncpasswd -f`; never use a password argument.
 6. Install `/run/qmt/vnc/passwd` mode 0600 owned by `wineuser`.
 7. Unset plaintext variables before xrdp, supervisor, or x11vnc starts.

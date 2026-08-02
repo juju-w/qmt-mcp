@@ -62,13 +62,22 @@
 
 - [x] T024 Update root/appliance README, AGENT feature map, and operator skills
   with native Windows installation and security boundaries.
-- [ ] T025 Run launcher, Python, Go, release-policy, actionlint, conformance,
+- [x] T025 Run launcher, Python, Go, release-policy, actionlint, conformance,
   Compose/image policy, secret scan, and diff gates.
-- [ ] T026 Build the Windows release in CI and record artifact/import/installer
+- [x] T026 Build the Windows release in CI and record artifact/import/installer
   evidence.
 - [ ] T027 Install on clean Windows x64 without Docker/Python/.NET and record
   setup, launch, restart, uninstall, and secret-scan evidence.
 - [ ] T028 Run real broker QMT login, xtdata smoke, no-duplicate process, MCP
   recovery, and diagnostics acceptance; record any xttrade permission boundary.
-- [ ] T029 Commit with Conventional Commits, open a PR, and observe PR CI to
+- [x] T029 Commit with Conventional Commits, open a PR, and observe PR CI to
   terminal success before merge/release.
+
+### CI evidence
+
+- PR: <https://github.com/juju-w/qmt-mcp/pull/25>
+- Successful run: <https://github.com/juju-w/qmt-mcp/actions/runs/30737685125>
+- Windows artifact: `windows-launcher-smoke`, 214,555,366 bytes, containing the
+  portable ZIP, per-user setup executable, and launcher checksum manifest.
+- Windows smoke: embedded Python import, silent install, installed-layout
+  assertions, and silent uninstall all passed on `windows-2025`.

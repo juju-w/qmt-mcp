@@ -1,10 +1,12 @@
 from pathlib import Path
+import struct
 import unittest
 
 
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "launcher" / "packaging" / "package-windows.ps1"
 INSTALLER = ROOT / "launcher" / "packaging" / "qmt-mcp-launcher.iss"
+ICON = ROOT / "launcher" / "src" / "QmtMcp.Launcher.Desktop" / "Assets" / "app-icon.ico"
 
 
 class WindowsLauncherPackagingTests(unittest.TestCase):
@@ -27,6 +29,20 @@ class WindowsLauncherPackagingTests(unittest.TestCase):
         self.assertIn("DefaultDirName={localappdata}\\Programs\\QMT-MCP", installer)
         self.assertIn("PrivilegesRequired=lowest", installer)
         self.assertIn("ArchitecturesAllowed=x64compatible", installer)
+
+    def test_icon_contains_native_tray_and_window_sizes(self) -> None:
+        data = ICON.read_bytes()
+        reserved, image_type, count = struct.unpack_from("<HHH", data)
+        self.assertEqual((reserved, image_type), (0, 1))
+        sizes = set()
+        for index in range(count):
+            width, height = struct.unpack_from("<BB", data, 6 + index * 16)
+            sizes.add((width or 256, height or 256))
+        self.assertEqual(
+            sizes,
+            {(16, 16), (20, 20), (24, 24), (32, 32), (40, 40),
+             (48, 48), (64, 64), (128, 128), (256, 256)},
+        )
 
 
 if __name__ == "__main__":

@@ -37,11 +37,11 @@ internal sealed partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Select QMT client",
+            Title = ViewModel.Localize("PickerQmtClient"),
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType("Windows executable") { Patterns = ["*.exe"] },
+                new FilePickerFileType(ViewModel.Localize("PickerWindowsExecutable")) { Patterns = ["*.exe"] },
             ],
         });
         var selected = files.Count > 0 ? files[0] : null;
@@ -54,7 +54,7 @@ internal sealed partial class MainWindow : Window
 
     private async void BrowseXtquant_Click(object? sender, RoutedEventArgs eventArgs)
     {
-        var selected = await PickFolderAsync("Select directory containing xtquant");
+        var selected = await PickFolderAsync(ViewModel.Localize("PickerXtquant"));
         if (selected is not null)
         {
             ViewModel.XtquantRoot = selected;
@@ -64,7 +64,7 @@ internal sealed partial class MainWindow : Window
 
     private async void BrowseUserdata_Click(object? sender, RoutedEventArgs eventArgs)
     {
-        var selected = await PickFolderAsync("Select userdata_mini directory");
+        var selected = await PickFolderAsync(ViewModel.Localize("PickerUserdata"));
         if (selected is not null)
         {
             ViewModel.UserdataPath = selected;

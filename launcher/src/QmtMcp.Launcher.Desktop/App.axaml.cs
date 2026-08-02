@@ -12,6 +12,7 @@ public sealed partial class App : Application
     private const string WindowsActivationName = @"Local\QMT-MCP-Launcher-Activate";
     private MainWindow? mainWindow;
     private LauncherRuntime? runtime;
+    private LocalizationManager? localization;
     private SingleInstanceLock? instanceLock;
     private SingleInstanceActivation? instanceActivation;
 
@@ -22,6 +23,9 @@ public sealed partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             runtime = LauncherRuntime.Create();
+            localization = new LocalizationManager(runtime.LocalDataRoot);
+            localization.LanguageChanged += OnLanguageChanged;
+            ApplyLocalization();
             instanceLock = SingleInstanceLock.TryAcquire(Path.Combine(runtime.LocalDataRoot, "launcher.lock"));
             if (instanceLock is null)
             {
@@ -37,7 +41,10 @@ public sealed partial class App : Application
             }
 
             var startHidden = desktop.Args?.Contains("--background", StringComparer.OrdinalIgnoreCase) == true;
-            var viewModel = new MainWindowViewModel(runtime, action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
+            var viewModel = new MainWindowViewModel(
+                runtime,
+                localization,
+                action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
             mainWindow = new MainWindow(viewModel, startHidden);
             if (OperatingSystem.IsWindows())
             {
@@ -88,6 +95,11 @@ public sealed partial class App : Application
 
     private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs eventArgs)
     {
+        if (localization is not null)
+        {
+            localization.LanguageChanged -= OnLanguageChanged;
+        }
+
         if (runtime is not null)
         {
             runtime.DisposeAsync().AsTask().GetAwaiter().GetResult();
@@ -95,6 +107,29 @@ public sealed partial class App : Application
 
         instanceActivation?.Dispose();
         instanceLock?.Dispose();
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs eventArgs) => ApplyLocalization();
+
+    private void ApplyLocalization()
+    {
+        if (localization is null)
+        {
+            return;
+        }
+
+        foreach (var resource in localization.CurrentStrings)
+        {
+            Resources[resource.Key] = resource.Value;
+        }
+
+        var trayIcons = TrayIcon.GetIcons(this);
+        var menu = trayIcons is { Count: > 0 } ? trayIcons[0].Menu : null;
+        if (menu?.Items is { Count: >= 3 } items)
+        {
+            ((NativeMenuItem)items[0]).Header = localization["TrayOpen"];
+            ((NativeMenuItem)items[2]).Header = localization["TrayExit"];
+        }
     }
 
     private static async Task InitializeAsync(MainWindowViewModel viewModel, bool startHidden)

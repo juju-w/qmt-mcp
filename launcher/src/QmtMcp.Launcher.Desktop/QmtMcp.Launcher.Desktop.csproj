@@ -16,4 +16,9 @@
   <ItemGroup>
     <AvaloniaResource Include="Assets/**" />
   </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>QmtMcp.Launcher.Desktop.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>

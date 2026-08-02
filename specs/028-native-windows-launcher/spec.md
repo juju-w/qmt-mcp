@@ -132,6 +132,26 @@ the staged tree, install and uninstall silently in a VM, and verify checksums.
 3. **Given** GitHub Release publication, **when** assets are listed, **then** the
    launcher ZIP, installer, and their SHA256 entries are present.
 
+### User Story 6 - Use the launcher in Chinese or English (Priority: P2)
+
+A user sees the launcher in Simplified Chinese on a Chinese Windows system and
+can switch between Simplified Chinese and English without restarting.
+
+**Independent Test**: Start with empty local settings under Chinese and English
+system cultures, switch languages, restart, and verify the selected language is
+restored across the window, tray menu, status messages, and file pickers.
+
+**Acceptance Scenarios**:
+
+1. **Given** no saved language preference, **when** the launcher starts on a
+   Chinese Windows system, **then** Simplified Chinese is selected by default.
+2. **Given** the user changes the language, **when** the selection is applied,
+   **then** visible static and runtime text updates without restarting services.
+3. **Given** a saved language preference, **when** the launcher restarts, **then**
+   the preference wins over the current system language.
+4. **Given** either a light or dark taskbar, **when** the launcher icon is shown
+   at 16 pixels, **then** its Q-and-connector silhouette remains recognizable.
+
 ## Functional Requirements
 
 - **FR-001**: The launcher MUST target Windows 10 22H2 and Windows 11 on x64.
@@ -194,6 +214,12 @@ the staged tree, install and uninstall silently in a VM, and verify checksums.
   verify downloaded Python runtime integrity before assembly.
 - **FR-030**: Existing Docker appliance, MCP tool contracts, qmtctl packages,
   read-only defaults, and automated release behavior MUST remain compatible.
+- **FR-031**: The desktop UI MUST provide Simplified Chinese and English
+  catalogs covering the main window, runtime state, file pickers, and tray menu.
+- **FR-032**: The launcher MUST default from the Windows UI culture, support
+  runtime language switching, and persist an explicit per-user selection.
+- **FR-033**: The application and tray icon MUST use a high-contrast, text-free
+  symbol with embedded 16, 20, 24, 32, 40, 48, 64, 128, and 256 pixel sizes.
 
 ## Non-Goals
 
@@ -219,3 +245,5 @@ the staged tree, install and uninstall silently in a VM, and verify checksums.
   diagnostic archives.
 - macOS core tests, Windows launcher tests/package smoke, full repository CI,
   and the automated GitHub Release all complete successfully.
+- Chinese and English resource catalogs have matching keys, language selection
+  survives restart, and the icon remains legible at tray and window sizes.

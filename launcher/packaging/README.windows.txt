@@ -12,6 +12,9 @@ First run
 4. Choose Start. Complete broker login in the normal QMT window when prompted.
 5. When Market data is Ready, copy the local MCP connection from Status.
 
+The launcher supports Simplified Chinese and English. It follows the Windows
+display language on first run and remembers the language selected in the header.
+
 Security
 --------
 - MCP binds to 127.0.0.1 only.

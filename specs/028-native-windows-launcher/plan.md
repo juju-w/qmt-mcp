@@ -15,7 +15,8 @@ assets in the existing automated release.
 **Language/Version**: C# 14 on .NET 10; Python 3.12.10 for the bundled MCP
 runtime; PowerShell for Windows package assembly; Inno Setup for the installer.
 
-**UI**: Avalonia 12.1.0 with the Fluent theme and a tray-first desktop shell.
+**UI**: Avalonia 12.1.0 with the Fluent theme, a tray-first desktop shell, and
+runtime-switchable Simplified Chinese/English resource catalogs.
 
 **Dependencies**: Existing `appliance/mcp` server source and hash-locked Python
 requirements; Windows DPAPI; Avalonia storage provider; GitHub Actions Windows

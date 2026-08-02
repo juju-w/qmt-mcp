@@ -36,7 +36,7 @@
   connection copy, settings, logs, and diagnostics views.
 - [x] T015 Implement tray lifecycle, single-instance activation, close-to-tray,
   and active supervision indicators.
-- [ ] T016 Add macOS demo fixtures and verify desktop/mobile-scale layouts do
+- [x] T016 Add macOS demo fixtures and verify desktop/minimum-scale layouts do
   not overlap or resize unexpectedly.
 
 ## Phase 5 - Native MCP compatibility
@@ -72,6 +72,12 @@
   recovery, and diagnostics acceptance; record any xttrade permission boundary.
 - [x] T029 Commit with Conventional Commits, open a PR, and observe PR CI to
   terminal success before merge/release.
+- [x] T030 Replace the placeholder icon with a high-contrast Q-and-connector
+  mark and verify the embedded ICO sizes on light and dark backgrounds.
+- [x] T031 Add persisted Simplified Chinese/English localization for the window,
+  runtime states, file pickers, and tray menu.
+- [ ] T032 Add localization tests, run launcher build/test/UI smoke, and observe
+  the updated PR CI to terminal success.
 
 ### CI evidence
 

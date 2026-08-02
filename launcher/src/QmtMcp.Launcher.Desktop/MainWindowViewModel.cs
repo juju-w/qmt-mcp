@@ -14,6 +14,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
     };
 
     private readonly LauncherRuntime runtime;
+    private readonly LocalizationManager localization;
+    private readonly IReadOnlyList<LanguageOption> languages;
     private readonly Action<Action> dispatch;
     private LauncherProfile? profile;
     private ResolvedBroker? resolvedBroker;
@@ -22,20 +24,25 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
     private string xtquantRoot = string.Empty;
     private string userdataPath = string.Empty;
     private int mcpPort = 18765;
-    private string stateLabel = "Stopped";
-    private string stateDetail = "Select a QMT client to create a local profile.";
-    private string qmtStatus = "Not configured";
-    private string mcpStatus = "Stopped";
-    private string xtdataStatus = "Unknown";
-    private string xttradeStatus = "Disabled";
-    private string resolutionStatus = "No client selected";
-    private string lastDiagnosticPath = "No diagnostic archive exported";
+    private LocalizedText stateLabelText = LocalizedText.Key("StateStopped");
+    private LocalizedText stateDetailText = LocalizedText.Key("DetailSelectClient");
+    private LocalizedText qmtStatusText = LocalizedText.Key("StatusNotConfigured");
+    private LocalizedText mcpStatusText = LocalizedText.Key("StatusStopped");
+    private LocalizedText xtdataStatusText = LocalizedText.Key("StatusUnknown");
+    private LocalizedText xttradeStatusText = LocalizedText.Key("StatusDisabled");
+    private LocalizedText resolutionStatusText = LocalizedText.Key("ResolutionNoClient");
+    private LocalizedText lastDiagnosticPathText = LocalizedText.Key("NoDiagnosticArchive");
     private bool autoStartLauncher;
     private bool busy;
 
-    public MainWindowViewModel(LauncherRuntime runtime, Action<Action> dispatch)
+    public MainWindowViewModel(
+        LauncherRuntime runtime,
+        LocalizationManager localization,
+        Action<Action> dispatch)
     {
         this.runtime = runtime;
+        this.localization = localization;
+        languages = LocalizationManager.Languages;
         this.dispatch = dispatch;
         SaveCommand = new AsyncCommand(SaveAsync, () => !Busy, ShowError);
         StartCommand = new AsyncCommand(StartAsync, () => !Busy, ShowError);
@@ -49,6 +56,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         }, () => !Busy, ShowError);
         runtime.Orchestrator.SnapshotChanged += OnSnapshotChanged;
+        localization.LanguageChanged += OnLanguageChanged;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -61,20 +69,33 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ExportDiagnosticsCommand { get; }
     public ICommand OpenLogsCommand { get; }
 
+    public IReadOnlyList<LanguageOption> Languages => languages;
+    public LanguageOption SelectedLanguage
+    {
+        get => Languages.First(item => item.Code == localization.CurrentLanguage);
+        set
+        {
+            if (value is not null)
+            {
+                localization.SetLanguage(value.Code);
+            }
+        }
+    }
+
     public string ProfileName { get => profileName; set => Set(ref profileName, value); }
     public string ClientPath { get => clientPath; set => Set(ref clientPath, value); }
     public string XtquantRoot { get => xtquantRoot; set => Set(ref xtquantRoot, value); }
     public string UserdataPath { get => userdataPath; set => Set(ref userdataPath, value); }
     public int McpPort { get => mcpPort; set { if (Set(ref mcpPort, value)) OnPropertyChanged(nameof(McpUrl)); } }
     public string McpUrl => $"http://127.0.0.1:{McpPort}/mcp";
-    public string StateLabel { get => stateLabel; private set => Set(ref stateLabel, value); }
-    public string StateDetail { get => stateDetail; private set => Set(ref stateDetail, value); }
-    public string QmtStatus { get => qmtStatus; private set => Set(ref qmtStatus, value); }
-    public string McpStatus { get => mcpStatus; private set => Set(ref mcpStatus, value); }
-    public string XtdataStatus { get => xtdataStatus; private set => Set(ref xtdataStatus, value); }
-    public string XttradeStatus { get => xttradeStatus; private set => Set(ref xttradeStatus, value); }
-    public string ResolutionStatus { get => resolutionStatus; private set => Set(ref resolutionStatus, value); }
-    public string LastDiagnosticPath { get => lastDiagnosticPath; private set => Set(ref lastDiagnosticPath, value); }
+    public string StateLabel => stateLabelText.Resolve(localization);
+    public string StateDetail => stateDetailText.Resolve(localization);
+    public string QmtStatus => qmtStatusText.Resolve(localization);
+    public string McpStatus => mcpStatusText.Resolve(localization);
+    public string XtdataStatus => xtdataStatusText.Resolve(localization);
+    public string XttradeStatus => xttradeStatusText.Resolve(localization);
+    public string ResolutionStatus => resolutionStatusText.Resolve(localization);
+    public string LastDiagnosticPath => lastDiagnosticPathText.Resolve(localization);
     public bool AutoStartLauncher { get => autoStartLauncher; set => Set(ref autoStartLauncher, value); }
     public bool Busy { get => busy; private set { if (Set(ref busy, value)) RefreshCommands(); } }
     public bool IsRunning => runtime.Orchestrator.Snapshot.State is not LauncherState.Stopped and not LauncherState.Faulted;
@@ -121,8 +142,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         if (!result.IsSuccess)
         {
             resolvedBroker = null;
-            ResolutionStatus = result.Failure?.Message ?? "Unable to resolve QMT paths.";
-            QmtStatus = "Configuration incomplete";
+            SetResolutionFailure(result.Failure);
+            SetLocalized(ref qmtStatusText, nameof(QmtStatus), "StatusConfigurationIncomplete");
             return;
         }
 
@@ -130,8 +151,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         ClientPath = resolvedBroker!.ClientPath;
         XtquantRoot = resolvedBroker.XtquantRoot;
         UserdataPath = resolvedBroker.UserdataPath;
-        ResolutionStatus = "Client, xtquant, and userdata paths validated";
-        QmtStatus = "Configured";
+        SetLocalized(ref resolutionStatusText, nameof(ResolutionStatus), "ResolutionValidated");
+        SetLocalized(ref qmtStatusText, nameof(QmtStatus), "StatusConfigured");
     }
 
     public async Task SaveAsync()
@@ -195,7 +216,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             var candidates = await runtime.DiscoverBrokersAsync(timeout.Token);
             if (candidates.Count == 0)
             {
-                ResolutionStatus = "No QMT client found. Select the executable manually.";
+                SetLocalized(ref resolutionStatusText, nameof(ResolutionStatus), "ResolutionNoClientFound");
                 return;
             }
 
@@ -204,9 +225,14 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             XtquantRoot = string.Empty;
             UserdataPath = string.Empty;
             await ResolveAsync();
-            ResolutionStatus = resolvedBroker is null
-                ? ResolutionStatus
-                : $"Detected from {selected.Source}; paths validated";
+            if (resolvedBroker is not null)
+            {
+                SetLocalized(
+                    ref resolutionStatusText,
+                    nameof(ResolutionStatus),
+                    "ResolutionDetected",
+                    selected.Source);
+            }
         }
         finally
         {
@@ -223,7 +249,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
 
         if (profile is null)
         {
-            throw new InvalidOperationException("Save a valid profile before copying the connection.");
+            throw new InvalidOperationException(localization["ErrorSaveProfileBeforeCopy"]);
         }
 
         var token = await runtime.Secrets.GetAsync(profile.TokenSecretId);
@@ -253,29 +279,40 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             token = await runtime.Secrets.GetAsync(profile.TokenSecretId);
         }
 
-        LastDiagnosticPath = await runtime.ExportDiagnosticsAsync(profile, token, CancellationToken.None);
+        SetLiteral(
+            ref lastDiagnosticPathText,
+            nameof(LastDiagnosticPath),
+            await runtime.ExportDiagnosticsAsync(profile, token, CancellationToken.None));
     }
 
     private void OnSnapshotChanged(object? sender, LauncherSnapshot snapshot) => dispatch(() =>
     {
-        StateLabel = snapshot.State switch
+        SetLocalized(ref stateLabelText, nameof(StateLabel), StateLabelKey(snapshot.State));
+        SetSnapshotDetail(snapshot);
+        if (snapshot.TerminalPid is null)
         {
-            LauncherState.Ready => "Ready",
-            LauncherState.WaitingForLogin => "Waiting for login",
-            LauncherState.Degraded => "Degraded",
-            LauncherState.Faulted => "Action required",
-            LauncherState.Stopped => "Stopped",
-            _ => "Starting",
-        };
-        StateDetail = snapshot.Summary;
-        QmtStatus = snapshot.TerminalPid is null
-            ? "Stopped"
-            : $"Running (PID {snapshot.TerminalPid})";
-        McpStatus = snapshot.McpPid is null
-            ? "Stopped"
-            : snapshot.McpLive ? $"Live (PID {snapshot.McpPid})" : $"Starting (PID {snapshot.McpPid})";
-        XtdataStatus = Capitalize(snapshot.XtdataState);
-        XttradeStatus = Capitalize(snapshot.XttradeState);
+            SetLocalized(ref qmtStatusText, nameof(QmtStatus), "StatusStopped");
+        }
+        else
+        {
+            SetLocalized(ref qmtStatusText, nameof(QmtStatus), "StatusRunningPid", snapshot.TerminalPid);
+        }
+
+        if (snapshot.McpPid is null)
+        {
+            SetLocalized(ref mcpStatusText, nameof(McpStatus), "StatusStopped");
+        }
+        else
+        {
+            SetLocalized(
+                ref mcpStatusText,
+                nameof(McpStatus),
+                snapshot.McpLive ? "StatusLivePid" : "StatusStartingPid",
+                snapshot.McpPid);
+        }
+
+        SetLocalized(ref xtdataStatusText, nameof(XtdataStatus), ComponentStateKey(snapshot.XtdataState));
+        SetLocalized(ref xttradeStatusText, nameof(XttradeStatus), ComponentStateKey(snapshot.XttradeState));
         OnPropertyChanged(nameof(IsRunning));
         RefreshCommands();
     });
@@ -292,8 +329,29 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void ShowError(Exception exception)
     {
-        StateLabel = "Action required";
-        StateDetail = new SecretRedactor().Redact(exception.Message);
+        SetLocalized(ref stateLabelText, nameof(StateLabel), "StateActionRequired");
+        SetLiteral(ref stateDetailText, nameof(StateDetail), new SecretRedactor().Redact(exception.Message));
+    }
+
+    internal string Localize(string key) => localization[key];
+
+    private void OnLanguageChanged(object? sender, EventArgs eventArgs)
+    {
+        foreach (var propertyName in new[]
+                 {
+                     nameof(SelectedLanguage),
+                     nameof(StateLabel),
+                     nameof(StateDetail),
+                     nameof(QmtStatus),
+                     nameof(McpStatus),
+                     nameof(XtdataStatus),
+                     nameof(XttradeStatus),
+                     nameof(ResolutionStatus),
+                     nameof(LastDiagnosticPath),
+                 })
+        {
+            OnPropertyChanged(propertyName);
+        }
     }
 
     private void RefreshCommands()
@@ -320,7 +378,6 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
     private static string? EmptyToNull(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
-    private static string Capitalize(string value) => string.IsNullOrEmpty(value) ? "Unknown" : char.ToUpperInvariant(value[0]) + value[1..];
 
     private async Task SaveProfileAsync()
     {
@@ -372,6 +429,110 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         });
         LauncherRuntime.SetAutoStart(AutoStartLauncher);
         profile = updated;
-        StateDetail = "Profile saved locally";
+        SetLocalized(ref stateDetailText, nameof(StateDetail), "ResolutionProfileSaved");
+    }
+
+    private void SetResolutionFailure(ResolutionFailure? failure)
+    {
+        var key = failure?.Code switch
+        {
+            "path_not_absolute" => "ResolutionPathNotAbsolute",
+            "client_missing" => "ResolutionClientMissing",
+            "client_unsupported" => "ResolutionClientUnsupported",
+            "xtquant_missing" => "ResolutionXtquantMissing",
+            "xtquant_ambiguous" => "ResolutionXtquantAmbiguous",
+            "userdata_missing" => "ResolutionUserdataMissing",
+            _ => "ResolutionUnable",
+        };
+        SetLocalized(ref resolutionStatusText, nameof(ResolutionStatus), key);
+    }
+
+    private void SetSnapshotDetail(LauncherSnapshot snapshot)
+    {
+        if (snapshot.State == LauncherState.Faulted)
+        {
+            var errorKey = snapshot.LastError?.Code switch
+            {
+                "profile_invalid" => "DetailProfileInvalid",
+                "startup_failed" => "DetailStartupFailed",
+                "mcp_restart_exhausted" => "DetailRestartExhausted",
+                _ => null,
+            };
+            if (errorKey is not null)
+            {
+                SetLocalized(ref stateDetailText, nameof(StateDetail), errorKey);
+            }
+            else
+            {
+                SetLiteral(ref stateDetailText, nameof(StateDetail), snapshot.Summary);
+            }
+
+            return;
+        }
+
+        var key = snapshot.State switch
+        {
+            LauncherState.Validating => "DetailValidating",
+            LauncherState.StartingMcp => "DetailStartingMcp",
+            LauncherState.StartingTerminal when snapshot.TerminalOwnership == TerminalOwnership.Attached => "DetailAttachedQmt",
+            LauncherState.StartingTerminal => "DetailStartingQmt",
+            LauncherState.WaitingForLogin => snapshot.Summary == "MCP server stopped"
+                ? "DetailMcpStopped"
+                : "DetailWaitingForLogin",
+            LauncherState.Ready => "DetailReady",
+            LauncherState.Degraded when snapshot.Summary == "QMT terminal stopped" => "DetailQmtStopped",
+            LauncherState.Degraded when snapshot.Summary == "MCP server stopped" => "DetailMcpStopped",
+            LauncherState.Degraded => "DetailDegraded",
+            LauncherState.Stopping => "DetailStopping",
+            LauncherState.Stopped => "DetailStopped",
+            _ => "DetailStartingMcp",
+        };
+        SetLocalized(ref stateDetailText, nameof(StateDetail), key);
+    }
+
+    private static string StateLabelKey(LauncherState state) => state switch
+    {
+        LauncherState.Ready => "StateReady",
+        LauncherState.WaitingForLogin => "StateWaitingForLogin",
+        LauncherState.Degraded => "StateDegraded",
+        LauncherState.Faulted => "StateActionRequired",
+        LauncherState.Stopped => "StateStopped",
+        LauncherState.Stopping => "StateStopping",
+        _ => "StateStarting",
+    };
+
+    private static string ComponentStateKey(string state) => state.ToLowerInvariant() switch
+    {
+        "ready" => "ComponentReady",
+        "degraded" => "ComponentDegraded",
+        "disabled" => "ComponentDisabled",
+        "login_required" => "ComponentLoginRequired",
+        "error" => "ComponentError",
+        _ => "ComponentUnknown",
+    };
+
+    private void SetLocalized(
+        ref LocalizedText target,
+        string propertyName,
+        string key,
+        params object?[] arguments)
+    {
+        target = LocalizedText.Key(key, arguments);
+        OnPropertyChanged(propertyName);
+    }
+
+    private void SetLiteral(ref LocalizedText target, string propertyName, string value)
+    {
+        target = LocalizedText.Literal(value);
+        OnPropertyChanged(propertyName);
+    }
+
+    private sealed record LocalizedText(string? ResourceKey, string? LiteralValue, object?[] Arguments)
+    {
+        public static LocalizedText Key(string key, params object?[] arguments) => new(key, null, arguments);
+        public static LocalizedText Literal(string value) => new(null, value, []);
+
+        public string Resolve(LocalizationManager localization) =>
+            ResourceKey is null ? LiteralValue ?? string.Empty : localization.Format(ResourceKey, Arguments);
     }
 }

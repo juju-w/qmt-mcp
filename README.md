@@ -69,15 +69,16 @@ flowchart LR
 
 1. 从 [Releases](https://github.com/juju-w/qmt-mcp/releases) 下载
    `qmt-mcp-launcher_<版本>_setup.exe`，或便携 ZIP。
-2. 打开 QMT-MCP，在 **Setup** 选择券商 QMT 的 `XtItClient.exe` / `XtMiniQmt.exe`；
-   也可以先点 **Detect client**。
-3. 确认 `xtquant` 与 `userdata_mini` 路径，保存后点 **Start**。
-4. 在正常弹出的券商窗口完成人工登录；状态页显示 **Market data: Ready** 后复制
+2. 打开 QMT-MCP，在 **设置** 选择券商 QMT 的 `XtItClient.exe` / `XtMiniQmt.exe`；
+   也可以先点 **自动查找客户端**。
+3. 确认 `xtquant` 与 `userdata_mini` 路径，保存后点 **启动**。
+4. 在正常弹出的券商窗口完成人工登录；状态页显示 **行情数据：已就绪** 后复制
    本地 MCP 连接。
 
 启动器只监听 `127.0.0.1`，token 用当前 Windows 用户的 DPAPI 加密。发行包内置
 Python 3.12、MCP 依赖和本项目服务端源码，但不包含券商终端、`xtquant`、账号或
-登录凭据，也不会自动填写密码、验证码或交易确认。
+登录凭据，也不会自动填写密码、验证码或交易确认。界面支持简体中文和英文，首次
+启动跟随 Windows 显示语言，右上角可以即时切换并记住选择。
 
 ### Linux / NAS：Docker appliance
 
@@ -158,7 +159,7 @@ export QMT_MCP_TOKEN=<token>
 
 | 能力 | 状态 | 说明 |
 |---|---|---|
-| Windows 原生启动器 | ✅ | 无需 Docker、系统 Python 或 .NET；自动发现 QMT、托盘守护、DPAPI token、ZIP/setup 发布 |
+| Windows 原生启动器 | ✅ | 无需 Docker、系统 Python 或 .NET；中英文界面、自动发现 QMT、托盘守护、DPAPI token、ZIP/setup 发布 |
 | 持久 QMT 桌面 + RDP/VNC | ✅ | 启动即拉起终端 + MCP；RDP 与可选 VNC 共用单会话 |
 | 行情 `xtdata` | ✅ | 快照、K线、下载历史、合约详情、板块、日历、指数权重 |
 | 合约模糊搜索 | ✅ | 中文名、代码、别名、拼音首字母、板块、主题；支持流动性排序 |

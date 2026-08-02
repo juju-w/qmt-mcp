@@ -19,6 +19,11 @@ broker pack, and you're live.
 > a mounted **broker pack**, never by rebuilding. One host can run several brokers
 > in parallel.
 
+<p align="center">
+  <img src="docs/illustrations/qmt-mcp-agent-workflow-en.webp" width="960" alt="A user gives an AI Agent several natural-language tasks; the Agent uses QMT-MCP xtdata and xttrade capabilities for market data, research, portfolio risk, and planned conditional trading">
+</p>
+<p align="center"><sub>xtdata scenarios are available today; xttrade account and portfolio queries require broker permission, while conditional trading remains a planned extension.</sub></p>
+
 ```text
 immutable base image  ghcr.io/juju-w/qmt-mcp           mounted at runtime
 (Wine wow64 + Win Python 3.12 + MCP + xrdp)  ◄── broker pack → /broker
@@ -26,14 +31,6 @@ immutable base image  ghcr.io/juju-w/qmt-mcp           mounted at runtime
 ```
 
 ## Screenshots
-
-**✨ Fuzzy instrument search (the highlight)** — an AI agent asks in plain language
-("the best CSI 500 ETF") and MCP returns ranked candidates by liquidity; the agent
-never needs to know the raw QMT code:
-
-<p align="center">
-  <img src="docs/screenshots/fuzzy-search-etf.png" width="680" alt="AI agent fuzzy-searching ETFs via MCP">
-</p>
 
 | Stock snapshot | Sector board | QMT terminal in Docker (RDP) |
 |:---:|:---:|:---:|

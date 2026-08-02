@@ -30,3 +30,6 @@ venv/
 
 # agent-local memory (never publish)
 .claude/projects/
+
+# Local QMT captures may contain account and position data.
+/screenshots/

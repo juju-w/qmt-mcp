@@ -1,119 +1,190 @@
-# qmt-mcp · 在 Docker 里跑 QMT，用 MCP 接入 AI Agent
+# QMT-MCP
 
-🌐 **简体中文** · [English](README.en.md)
+**简体中文** · [English](README.en.md)
 
 [![CI](https://github.com/juju-w/qmt-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/juju-w/qmt-mcp/actions/workflows/ci.yml)
 [![Release](https://github.com/juju-w/qmt-mcp/actions/workflows/release.yml/badge.svg)](https://github.com/juju-w/qmt-mcp/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](#)
-[![image: ghcr.io/juju-w/qmt-mcp](https://img.shields.io/badge/image-ghcr.io%2Fjuju--w%2Fqmt--mcp-2496ED?logo=docker&logoColor=white)](https://github.com/juju-w/qmt-mcp/pkgs/container/qmt-mcp)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Docker image](https://img.shields.io/badge/image-ghcr.io%2Fjuju--w%2Fqmt--mcp-2496ED?logo=docker&logoColor=white)](https://github.com/juju-w/qmt-mcp/pkgs/container/qmt-mcp)
 [![Stars](https://img.shields.io/github/stars/juju-w/qmt-mcp?style=social)](https://github.com/juju-w/qmt-mcp/stargazers)
 
-用 **Docker** 一键把 Windows 版 **QMT / MiniQMT 终端**（跑在容器内的 Wine 里）封装成
-**MCP（Model Context Protocol）** 服务，把 A 股行情与账户能力安全地暴露给 AI Agent。
-`docker compose up` 起一个容器，挂上券商 pack 就能用。
+**把依赖 Windows QMT 终端的 `xtquant`，变成可以从任意机器调用的 MCP 服务。**
 
-> **核心理念**：基础镜像与券商无关，换券商只换一个挂载的 **broker pack**，镜像永不重建。
-> 一台机可并行多券商。
-
-```text
-不可变基础镜像 ghcr.io/juju-w/qmt-mcp           运行时挂载
-(Wine wow64 + Win Python 3.12 + MCP + xrdp/VNC) ◄── broker pack → /broker
-—— 券商中立，不含任何终端/xtquant/账户数据         (券商 QMT 终端 + xtquant + broker.yaml)
-```
-
-## 截图 / Screenshots
-
-**✨ 合约模糊搜索（核心亮点）** —— AI Agent 用一句中文（"中证500 最好的 ETF"）即可让 MCP
-按流动性排序返回候选合约，不必预先知道 QMT 代码：
+QMT-MCP 在原生 amd64 Linux 服务器上常驻 **QMT / MiniQMT**。你通过 RDP/VNC
+完成券商登录，Codex、Claude Code、自建 Agent 和 `qmtctl` 从其他机器通过
+Streamable HTTP MCP 获取行情和可选的账户只读数据。
 
 <p align="center">
-  <img src="docs/screenshots/fuzzy-search-etf.png" width="680" alt="AI agent 用 MCP 模糊搜索 ETF">
+  <img src="docs/illustrations/qmt-mcp-agent-workflow.webp" width="960" alt="用户向 AI Agent 提出多个自然语言任务，Agent 通过 QMT-MCP 的 xtdata 和 xttrade 能力获取行情、研究、组合风险以及计划中的条件交易结果">
 </p>
+<p align="center"><sub>xtdata 场景已经可用；xttrade 账户和组合查询需要券商权限，条件交易是框架预留的计划中能力。</sub></p>
+
+## 它解决的核心问题
+
+- **QMT 不再绑定 Agent 所在的电脑**：终端常驻 Linux/NAS/服务器，Agent 只连接
+  一个带 token 的 `/mcp` 端点。
+- **AI 不必猜证券代码**：支持中文名、代码、别名、主题和拼音首字母搜索，并可按
+  相关性、流动性或规模排序候选。
+- **部署可以复制和隔离**：公共镜像保持券商中立；每个券商或账号实例挂载自己的
+  broker pack、缓存和日志。
+- **不只服务 AI**：Go 编写的单文件 `qmtctl` 同样适合人工排障、自动化脚本和 CI。
+
+项目当前专注于**行情、研究数据和账户只读查询**，没有下单、撤单或划转工具。
+账户查询还需要券商额外开通程序化交易 / 外部 Python 权限。
+
+## 工作方式
+
+```mermaid
+flowchart LR
+    U["你"]
+    A["Codex / Claude Code / qmtctl"]
+    B["broker pack<br/>券商终端 + xtquant"]
+    subgraph C["qmt-mcp 容器 · amd64 Linux"]
+        M["MCP server"]
+        M --> X["xtquant"]
+        X --> Q["QMT / MiniQMT"]
+    end
+
+    U -->|"RDP / VNC 登录"| Q
+    A -->|"Streamable HTTP MCP + token"| M
+    B --> Q
+```
+
+一次典型查询由 Agent 自动完成两步：
+
+```text
+1. qmt_xtdata_search_instruments("中证500", types=["etf"], rank_by="liquidity")
+2. qmt_xtdata_snapshot(["510500.SH", "512500.SH", ...])
+
+结果：按相关性召回真正的中证500 ETF，再结合成交额、盘口和规模给出候选与理由。
+```
+
+## 快速开始
+
+> 运行主机必须是**原生 amd64 Linux**。Apple Silicon 可以开发代码，但不建议生产跑 QMT/Wine。
+
+1. 准备 broker pack
+
+```bash
+cd appliance
+cp .env.example .env
+scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
+```
+
+2. 配置 `.env`
+
+```env
+BROKER_PACK=./brokers/<id>/pack
+QMT_MCP_TOKEN=<change-me>
+QMT_DESKTOP_MODE=persistent
+QMT_RDP_PASSWORD=<at-least-12-chars>
+```
+
+3. 启动
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+4. 连接
+
+```text
+RDP:  127.0.0.1:13389   wineuser / QMT_RDP_PASSWORD
+VNC:  127.0.0.1:15900   可选；适合移动端或可保存凭据的客户端
+MCP:  http://<host>:18765/mcp
+Auth: Authorization: Bearer <QMT_MCP_TOKEN>
+```
+
+远程服务器建议先 SSH 转发：
+
+```bash
+ssh -N \
+  -L 13389:127.0.0.1:13389 \
+  -L 15900:127.0.0.1:15900 \
+  -L 18765:127.0.0.1:18765 \
+  <user>@<server>
+```
+
+然后本机连接 `127.0.0.1:13389` 和 `http://127.0.0.1:18765/mcp`。
+
+## 用 qmtctl 先试一下
+
+`qmtctl` 是 Go 写的命令行客户端，适合人工 smoke、脚本和 CI。
+
+```bash
+cd cli/qmtctl
+go build -o qmtctl .
+
+export QMT_MCP_URL=http://127.0.0.1:18765/mcp
+export QMT_MCP_TOKEN=<token>
+
+./qmtctl health
+./qmtctl search 中证500 --types etf --rank liquidity
+./qmtctl snapshot 510500.SH
+./qmtctl bars 510500.SH --period 1d --count 20
+./qmtctl smoke
+```
+
+更多命令见 [`cli/qmtctl/README.md`](cli/qmtctl/README.md)。
+
+## 运行中的样子
 
 | 个股行情快照 | 行业板块成分 | Docker 内 QMT 终端（RDP） |
 |:---:|:---:|:---:|
 | <img src="docs/screenshots/snapshot-stock.png" width="250" alt="xtdata 个股行情"> | <img src="docs/screenshots/sector-board.png" width="250" alt="xtdata 行业板块"> | <img src="docs/screenshots/rdp-qmt-in-docker.png" width="250" alt="RDP 登录 Docker 内的 QMT 终端"> |
 
-## 能力现状
+## 已实现能力
 
 | 能力 | 状态 | 说明 |
 |---|---|---|
 | 持久 QMT 桌面 + RDP/VNC | ✅ | 启动即拉起终端 + MCP；RDP 与可选 VNC 共用单会话 |
-| 行情 `xtdata`（快照/K线/合约/板块/日历） | ✅ 可用 | MCP 工具返回结构化 JSON（11/11 实测通过） |
-| **合约模糊搜索**（中文名/拼音/别名/板块/主题） | ✅ 可用 | Agent 不必知道 QMT 代码即可定位合约 |
-| 账户只读查询 `xttrade` | ⚠️ 需券商权限 | 未开通时报 `not_authorized` 优雅降级，不崩溃 |
-| 数据库持久化（PostgreSQL，可选） | ✅ 可用 | 行情数据仓库，read/write-through，off by default |
-| `qmtctl` CLI | ✅ 可用 | Go 编译命令行客户端，支持行情/搜索/账户查询 |
-| MCP 协议 | ✅ 双线兼容 | 主推稳定版 `2026-07-28`，同一 `/mcp` 自动兼容 2025 客户端 |
-| MCP 长任务 | ✅ 可用 | 2026 Tasks 持久化执行；未升级或未声明扩展的客户端继续同步调用 |
-| MCP 任务多轮输入 | ✅ 可用 | 任务可暂停并分批接收标准 MCP 输入；qmtctl 显式回答，不自动确认 |
-| MCP 任务状态通知 | ✅ 可用 | 2026 完整状态推送；qmtctl 通知优先，断流自动轮询回退 |
-| MCP 工具契约 / Profile | ✅ 可用 | 结构化结果、行为注解；可按 full/readonly/market/account/core/custom 裁剪工具面 |
+| 行情 `xtdata` | ✅ | 快照、K线、下载历史、合约详情、板块、日历、指数权重 |
+| 合约模糊搜索 | ✅ | 中文名、代码、别名、拼音首字母、板块、主题；支持流动性排序 |
+| 行情订阅热缓存 | ✅ | 官方 `subscribe_quote` 优先，轮询兜底 |
+| 期权 / 参考数据 | ✅ | 期权链、报价、IV 输入；财务、新股、分红、可转债、ETF 参考数据 |
+| qmtctl CLI | ✅ | 单文件命令行客户端，覆盖常用 MCP 工具 |
+| PostgreSQL 持久化 | ✅ 可选 | 行情仓库，`QMT_DB_URL` 打开，默认关闭 |
+| 账户只读查询 `xttrade` | ⚠️ 需券商权限 | 默认关闭；需要程序化交易/外部 Python 权限和账户白名单 |
+| 自定义板块 / 公式因子 | ✅ 可选 | 默认关闭；受管前缀、白名单和输出沙箱 |
+| MCP 2026 协议能力 | ✅ | Tasks、状态通知、多轮输入、工具分页、gzip、结构化结果 |
 | OAuth 2.1 授权 | ✅ 可用 | static/oauth/hybrid；JWT/JWKS 校验、scope 裁剪、qmtctl PKCE 登录与刷新 |
 
-> **交易/账户权限**：外部 `xtquant` 连交易接口（下单**和**账户查询）需券商开通「程序化交易 /
-> 外部 Python 接口」权限（`m_nPythonConnectNet`）。未开通时只有行情可用。开通通常需满足
-> 资产门槛并签协议，请联系你的券商。
+## MCP 工具怎么用
 
-## MCP 工具
+推荐 Agent 遵守这个顺序：
 
-✨ **亮点：合约模糊搜索** —— Agent 不必预先知道 QMT 代码，直接用中文名 / 拼音首字母 / 别名 /
-板块 / 主题（如 `天岳`、`ZGWX`、`恒生科技`、`纳指`）即可搜到并解析出代码，再去取行情。
+1. 先用 `qmt_xtdata_search_instruments` 或 `qmt_xtdata_resolve_instrument`
+   找合约，尤其是用户只说中文名、ETF 主题、简称或拼音首字母时。
+2. 高置信候选再调用 `qmt_xtdata_snapshot`、`qmt_xtdata_bars`、
+   `qmt_xtdata_instrument_detail`。
+3. 低置信或 `resolved=false` 时让用户澄清，不要编代码。
 
 | 工具 | 说明 |
 |---|---|
 | `qmt_health` · `qmt_capabilities` | 健康 / 能力状态（鉴权、依赖、工具族） |
-| `qmt_xtdata_search_instruments` ✨ | 按名称/代码/别名/拼音/板块/主题**模糊搜索**合约，带相关性 + 流动性排序 |
-| `qmt_xtdata_resolve_instrument` ✨ | 把一句话**解析**成最佳合约代码 + 备选（低置信度返回 `resolved=false`） |
-| `qmt_xtdata_search_sectors` | 模糊搜索板块名 |
-| `qmt_xtdata_instrument_detail` | 单合约元数据 |
-| `qmt_xtdata_snapshot` | 实时快照（最新价 / 买卖盘等） |
-| `qmt_xtdata_bars` | K线（tick / 分钟 / 日 / 周 / 月…） |
-| `qmt_xtdata_sector_list` · `qmt_xtdata_sector_constituents` | 板块列表 / 成分股 |
-| `qmt_xtdata_index_weight` | 指数权重 |
-| `qmt_xtdata_trading_dates` · `qmt_xtdata_trading_calendar` · `qmt_xtdata_holidays` | 交易日历 |
-| `qmt_xtdata_download_history` · `_batch` | 下载历史数据到本地 |
-| `qmt_xtdata_instrument_cache_status` · `qmt_xtdata_refresh_instrument_cache` | 搜索缓存状态 / 刷新 |
-| `qmt_xtdata_quote_subscribe` · `qmt_xtdata_quote_unsubscribe` · `qmt_xtdata_quote_subscriptions` · `qmt_xtdata_quote_subscription_status` | 行情订阅热缓存（官方 `subscribe_quote` 优先，轮询兜底） |
-| `qmt_xtdata_option_chain` · `qmt_xtdata_option_quotes` · `qmt_xtdata_option_iv` · `qmt_xtdata_volatility_index_inputs` | 期权链/认购认沽报价/IV/VIX 输入包（只读，不发布指数值） |
-| `qmt_xtdata_financial_data` · `qmt_xtdata_ipo_info` · `qmt_xtdata_dividend_factors` · `qmt_xtdata_cb_info` · `qmt_xtdata_etf_info` | 财务/新股/分红/可转债/ETF 参考数据（只读，按运行时能力降级） |
-| `qmt_portfolio_summary` · `qmt_portfolio_positions` · `qmt_portfolio_exposure` · `qmt_portfolio_risk_checks` | 组合持仓/敞口/风控指标（只读，依赖 xttrade 白名单） |
-| `qmt_xtdata_sector_create` · `qmt_xtdata_sector_add_codes` · `qmt_xtdata_sector_remove_codes` · `qmt_xtdata_managed_sector_list` | 自定义板块管理（默认关闭，仅允许 `MCP/`、`AI/` 等受管前缀） |
-| `qmt_xtdata_formula_call` · `qmt_xtdata_formula_call_batch` · `qmt_xtdata_formula_generate_factor` · `qmt_xtdata_formula_subscribe` | 公式/因子运行（默认关闭，服务端公式白名单 + 输出目录沙箱） |
-| 账户只读查询 `xttrade`（04，**选配**） | 见下表，默认关闭 |
+| 搜索与解析 | `qmt_xtdata_search_instruments`、`qmt_xtdata_resolve_instrument`、`qmt_xtdata_search_sectors` |
+| 行情 | `qmt_xtdata_snapshot`、`qmt_xtdata_bars`、`qmt_xtdata_download_history`、`qmt_xtdata_download_history_batch` |
+| 合约与板块 | `qmt_xtdata_instrument_detail`、`qmt_xtdata_sector_list`、`qmt_xtdata_sector_constituents`、`qmt_xtdata_index_weight` |
+| 日历 | `qmt_xtdata_trading_dates`、`qmt_xtdata_trading_calendar`、`qmt_xtdata_holidays` |
+| 订阅缓存 | `qmt_xtdata_quote_subscribe`、`qmt_xtdata_quote_unsubscribe`、`qmt_xtdata_quote_subscriptions`、`qmt_xtdata_quote_subscription_status` |
+| 期权与参考数据 | `qmt_xtdata_option_*`、`qmt_xtdata_financial_data`、`qmt_xtdata_ipo_info`、`qmt_xtdata_dividend_factors`、`qmt_xtdata_cb_info`、`qmt_xtdata_etf_info` |
+| 账户只读（选配） | `qmt_xttrade_asset`、`qmt_xttrade_positions`、`qmt_xttrade_orders`、`qmt_xttrade_trades` 等 |
+| 组合风险（选配） | `qmt_portfolio_summary`、`qmt_portfolio_positions`、`qmt_portfolio_exposure`、`qmt_portfolio_risk_checks` |
+| 受管写操作（默认关闭） | 自定义板块、公式/因子输出；仅限受管前缀/白名单/沙箱 |
 
-**xttrade 账户查询工具族**（需 `QMT_ENABLE_XTTRADE_QUERY=1` + 账户白名单）：
+当前 xttrade 账户工具均为**只读**、带鉴权与审计、返回结构化 JSON。仓库没有下单、
+撤单或划转工具。账户查询需 `QMT_ENABLE_XTTRADE_QUERY=1`、`QMT_TRADE_ACCOUNTS`
+白名单，以及券商开通「程序化交易 / 外部 Python 接口」权限；未开通时返回
+`not_authorized`，服务不崩溃。
 
-| 工具 | 说明 |
-|---|---|
-| `qmt_xttrade_asset` | 资金快照（现金/总值/市值/冻结） |
-| `qmt_xttrade_positions` | 持仓列表（代码/数量/可用/冻结/昨仓/在途/开仓价/均价/市值） |
-| `qmt_xttrade_orders` | 当日委托（支持 `cancelable_only` 过滤可撤单） |
-| `qmt_xttrade_trades` | 当日成交（代码/成交价/量/额/时间/委托号） |
-| `qmt_xttrade_position_statistics` | 持仓汇总统计 |
-| `qmt_xttrade_account_status` | 账户状态 |
-| `qmt_xttrade_new_purchase_limit` | 新股申购额度 |
-| `qmt_xttrade_ipo_data` | 当日新股申购信息（非账户维度） |
-
-交易与账户工具均为**只读**、带鉴权与审计、返回结构化 JSON（无下单/撤单/
-划转工具）。自定义板块和公式输出是默认关闭的非交易写操作，需显式开关、受管
-命名空间/沙箱，以及 OAuth `qmt:manage` 权限。
-
-> **账户查询（feature 04）** 默认关闭，需显式开启 `QMT_ENABLE_XTTRADE_QUERY=1` **且**配置
-> 账户白名单 `QMT_TRADE_ACCOUNTS`；且仍需券商开通程序化交易权限才能联调成功路径，未开通时
-> 报 `not_authorized` 优雅降级。**纯只读、无下单/撤单/划转**。
-> 成功路径待有权限的账户验证（欢迎 PR）。
-
-### 工具契约与 Profile
+## 安全模型
 
 每个可见工具都发布 `title`、输入/输出 JSON Schema 和只读/破坏性/幂等/
 外部访问行为注解。新版客户端直接读取 `structuredContent`；旧客户端仍可读取
 语义相同的 JSON 文本块。业务字段不因 schema 校验被增删。
 
-默认 `full` 保持完整工具面。可在 `appliance/.env` 按 Agent 用途缩小上下文和
-可调用能力：
+可以在 `appliance/.env` 按 Agent 用途缩小工具面：
 
 ```env
 QMT_MCP_TOOL_PROFILE=market
@@ -126,55 +197,18 @@ QMT_MCP_TOOL_DENYLIST=qmt_xtdata_download_*
 模式下它们会再与 token scope 取交集；`qmt:admin` 也不能越过启动 Profile 和
 feature gate。
 
-### 工具分页与 HTTP 压缩
+公网或多用户场景可切换到外部 OAuth authorization server 签发 JWT 的
+`oauth`/`hybrid` 模式；QMT-MCP 只做 resource server，不保存用户密码、不签发
+token。完整配置和 scope 表见 [客户端接入](docs/MCP-CLIENTS.md) 与
+[部署加固](appliance/docs/DEPLOY.md)。
 
-`tools/list` 默认每页最多 50 个已授权工具，并用标准 opaque cursor 继续
-翻页。Profile、allow/deny 和 OAuth scope 会先裁剪工具面，再生成 cursor；
-qmtctl 会自动取完全部页面，所以 `qmtctl tools` 的使用方式和输出不变。
-这里分页的是 MCP 工具目录，不会改变行情、期权或参考数据工具各自的 `limit`。
+## 高级能力简表
 
-远程 MCP JSON 响应在客户端接受 gzip 且正文至少 1024 字节时自动压缩，SSE
-始终不压缩。可在 `appliance/.env` 调整；若反向代理统一负责压缩，可设阈值为
-`0` 关闭应用层 gzip：
-
-```env
-QMT_MCP_LIST_PAGE_SIZE=50
-QMT_MCP_GZIP_MIN_SIZE=1024
-```
-
-### 长任务与 MCP Tasks
+### MCP Tasks
 
 服务端以稳定版 `2026-07-28` 的 `io.modelcontextprotocol/tasks` 扩展承载下载、
-财务数据、批量公式、因子生成和缓存刷新等长操作。声明该扩展的客户端可在断开后
-继续查询或取消任务；2025 客户端以及尚未声明 Tasks 的 Codex、Claude Code、
-WorkBuddy 等客户端仍走原有同步 `tools/call`，无需升级配置。
-
-任务状态默认持久化到 broker pack 内的 SQLite，只保存生命周期、不可逆 owner
-摘要、所需 scope 和终态结果，不保存工具参数、token 或原始用户标识。服务重启
-后未完成任务会明确变成 `failed`；终态记录按 TTL 和数量上限清理：
-
-```env
-QMT_MCP_TASKS_ENABLED=1
-QMT_MCP_TASK_STORE=/broker/cache/mcp-tasks-v1.sqlite3
-QMT_MCP_TASK_TTL_MS=86400000
-QMT_MCP_TASK_POLL_INTERVAL_MS=1000
-QMT_MCP_TASK_MAX_RETAINED=1000
-```
-
-长任务可以进入 `input_required`，通过 `tasks/get` 暴露带 `{method, params}`
-的标准 `inputRequests`。客户端可分批调用 `tasks/update`；未知、重复或已回答
-的键会幂等忽略，最后一个待答键完成后任务恢复。待答问题快照会写入任务库，
-回答值只交给当前任务协程，不写 SQLite、日志或审计。服务重启时等待输入的
-任务与其他未完成任务一样明确失败，不会重放回答。
-
-声明 Tasks 的 `2026-07-28` 客户端还可通过
-`subscriptions/listen.notifications.taskIds` 订阅状态。服务端先返回
-`notifications/subscriptions/acknowledged`，随后推送当前状态和每次已落库的
-`notifications/tasks` 完整快照。该能力没有新增配置项，也不会发送已删除的
-`notifications/tasks/status`。客户端不支持、未确认或连接中断时，继续用
-`tasks/get` 即可；qmtctl 默认先尝试通知，再自动回退到服务端指导频率的轮询。
-
-qmtctl 默认等待任务结束并保持原命令输出，也可脱离后续查：
+财务数据、批量公式、因子生成和缓存刷新等长操作。声明该扩展的客户端可断开后
+继续查询或取消任务；旧客户端仍走同步 `tools/call`。
 
 ```bash
 qmtctl cache refresh --force
@@ -182,97 +216,56 @@ qmtctl --task-mode detach --json cache refresh --force
 qmtctl task get tsk_<id>
 qmtctl task wait tsk_<id>
 qmtctl task cancel tsk_<id>
-qmtctl task update tsk_<id> \
-  --responses-json '{"confirmation":{"action":"accept","content":{"confirm":true}}}'
 ```
 
-通知与轮询共用同一个 `--task-timeout`。默认等待遇到
-`input_required` 时会返回结构化
-`task_input_required` 错误，包含 task ID 和待答请求；qmtctl 不会替用户确认。
-只有 `2026-07-28` 且声明 Tasks 的客户端启用这些语义，2025 或未声明客户端
-仍同步执行。
+### 工具分页与 HTTP 压缩
 
-## 快速开始
+`tools/list` 默认每页最多 50 个已授权工具，并用标准 opaque cursor 继续翻页。
+qmtctl 会自动取完全部页面。远程 MCP JSON 响应在客户端接受 gzip 且正文足够大时
+自动压缩，SSE 始终不压缩。
 
-> 必须在**原生 amd64 主机**构建运行（Apple Silicon 仅模拟，QMT 可能触发 Rosetta AVX 崩溃）。
-
-```bash
-cd appliance
-cp .env.example .env                       # 填入认证配置 / BROKER_PACK 等
-# 推荐 QMT_DESKTOP_MODE=persistent；RDP 密码至少 12 位且无默认值
-docker compose build                       # 构建券商中立基础镜像
-scripts/make-broker-pack.sh <setup_qmt.exe> <xtquant_xxxxxx.rar> brokers/<id>/pack
-docker compose up -d
-# 可选：增加可保存凭据、适合 Android/轻量客户端的 VNC 入口
-# docker compose -f docker-compose.yml -f docker-compose.vnc.yml up -d
+```env
+QMT_MCP_LIST_PAGE_SIZE=50
+QMT_MCP_GZIP_MIN_SIZE=1024
 ```
 
-连接（持久桌面会在容器启动时创建；仍需在 QMT 界面登录资金账号，交易需勾选
-**独立交易/极简模式**）：
+### 数据库持久化
 
-```text
-RDP:  127.0.0.1:13389   wineuser / 密码见 .env
-VNC:  127.0.0.1:15900   可选 override；密码可由客户端保存
-MCP:  http://<host>:18765/mcp   需 Authorization: Bearer <QMT_MCP_TOKEN>
+```env
+QMT_DB_URL=postgresql://user:pass@host:5432/qmt
 ```
 
-桌面端优先用 RDP；需要客户端保存凭据或 Android 轻量接入时启用 VNC override。
-远程电脑先建立 `ssh -N -L 13389:127.0.0.1:13389 -L 15900:127.0.0.1:15900
-<user>@<host>`，再连接本机相应端口。两种协议看到同一个 QMT/Xorg 会话，
-不会重复启动终端。raw VNC 不加密传输且认证只使用密码前 8 个字符，禁止直接
-暴露到公网。
+默认关闭。打开后行情仓库支持 bars read/write-through；数据库不可用时优雅降级。
 
-默认 `static` 模式与旧部署完全兼容。公网或多用户场景可切换到外部 OAuth
-authorization server 签发 JWT 的 `oauth`/`hybrid` 模式；QMT-MCP 只做 resource
-server，不保存用户密码、不签发 token。完整配置和 scope 表见
-[客户端接入](docs/MCP-CLIENTS.md) 与 [部署加固](appliance/docs/DEPLOY.md)。
+## 运行要求与限制
 
-也可以用 **qmtctl** CLI 从命令行操作（详见 [`cli/qmtctl/README.md`](cli/qmtctl/README.md)）：
-
-```bash
-cd cli/qmtctl && go build -o qmtctl .
-export QMT_MCP_URL=http://<host>:18765/mcp QMT_MCP_TOKEN=<token>
-./qmtctl health                       # 健康检查
-./qmtctl search 纳指                   # 模糊搜索合约
-./qmtctl snapshot 510300.SH           # 实时行情快照
-./qmtctl bars 510300.SH --period 1d   # K线数据
-./qmtctl subscription add --id s1 510300.SH,510500.SH  # 行情订阅
-./qmtctl portfolio summary --account <id>              # 组合概览
-./qmtctl option chain --family 300ETF                  # 期权链
-./qmtctl ref financial 600000.SH --tables Income       # 参考数据
-./qmtctl account asset --account <id> # 账户资产（需开启 xttrade）
-```
-
-OAuth 模式可以由 qmtctl 完成浏览器 PKCE 登录并安全复用/刷新会话：
-
-```bash
-./qmtctl --url https://qmt.example.com/mcp auth login \
-  --client-id-metadata-url https://client.example.com/qmtctl.json \
-  --scope 'qmt:read qmt:market'
-./qmtctl --url https://qmt.example.com/mcp auth status
-```
-
-更多：[broker pack 制作与切换](appliance/docs/BROKER-PACK.md) ·
-[部署与安全加固](appliance/docs/DEPLOY.md) ·
-[Codex / Claude Code / WorkBuddy 接入](docs/MCP-CLIENTS.md)
-
-## ⚠️ 运行要求
-
-- **原生 amd64**：不要在 Apple Silicon 上跑生产（仅模拟，可能触发 Rosetta AVX 崩溃）。
+- **原生 amd64**：不要在 Apple Silicon 上跑生产，QMT/Wine 可能触发模拟器或 AVX 问题。
+- **Python 3.12**：`xtquant` 官方最高支持到 3.12，本项目固定 Wine 内 Python 3.12。
 - **GBK 区域**：QMT 是 cp936 中文程序，镜像用 `zh_CN.GBK` 构建 Wine prefix。
+- **券商权限**：行情通常只需登录 QMT；账户只读/交易连接需要券商额外开通程序化权限。
+- **broker pack 自备**：仓库和镜像都不包含 QMT、xtquant、账号、token。
 
 ## 项目结构与开发
 
 ```text
-appliance/   # 可部署 appliance：Dockerfile · compose · scripts · mcp/ · brokers/ · docs/
-cli/         # qmtctl：Go 编译的命令行客户端（streamable-http MCP）
-skills/      # AI Agent 运维知识库（部署/MCP/CLI/排错）
-specs/       # Spec-Driven Development（spec-kit）规格/计划/任务
+appliance/   # Docker appliance：compose、Dockerfile、MCP server、broker pack 工具
+cli/         # qmtctl：Go CLI，走 streamable-http MCP
+docs/        # 客户端接入、发布、截图说明
+skills/      # Agent 运维知识库
+specs/       # spec-kit：每个 feature 的 spec/plan/tasks/verification
 ```
 
 用 **Spec-Driven Development** 管理，一次一个 feature、先 spec 后实现；原则见
 [`constitution.md`](.specify/memory/constitution.md)，AI 协作见 [`AGENT.md`](AGENT.md)，
 测试见 [`appliance/mcp/tests/README.md`](appliance/mcp/tests/README.md)。
+
+常用入口：
+
+- [broker pack 制作与切换](appliance/docs/BROKER-PACK.md)
+- [部署与安全加固](appliance/docs/DEPLOY.md)
+- [Codex / Claude Code / WorkBuddy 接入](docs/MCP-CLIENTS.md)
+- [qmtctl CLI](cli/qmtctl/README.md)
+- [发布流程](docs/RELEASE.md)
 
 ## 版本与自动发布
 

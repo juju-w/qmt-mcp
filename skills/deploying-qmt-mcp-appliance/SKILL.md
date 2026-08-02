@@ -22,12 +22,14 @@ that persistent display, not another headless QMT stack.
 | Check | Command | Requirement |
 |---|---|---|
 | Native amd64 | `dpkg --print-architecture` | `amd64`. Apple Silicon = emulation, QMT hits Rosetta AVX |
-| Disk | `df -h /` | **≥ 12 GB free.** Final image ≈ 8.7 GB, build cache adds ≈ 5 GB |
-| Real disk mount | — | Pack must NOT be on tmpfs/ramfs (RAM exhaustion) |
+| Disk | `df -h <build-dir> <pack-dir>` | **≥ 12 GB free** on the exact SSD/HDD mounts used for builds and broker data |
+| Real disk mount | `findmnt -T <build-dir>` | Never use system `/tmp`, tmpfs, or ramfs for the build workspace, Docker data/cache, broker pack, or task store |
 | Host tools | `command -v 7z unzip` | `make-broker-pack.sh` needs `7z`; `unzip` (zip) or `unrar` (RAR5) |
 
 Docker's real usage may live under `/var/lib/containerd`, not `/var/lib/docker` — check
-both when hunting space. `docker builder prune -af` reclaims the cache after a build.
+both when hunting space. On NAS hosts, place the workspace and Docker data root on
+an SSD or HDD-backed persistent mount before building. `docker builder prune -af`
+reclaims the cache after a build.
 
 ## Gotcha 1: CRLF from a Windows checkout kills the image
 
@@ -111,8 +113,8 @@ To verify the server headlessly without an RDP session:
 
 ```bash
 docker exec -u wineuser -d <container> bash -lc \
-  'nohup /usr/local/bin/qmt-supervisor.sh > /tmp/sup.log 2>&1'
-sleep 50 && docker exec <container> cat /tmp/sup.log   # expect "Application startup complete"
+  'mkdir -p /broker/logs && nohup /usr/local/bin/qmt-supervisor.sh > /broker/logs/supervisor-smoke.log 2>&1'
+sleep 50 && docker exec <container> cat /broker/logs/supervisor-smoke.log   # expect "Application startup complete"
 ```
 
 In either mode, `xtdata: degraded` + `无法连接xtquant服务` and

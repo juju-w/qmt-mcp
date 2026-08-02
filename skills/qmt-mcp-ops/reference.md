@@ -26,7 +26,7 @@ Generate a static token with `openssl rand -hex 32`.
 | `RDP_PORT` | `13389` | Host RDP port |
 | `MCP_PORT` | `18765` | Host MCP port |
 | `RDP_BIND_ADDRESS` | `127.0.0.1` | RDP host bind; non-loopback also needs `QMT_RDP_ALLOW_LAN=1` |
-| `QMT_DESKTOP_MODE` | `manual` | `persistent` is recommended; `manual` is rollback-compatible |
+| `QMT_DESKTOP_MODE` | `persistent` in `.env.example`; Compose fallback is `manual` | Persistent starts the desktop at boot; `manual` is rollback-compatible |
 | `QMT_RDP_PASSWORD` | empty | Compatibility input; unique >= 12 chars, file-backed preferred |
 | `QMT_RDP_PASSWORD_FILE` | empty | Owner-only in-container password file |
 | `QMT_RDP_CLIPBOARD` | `none` | `none`, text-only `text`, or unsafe-gated `all` |
@@ -73,6 +73,11 @@ issues JWTs; QMT-MCP validates them but never issues tokens.
 `custom` requires a non-empty allowlist. Core tools always remain available.
 Startup visibility is fixed for one server process; restart after changes.
 OAuth `tools/list` and `tools/call` additionally intersect it with token scopes.
+
+`qmt:account` currently authorizes read-only xttrade account and portfolio
+queries. There are no registered order placement, cancellation, or transfer
+tools. Any future trading write surface must use a separate feature gate and
+scope instead of inheriting query access.
 
 ### MCP paging and HTTP compression
 
@@ -293,7 +298,8 @@ docker compose --profile db up -d
 2. Keep Python at 3.12 because the proprietary xtquant extension targets it.
 3. Build the Wine prefix with `zh_CN.GBK` for Chinese QMT paths.
 4. Quote resolved Wine paths when shell-sourcing generated env files.
-5. Keep broker packs on real disk, never tmpfs.
+5. Keep workspaces, Docker data/cache, broker packs, and task stores on SSD/HDD
+   persistent mounts; never use system `/tmp`, tmpfs, or ramfs.
 6. Treat `xttrader.connect()==-1` as a likely broker permission issue.
 7. Prefer `XtItClient.exe` when both QMT executables exist.
 8. Follow the canonical repository rules in `AGENT.md`; release mechanics live

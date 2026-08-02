@@ -139,16 +139,24 @@ jobs:
 
           $Setup = Resolve-Path 'launcher/artifacts/qmt-mcp-launcher_0.0.0_setup.exe'
           $InstallRoot = Join-Path $env:LOCALAPPDATA 'Programs/QMT-MCP-CI'
-          & $Setup /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/DIR=$InstallRoot"
-          if ($LASTEXITCODE -ne 0) { throw 'Installer smoke failed.' }
+          $Install = Start-Process -FilePath $Setup.Path `
+            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$InstallRoot") `
+            -Wait -PassThru
+          if ($Install.ExitCode -ne 0) {
+            throw "Installer smoke failed with exit code $($Install.ExitCode)."
+          }
           @('QmtMcp.Launcher.exe', 'runtime/python/python.exe', 'server/qmt_mcp.py') |
             ForEach-Object {
               if (-not (Test-Path (Join-Path $InstallRoot $_))) {
                 throw "Installed layout is missing $_"
               }
             }
-          & "$InstallRoot/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-          if ($LASTEXITCODE -ne 0) { throw 'Uninstaller smoke failed.' }
+          $Uninstall = Start-Process -FilePath "$InstallRoot/unins000.exe" `
+            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') `
+            -Wait -PassThru
+          if ($Uninstall.ExitCode -ne 0) {
+            throw "Uninstaller smoke failed with exit code $($Uninstall.ExitCode)."
+          }
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: windows-launcher-smoke

@@ -76,7 +76,7 @@
   mark and verify the embedded ICO sizes on light and dark backgrounds.
 - [x] T031 Add persisted Simplified Chinese/English localization for the window,
   runtime states, file pickers, and tray menu.
-- [ ] T032 Add localization tests, run launcher build/test/UI smoke, and observe
+- [x] T032 Add localization tests, run launcher build/test/UI smoke, and observe
   the updated PR CI to terminal success.
 
 ### CI evidence
@@ -87,3 +87,6 @@
   portable ZIP, per-user setup executable, and launcher checksum manifest.
 - Windows smoke: embedded Python import, silent install, installed-layout
   assertions, and silent uninstall all passed on `windows-2025`.
+- Bilingual UI run: <https://github.com/juju-w/qmt-mcp/actions/runs/30739059502>
+  passed 31 launcher tests, including Simplified Chinese/English persistence,
+  Headless+Skia rendering at 940x680 and 760x600, and all nine ICO sizes.

@@ -9,7 +9,8 @@ creates `chore(release): vX.Y.Z [skip ci]`, tags it, and then:
 2. updates the persistent `ghcr.io/<owner>/qmt-mcp:buildcache`;
 3. optionally mirrors the published digest to a mainland China registry;
 4. packages qmtctl for Linux, macOS, and Windows on amd64 and arm64;
-5. publishes the six archives and `SHA256SUMS` in one GitHub Release.
+5. packages the native Windows x64 launcher as a portable ZIP and per-user setup;
+6. publishes all archives and one merged `SHA256SUMS` in one GitHub Release.
 
 The Release job explicitly requests `contents: write`. If repository policy
 still blocks the default Actions token, configure a fine-grained
@@ -19,6 +20,25 @@ does not send `target_commitish` to the Releases API. GitHub's built-in Actions
 token cannot create a Release when that parameter points to an older commit
 whose `.github/workflows/` content differs from the default branch, even with
 `contents: write`.
+
+## Native Windows Launcher
+
+`launcher/packaging/package-windows.ps1` builds both Windows assets from one
+staging directory. It publishes the Avalonia app self-contained, verifies the
+pinned Python 3.12.10 embeddable archive SHA256, installs the hash-locked MCP
+requirements into that runtime, copies broker-neutral server source, runs an
+embedded-Python import smoke, and then creates:
+
+```text
+qmt-mcp-launcher_X.Y.Z_windows_x64.zip
+qmt-mcp-launcher_X.Y.Z_setup.exe
+```
+
+The setup installs under `{localappdata}\Programs\QMT-MCP` with no elevation.
+Windows CI compiles with pinned Inno Setup 6.7.1, extracts the ZIP, performs an
+embedded runtime import, silently installs the setup into an isolated directory,
+asserts its layout, and uninstalls it. Launcher and qmtctl manifests are merged
+only in the final release job.
 
 ## Build Cache And Layers
 

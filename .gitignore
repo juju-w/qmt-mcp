@@ -28,6 +28,11 @@ venv/
 .ruff_cache/
 .pytest_cache/
 
+# .NET launcher build output
+**/bin/
+**/obj/
+launcher/artifacts/
+
 # agent-local memory (never publish)
 .claude/projects/
 

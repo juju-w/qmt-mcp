@@ -1,5 +1,10 @@
 # appliance
 
+This directory is the Linux/NAS Docker deployment. For a Windows x64 host that
+should run an already-installed QMT directly, use the native launcher described
+in the root [README](../README.en.md#windows-x64-no-docker); it requires neither
+Docker nor a separately installed Python/.NET runtime.
+
 > Component-level build & ops reference. For the project overview, broker-pack
 > model, and MCP usage, see the [root README](../README.md).
 

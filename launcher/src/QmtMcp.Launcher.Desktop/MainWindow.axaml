@@ -1,0 +1,132 @@
+<Window
+    x:Class="QmtMcp.Launcher.Desktop.MainWindow"
+    x:DataType="local:MainWindowViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:QmtMcp.Launcher.Desktop"
+    Title="QMT-MCP"
+    Icon="/Assets/app-icon.ico"
+    Width="940"
+    Height="680"
+    MinWidth="760"
+    MinHeight="600"
+    WindowStartupLocation="CenterScreen">
+  <Grid RowDefinitions="Auto,*">
+    <Border Background="#202522" Padding="22,16">
+      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+        <Image Source="/Assets/app-icon.png" Width="44" Height="44" />
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Text="QMT-MCP" FontSize="20" FontWeight="SemiBold" Foreground="White" />
+          <TextBlock Text="{Binding StateLabel}" FontSize="13" Foreground="#A9D5BD" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+          <Button Classes="primary" Content="Start" Command="{Binding StartCommand}" MinWidth="84" />
+          <Button Classes="danger" Content="Stop" Command="{Binding StopCommand}" MinWidth="84" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <TabControl Grid.Row="1" Margin="20">
+      <TabItem Header="Status">
+        <Grid Margin="0,16,0,0" ColumnDefinitions="2*,*" ColumnSpacing="14">
+          <StackPanel Spacing="14">
+            <Border Classes="panel">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="sectionTitle" Text="Runtime" />
+                <TextBlock Text="{Binding StateDetail}" TextWrapping="Wrap" />
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="130,*" RowSpacing="9">
+                  <TextBlock Classes="muted" Text="QMT terminal" />
+                  <TextBlock Grid.Column="1" Text="{Binding QmtStatus}" />
+                  <TextBlock Grid.Row="1" Classes="muted" Text="MCP server" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding McpStatus}" />
+                  <TextBlock Grid.Row="2" Classes="muted" Text="Market data" />
+                  <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding XtdataStatus}" />
+                  <TextBlock Grid.Row="3" Classes="muted" Text="Account query" />
+                  <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding XttradeStatus}" />
+                </Grid>
+              </StackPanel>
+            </Border>
+            <Border Classes="panel">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="sectionTitle" Text="Local MCP endpoint" />
+                  <TextBlock Text="{Binding McpUrl}" FontFamily="Consolas, Menlo, monospace" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="Copy connection" Click="CopyConnection_Click" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+          </StackPanel>
+
+          <Border Grid.Column="1" Classes="panel">
+            <StackPanel Spacing="12">
+              <TextBlock Classes="sectionTitle" Text="Active profile" />
+              <TextBlock Classes="muted" Text="Name" />
+              <TextBlock Text="{Binding ProfileName}" />
+              <TextBlock Classes="muted" Text="Validation" Margin="0,8,0,0" />
+              <TextBlock Text="{Binding ResolutionStatus}" TextWrapping="Wrap" />
+              <Separator Margin="0,8" />
+              <TextBlock Classes="muted" Text="Security" />
+              <TextBlock Text="Loopback only" />
+              <TextBlock Text="Bearer token protected for current user" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Setup">
+        <ScrollViewer Margin="0,16,0,0">
+          <Grid ColumnDefinitions="150,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12" ColumnSpacing="10">
+            <TextBlock Text="Profile name" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" Text="{Binding ProfileName}" />
+
+            <TextBlock Grid.Row="1" Text="QMT client" VerticalAlignment="Center" />
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ClientPath}" PlaceholderText="D:\QMT\bin.x64\XtItClient.exe" />
+            <Button Grid.Row="1" Grid.Column="2" Content="Browse" Click="BrowseClient_Click" />
+
+            <TextBlock Grid.Row="2" Text="xtquant root" VerticalAlignment="Center" />
+            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding XtquantRoot}" PlaceholderText="Directory containing xtquant" />
+            <Button Grid.Row="2" Grid.Column="2" Content="Browse" Click="BrowseXtquant_Click" />
+
+            <TextBlock Grid.Row="3" Text="Userdata" VerticalAlignment="Center" />
+            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding UserdataPath}" PlaceholderText="userdata_mini" />
+            <Button Grid.Row="3" Grid.Column="2" Content="Browse" Click="BrowseUserdata_Click" />
+
+            <TextBlock Grid.Row="4" Text="MCP port" VerticalAlignment="Center" />
+            <NumericUpDown Grid.Row="4" Grid.Column="1" Value="{Binding McpPort}" Minimum="1024" Maximum="65535" Width="160" HorizontalAlignment="Left" />
+
+            <TextBlock Grid.Row="5" Text="Startup" VerticalAlignment="Center" />
+            <CheckBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" IsChecked="{Binding AutoStartLauncher}" Content="Start QMT-MCP after Windows sign-in" />
+
+            <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+              <Button Content="Detect client" Command="{Binding DiscoverCommand}" />
+              <Button Content="Validate paths" Command="{Binding ResolveCommand}" />
+              <Button Classes="primary" Content="Save profile" Command="{Binding SaveCommand}" />
+              <TextBlock Text="{Binding ResolutionStatus}" VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+          </Grid>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Diagnostics">
+        <StackPanel Margin="0,16,0,0" Spacing="14">
+          <Border Classes="panel">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <StackPanel Spacing="4">
+                <TextBlock Classes="sectionTitle" Text="Runtime logs" />
+                <TextBlock Classes="muted" Text="Launcher and MCP server output" />
+              </StackPanel>
+              <Button Grid.Column="1" Content="Open logs" Command="{Binding OpenLogsCommand}" VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+          <Border Classes="panel">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="sectionTitle" Text="Diagnostic archive" />
+              <TextBlock Text="{Binding LastDiagnosticPath}" TextWrapping="Wrap" />
+              <Button Content="Export diagnostics" Command="{Binding ExportDiagnosticsCommand}" HorizontalAlignment="Left" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </TabItem>
+    </TabControl>
+  </Grid>
+</Window>

@@ -25,6 +25,18 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(len(cache_exports), 1)
         self.assertIn("publish_latest == 'true'", cache_exports[0])
 
+    def test_native_windows_launcher_is_release_gated_and_published(self) -> None:
+        self.assertIn("windows-launcher:", self.workflow)
+        self.assertIn("package-windows.ps1", self.workflow)
+        self.assertIn("needs: [prepare, image, cli, windows-launcher]", self.workflow)
+        self.assertIn("LAUNCHER_SHA256SUMS", self.workflow)
+        self.assertIn("launcher/artifacts/*.zip", self.workflow)
+
+    def test_windows_packaging_inputs_are_pinned(self) -> None:
+        self.assertIn("actions/setup-dotnet@v6.0.0", self.workflow)
+        self.assertIn("--version=6.7.1", self.workflow)
+        self.assertIn('python-version: "3.12"', self.workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

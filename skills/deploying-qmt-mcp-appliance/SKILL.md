@@ -8,6 +8,12 @@ description: Build, deploy, and verify the QMT-MCP appliance locally or on remot
 First-deploy and remote-deploy failures, and how to verify the result. For steady-state
 operations, tool tables, and `qmtctl` usage see **qmt-mcp-ops**.
 
+This skill owns the Linux/NAS Docker topology. For a Windows x64 host with QMT
+installed locally, use the native launcher Release instead: select/detect the
+client in its Setup view, review resolved paths, and start it without Docker or
+system Python/.NET. Do not apply Wine, broker-pack, RDP, or Compose diagnostics
+to that topology.
+
 ## Core principle
 
 Three things commonly break a first deploy: the **broker pack is incomplete**
@@ -261,9 +267,9 @@ the path: `./scripts/harden-check.sh .env`.
 
 ## Release artifacts and project rules
 
-Each automatic GitHub Release publishes the appliance image plus qmtctl archives
-for Linux, macOS, and Windows on amd64 and arm64 with `SHA256SUMS`. Prefer those
-artifacts over rebuilding the CLI on an operator machine.
+Each automatic GitHub Release publishes the appliance image, qmtctl archives,
+and native Windows x64 launcher ZIP/setup with one `SHA256SUMS`. Prefer those
+artifacts over rebuilding on an operator machine.
 
 This skill owns deployment and validation only. Repository development,
 Conventional Commits, CI gates, automatic SemVer, Docker layering, and cache

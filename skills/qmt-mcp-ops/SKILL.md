@@ -5,8 +5,9 @@ description: Deploy, operate, and troubleshoot the QMT-MCP appliance and qmtctl.
 
 # QMT-MCP Operations
 
-Operate the broker-neutral QMT appliance: Wine runs Windows QMT on native amd64,
-and streamable HTTP MCP exposes xtdata plus gated account and analysis features.
+Operate broker-neutral QMT-MCP: either Wine runs QMT in the Linux appliance, or
+the native Windows launcher supervises an installed QMT directly. Both expose
+xtdata plus gated account and analysis features over streamable HTTP MCP.
 The server and qmtctl prefer MCP `2026-07-28` and automatically retain the 2025
 initialize/session path for older clients at the same `/mcp` URL.
 
@@ -17,13 +18,13 @@ rules, follow `AGENT.md`.
 ## Architecture
 
 ```text
-ghcr.io/juju-w/qmt-mcp                 runtime mount
-Wine + Python 3.12 + MCP           <-- /broker
-broker-neutral image                   QMT + xtquant + broker.yaml + userdata
+Linux/NAS:  Docker + Wine + Python 3.12 + MCP  <-- mounted broker pack
+Windows:    native launcher + bundled Python   --> installed QMT + xtquant
 ```
 
-Switch brokers by mounting a different broker pack. Never bake a terminal,
-credentials, account data, or a personal strategy into the image.
+On Linux, switch brokers by mounting a different broker pack. On Windows, select
+another installed client profile. Never bake a terminal, credentials, account
+data, or a personal strategy into project releases.
 
 ```text
 appliance/mcp/
@@ -37,6 +38,17 @@ specs/                feature specifications
 ```
 
 ## Deploy
+
+### Windows x64
+
+Use the versioned launcher setup or portable ZIP from GitHub Releases. In the
+Setup view, select or detect the installed QMT client, review `xtquant` and
+`userdata_mini`, save, and start. The launcher owns one active profile, binds
+MCP to loopback, stores its token with current-user DPAPI, and waits truthfully
+for interactive broker login. It does not need Docker, a system Python, or a
+system .NET runtime.
+
+### Linux / NAS
 
 Requirements: native amd64 Linux, Docker Compose, and a broker pack containing
 the QMT terminal plus matching xtquant.

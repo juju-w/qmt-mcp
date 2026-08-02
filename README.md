@@ -8,11 +8,12 @@
 [![Docker image](https://img.shields.io/badge/image-ghcr.io%2Fjuju--w%2Fqmt--mcp-2496ED?logo=docker&logoColor=white)](https://github.com/juju-w/qmt-mcp/pkgs/container/qmt-mcp)
 [![Stars](https://img.shields.io/github/stars/juju-w/qmt-mcp?style=social)](https://github.com/juju-w/qmt-mcp/stargazers)
 
-**把依赖 Windows QMT 终端的 `xtquant`，变成可以从任意机器调用的 MCP 服务。**
+**把依赖 Windows QMT 终端的 `xtquant`，变成 Agent 可以直接调用的 MCP 服务。**
 
-QMT-MCP 在原生 amd64 Linux 服务器上常驻 **QMT / MiniQMT**。你通过 RDP/VNC
-完成券商登录，Codex、Claude Code、自建 Agent 和 `qmtctl` 从其他机器通过
-Streamable HTTP MCP 获取行情和可选的账户只读数据。
+QMT-MCP 提供两种运行方式：Windows x64 上使用原生桌面启动器，自动发现/启动
+QMT 与 MCP；Linux/NAS 上使用 Docker + Wine 常驻多个隔离实例。Codex、Claude
+Code、自建 Agent 和 `qmtctl` 都通过 Streamable HTTP MCP 获取行情和可选的账户
+只读数据。
 
 <p align="center">
   <img src="docs/illustrations/qmt-mcp-agent-workflow.webp" width="960" alt="用户向 AI Agent 提出多个自然语言任务，Agent 通过 QMT-MCP 的 xtdata 和 xttrade 能力获取行情、研究、组合风险以及计划中的条件交易结果">
@@ -21,18 +22,21 @@ Streamable HTTP MCP 获取行情和可选的账户只读数据。
 
 ## 它解决的核心问题
 
-- **QMT 不再绑定 Agent 所在的电脑**：终端常驻 Linux/NAS/服务器，Agent 只连接
-  一个带 token 的 `/mcp` 端点。
+- **QMT 不再绑定 Agent 所在的电脑**：可以在本机 Windows 托管，也可以常驻
+  Linux/NAS/服务器；Agent 只连接一个带 token 的 `/mcp` 端点。
 - **AI 不必猜证券代码**：支持中文名、代码、别名、主题和拼音首字母搜索，并可按
   相关性、流动性或规模排序候选。
-- **部署可以复制和隔离**：公共镜像保持券商中立；每个券商或账号实例挂载自己的
-  broker pack、缓存和日志。
+- **部署可以复制和隔离**：Windows 用独立 profile，Docker 用独立 broker pack；
+  公共发行包始终保持券商中立。
 - **不只服务 AI**：Go 编写的单文件 `qmtctl` 同样适合人工排障、自动化脚本和 CI。
 
 项目当前专注于**行情、研究数据和账户只读查询**，没有下单、撤单或划转工具。
 账户查询还需要券商额外开通程序化交易 / 外部 Python 权限。
 
 ## 工作方式
+
+下图是 Linux/NAS 拓扑；Windows 模式由原生 launcher 直接托管同一个 MCP server
+和本机 QMT，不需要容器或 RDP。
 
 ```mermaid
 flowchart LR
@@ -60,6 +64,22 @@ flowchart LR
 ```
 
 ## 快速开始
+
+### Windows x64：不用 Docker
+
+1. 从 [Releases](https://github.com/juju-w/qmt-mcp/releases) 下载
+   `qmt-mcp-launcher_<版本>_setup.exe`，或便携 ZIP。
+2. 打开 QMT-MCP，在 **Setup** 选择券商 QMT 的 `XtItClient.exe` / `XtMiniQmt.exe`；
+   也可以先点 **Detect client**。
+3. 确认 `xtquant` 与 `userdata_mini` 路径，保存后点 **Start**。
+4. 在正常弹出的券商窗口完成人工登录；状态页显示 **Market data: Ready** 后复制
+   本地 MCP 连接。
+
+启动器只监听 `127.0.0.1`，token 用当前 Windows 用户的 DPAPI 加密。发行包内置
+Python 3.12、MCP 依赖和本项目服务端源码，但不包含券商终端、`xtquant`、账号或
+登录凭据，也不会自动填写密码、验证码或交易确认。
+
+### Linux / NAS：Docker appliance
 
 > 运行主机必须是**原生 amd64 Linux**。Apple Silicon 可以开发代码，但不建议生产跑 QMT/Wine。
 
@@ -138,6 +158,7 @@ export QMT_MCP_TOKEN=<token>
 
 | 能力 | 状态 | 说明 |
 |---|---|---|
+| Windows 原生启动器 | ✅ | 无需 Docker、系统 Python 或 .NET；自动发现 QMT、托盘守护、DPAPI token、ZIP/setup 发布 |
 | 持久 QMT 桌面 + RDP/VNC | ✅ | 启动即拉起终端 + MCP；RDP 与可选 VNC 共用单会话 |
 | 行情 `xtdata` | ✅ | 快照、K线、下载历史、合约详情、板块、日历、指数权重 |
 | 合约模糊搜索 | ✅ | 中文名、代码、别名、拼音首字母、板块、主题；支持流动性排序 |
@@ -239,7 +260,8 @@ QMT_DB_URL=postgresql://user:pass@host:5432/qmt
 
 ## 运行要求与限制
 
-- **原生 amd64**：不要在 Apple Silicon 上跑生产，QMT/Wine 可能触发模拟器或 AVX 问题。
+- **Windows 模式**：Windows 10 22H2 / Windows 11 x64；使用券商安装的 QMT 与匹配的 `xtquant`。
+- **Docker 模式**：原生 amd64 Linux；不要在 Apple Silicon 上跑生产，QMT/Wine 可能触发模拟器或 AVX 问题。
 - **Python 3.12**：`xtquant` 官方最高支持到 3.12，本项目固定 Wine 内 Python 3.12。
 - **GBK 区域**：QMT 是 cp936 中文程序，镜像用 `zh_CN.GBK` 构建 Wine prefix。
 - **券商权限**：行情通常只需登录 QMT；账户只读/交易连接需要券商额外开通程序化权限。
@@ -250,6 +272,7 @@ QMT_DB_URL=postgresql://user:pass@host:5432/qmt
 ```text
 appliance/   # Docker appliance：compose、Dockerfile、MCP server、broker pack 工具
 cli/         # qmtctl：Go CLI，走 streamable-http MCP
+launcher/    # Windows x64 原生桌面启动器、打包与安装器
 docs/        # 客户端接入、发布、截图说明
 skills/      # Agent 运维知识库
 specs/       # spec-kit：每个 feature 的 spec/plan/tasks/verification
@@ -276,6 +299,7 @@ specs/       # spec-kit：每个 feature 的 spec/plan/tasks/verification
 
 - `ghcr.io/juju-w/qmt-mcp:X.Y.Z` 与 `latest`（appliance 仅 linux/amd64）
 - Linux / macOS / Windows 的 qmtctl（amd64 + arm64）
+- Windows x64 原生启动器 ZIP 与当前用户安装包
 - `SHA256SUMS` 和 GitHub Release
 
 镜像使用持久 BuildKit cache；普通 MCP 源码变更不会重新安装 Wine 和 Windows

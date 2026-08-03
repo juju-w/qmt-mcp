@@ -394,7 +394,7 @@ jobs:
           python-version: "3.12"
           architecture: x64
           cache: pip
-          cache-dependency-path: appliance/mcp/requirements.txt
+          cache-dependency-path: launcher/packaging/requirements-windows.txt
       - name: Install pinned Inno Setup
         shell: pwsh
         run: choco install innosetup --version=6.7.1 --yes --no-progress

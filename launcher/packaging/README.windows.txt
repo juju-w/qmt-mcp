@@ -4,6 +4,11 @@ QMT-MCP for Windows x64
 This package runs QMT-MCP without Docker, a system Python installation, or a
 system .NET installation. It does not contain QMT or any broker software.
 
+The installer applies transparent NTFS compression to the embedded Python
+runtime. The portable ZIP contains the same runtime but does not change
+filesystem compression attributes. The native launcher uses static-token auth
+and local state; OAuth and PostgreSQL remain available in the Linux appliance.
+
 First run
 ---------
 1. Start QmtMcp.Launcher.exe.

@@ -116,7 +116,7 @@ jobs:
           python-version: "3.12"
           architecture: x64
           cache: pip
-          cache-dependency-path: appliance/mcp/requirements.txt
+          cache-dependency-path: launcher/packaging/requirements-windows.txt
       - name: Install pinned Inno Setup
         shell: pwsh
         run: choco install innosetup --version=6.7.1 --yes --no-progress
@@ -136,6 +136,9 @@ jobs:
           Expand-Archive $Zip $Portable
           & "$Portable/runtime/python/python.exe" -c "import qmt_mcp; print('portable import OK')"
           if ($LASTEXITCODE -ne 0) { throw 'Portable embedded Python smoke failed.' }
+          if (Get-ChildItem $Portable -File -Recurse -Filter '*.pdb') {
+            throw 'Portable package contains debug symbols.'
+          }
 
           $Setup = Resolve-Path 'launcher/artifacts/qmt-mcp-launcher_0.0.0_setup.exe'
           $InstallRoot = Join-Path $env:LOCALAPPDATA 'Programs/QMT-MCP-CI'
@@ -151,6 +154,11 @@ jobs:
                 throw "Installed layout is missing $_"
               }
             }
+          $InstalledBytes = (Get-ChildItem $InstallRoot -File -Recurse |
+            Measure-Object Length -Sum).Sum
+          if ($InstalledBytes -gt 220MB) {
+            throw "Installed layout exceeds 220 MiB: $InstalledBytes bytes."
+          }
           $Uninstall = Start-Process -FilePath "$InstallRoot/unins000.exe" `
             -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') `
             -Wait -PassThru

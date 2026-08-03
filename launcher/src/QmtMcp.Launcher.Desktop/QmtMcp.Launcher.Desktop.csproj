@@ -1,4 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>

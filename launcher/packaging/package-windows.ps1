@@ -71,6 +71,46 @@ function Find-InnoCompiler {
     throw 'Inno Setup 6 compiler (ISCC.exe) was not found.'
 }
 
+function Remove-PackagingOnlyFiles {
+    param(
+        [Parameter(Mandatory = $true)] [string] $StageRoot,
+        [Parameter(Mandatory = $true)] [string] $SitePackagesRoot,
+        [Parameter(Mandatory = $true)] [string] $PythonRoot
+    )
+
+    Get-ChildItem $StageRoot -File -Recurse -Filter '*.pdb' |
+        Remove-Item -Force
+
+    # Keep cryptography, cffi and pycparser together: MCP imports the crypto
+    # bindings at startup and the Windows wheel loads _cffi_backend.
+    @(
+        'pythonwin'
+        'win32com'
+        'win32comext'
+        'adodbapi'
+        'isapi'
+        'bin'
+    ) | ForEach-Object {
+        Get-ChildItem $SitePackagesRoot -Force -Filter $_ -ErrorAction SilentlyContinue |
+            Remove-Item -Recurse -Force
+    }
+    @('win32\Demos', 'win32\include', 'win32\libs', 'win32\scripts') |
+        ForEach-Object {
+            Remove-Item (Join-Path $SitePackagesRoot $_) `
+                -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    Remove-Item (Join-Path $SitePackagesRoot 'PyWin32.chm') -Force -ErrorAction SilentlyContinue
+
+    @(Get-ChildItem $SitePackagesRoot -Directory -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -in @('test', 'tests') }) |
+        Sort-Object { $_.FullName.Length } -Descending |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    Get-ChildItem $PythonRoot -Directory -Recurse -Filter '__pycache__' -ErrorAction SilentlyContinue |
+        Remove-Item -Recurse -Force
+    Get-ChildItem $PythonRoot -File -Recurse -Include '*.pyc', '*.pyo' -ErrorAction SilentlyContinue |
+        Remove-Item -Force
+}
+
 if (-not $IsWindows) {
     throw 'Windows packaging must run on Windows x64.'
 }
@@ -123,7 +163,7 @@ New-Item -ItemType Directory -Force -Path $SitePackages | Out-Null
     'import site'
 ) | Set-Content -Encoding ASCII (Join-Path $RuntimeDirectory 'python312._pth')
 
-$Requirements = Join-Path $RepositoryRoot 'appliance\mcp\requirements.txt'
+$Requirements = Join-Path $PSScriptRoot 'requirements-windows.txt'
 Invoke-Checked -Command $DependencyPython -CommandArguments @(
     '-m', 'pip', 'install',
     '--disable-pip-version-check',
@@ -138,8 +178,10 @@ New-Item -ItemType Directory -Force -Path $ServerDirectory | Out-Null
 Copy-Item (Join-Path $RepositoryRoot 'appliance\mcp\qmt_mcp.py') $ServerDirectory
 Get-ChildItem (Join-Path $RepositoryRoot 'appliance\mcp') -Directory -Filter 'qmt_mcp_*' |
     ForEach-Object { Copy-Item $_.FullName $ServerDirectory -Recurse }
-Get-ChildItem $StageDirectory -Directory -Recurse -Filter '__pycache__' |
-    Remove-Item -Recurse -Force
+Remove-PackagingOnlyFiles `
+    -StageRoot $StageDirectory `
+    -SitePackagesRoot $SitePackages `
+    -PythonRoot $RuntimeDirectory
 
 Copy-Item (Join-Path $RepositoryRoot 'LICENSE') $StageDirectory
 Copy-Item (Join-Path $PSScriptRoot 'README.windows.txt') (Join-Path $StageDirectory 'README.txt')
@@ -148,7 +190,7 @@ Set-Content -Encoding ASCII (Join-Path $StageDirectory 'VERSION') $Version
 $EmbeddedPython = Join-Path $RuntimeDirectory 'python.exe'
 Invoke-Checked -Command $EmbeddedPython -CommandArguments @(
     '-c',
-    "import os; import qmt_mcp; from pathlib import Path; from qmt_mcp_core.runtime_paths import runtime_path; from qmt_mcp_xtdata.search_cache import cache_path; assert runtime_path(r'D:\QMT', 'nt') == r'D:\QMT'; expected = Path(os.environ['LOCALAPPDATA']) / 'QMT-MCP' / 'cache' / 'instrument-search-v1.json'; assert cache_path(str(expected)) == expected; print('native MCP import and cache sandbox OK')"
+    "import importlib.util, os; import cffi, cryptography, numpy, pandas, qmt_mcp, win32api, win32job; from pathlib import Path; from qmt_mcp_core.runtime_paths import runtime_path; from qmt_mcp_xtdata.search_cache import cache_path; assert importlib.util.find_spec('asyncpg') is None; assert runtime_path(r'D:\QMT', 'nt') == r'D:\QMT'; expected = Path(os.environ['LOCALAPPDATA']) / 'QMT-MCP' / 'cache' / 'instrument-search-v1.json'; assert cache_path(str(expected)) == expected; print('lean native MCP runtime OK')"
 )
 
 $RequiredPaths = @(

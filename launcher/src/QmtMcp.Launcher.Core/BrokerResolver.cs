@@ -1,19 +1,11 @@
 namespace QmtMcp.Launcher.Core;
 
-public sealed class BrokerResolver(
-    ILauncherFileSystem fileSystem,
-    IReadOnlyList<string>? xtquantSearchRoots = null)
+public sealed class BrokerResolver(ILauncherFileSystem fileSystem)
 {
     private static readonly HashSet<string> XtquantMarker = new(StringComparer.OrdinalIgnoreCase)
     {
         "__init__.py",
     };
-    private readonly IReadOnlyList<string> externalXtquantSearchRoots = (xtquantSearchRoots ?? [])
-        .Where(WindowsPath.IsAbsolute)
-        .Select(WindowsPath.Normalize)
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .ToArray();
-
     public ResolutionResult Resolve(BrokerSelection selection, CancellationToken cancellationToken = default)
     {
         if (!WindowsPath.IsAbsolute(selection.ClientPath))
@@ -90,12 +82,15 @@ public sealed class BrokerResolver(
             return PartialBroker(xtquantRoot: qmtRoot);
         }
 
-        var markers = FindXtquantRoots(qmtRoot, 5, 16, cancellationToken);
+        var markers = fileSystem.FindFiles(qmtRoot, XtquantMarker, 5, 16, cancellationToken)
+            .Where(path => string.Equals(WindowsPath.GetFileName(WindowsPath.GetDirectoryName(path)), "xtquant", StringComparison.OrdinalIgnoreCase))
+            .Select(path => WindowsPath.Parent(WindowsPath.GetDirectoryName(path)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
-        if (markers.Length == 1)
+        if (markers.Length == 0)
         {
-            evidence.Add($"xtquant:detected:{markers[0]}");
-            return PartialBroker(xtquantRoot: markers[0]);
+            return ResolutionResult.Fail("xtquant_missing", "No xtquant package was found under the selected QMT tree.");
         }
 
         if (markers.Length > 1)
@@ -106,51 +101,8 @@ public sealed class BrokerResolver(
                 markers);
         }
 
-        var externalMarkers = externalXtquantSearchRoots
-            .SelectMany(root => FindXtquantRoots(root, 4, 16, cancellationToken))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (externalMarkers.Length == 1)
-        {
-            evidence.Add($"xtquant:external:{externalMarkers[0]}");
-            return PartialBroker(xtquantRoot: externalMarkers[0]);
-        }
-
-        if (externalMarkers.Length > 1)
-        {
-            return ResolutionResult.Fail(
-                "xtquant_ambiguous",
-                "Multiple xtquant packages were found in the local SDK roots. Select the matching import root explicitly.",
-                externalMarkers);
-        }
-
-        return ResolutionResult.Fail(
-            "xtquant_missing",
-            "No xtquant package was found under the selected QMT tree or local SDK roots.");
-    }
-
-    private string[] FindXtquantRoots(
-        string searchRoot,
-        int maxDepth,
-        int maxResults,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var normalizedRoot = WindowsPath.Normalize(searchRoot);
-        var roots = new List<string>();
-        if (fileSystem.FileExists(WindowsPath.Combine(normalizedRoot, "xtquant", "__init__.py")))
-        {
-            roots.Add(normalizedRoot);
-        }
-
-        roots.AddRange(
-            fileSystem.FindFiles(normalizedRoot, XtquantMarker, maxDepth, maxResults, cancellationToken)
-                .Where(path => string.Equals(
-                    WindowsPath.GetFileName(WindowsPath.GetDirectoryName(path)),
-                    "xtquant",
-                    StringComparison.OrdinalIgnoreCase))
-                .Select(path => WindowsPath.Parent(WindowsPath.GetDirectoryName(path))));
-        return roots.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        evidence.Add($"xtquant:detected:{markers[0]}");
+        return PartialBroker(xtquantRoot: markers[0]);
     }
 
     private ResolutionResult ResolveUserdata(string? explicitPath, string qmtRoot, List<string> evidence)

@@ -159,7 +159,7 @@ internal sealed class LauncherRuntime : IAsyncDisposable
             paths.LocalDataRoot,
             paths.LogsRoot,
             new ProfileRepository(paths.ProfilesPath),
-            new BrokerResolver(fileSystem, GetWindowsXtquantSearchRoots(paths)),
+            new BrokerResolver(fileSystem),
             new BrokerDiscovery(fileSystem, processHost),
             GetWindowsDiscoveryRoots(),
             new DpapiSecretStore(paths.SecretsRoot),
@@ -225,22 +225,6 @@ internal sealed class LauncherRuntime : IAsyncDisposable
         }
 
         return roots.Where(Directory.Exists).Take(32).ToArray();
-    }
-
-    [SupportedOSPlatform("windows")]
-    private static string[] GetWindowsXtquantSearchRoots(LauncherPaths paths)
-    {
-        var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            Path.Combine(paths.LocalDataRoot, "sdk"),
-        };
-        var configured = Environment.GetEnvironmentVariable("QMT_XTQUANT_DIR_WIN");
-        if (!string.IsNullOrWhiteSpace(configured) && Path.IsPathFullyQualified(configured))
-        {
-            roots.Add(configured);
-        }
-
-        return roots.ToArray();
     }
 
     private static void AddEnvironmentRoot(HashSet<string> roots, Environment.SpecialFolder folder)

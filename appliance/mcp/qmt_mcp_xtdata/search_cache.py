@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import ntpath
 import os
+import posixpath
 import tempfile
 import time
 from collections.abc import Callable
@@ -29,14 +31,38 @@ def now_iso() -> str:
     return datetime.now(UTC).astimezone().isoformat(timespec="seconds")
 
 
+def _cache_path_is_allowed(path: Path, *, platform_name: str, local_appdata: str = "") -> bool:
+    if platform_name == "nt":
+        if not local_appdata:
+            return False
+        root = ntpath.abspath(ntpath.join(local_appdata, "QMT-MCP"))
+        candidate = ntpath.abspath(str(path))
+        try:
+            common = ntpath.commonpath((root, candidate))
+        except ValueError:
+            return False
+        return ntpath.normcase(common) == ntpath.normcase(root)
+
+    root = "/broker"
+    candidate = posixpath.abspath(str(path).replace("\\", "/"))
+    try:
+        return posixpath.commonpath((root, candidate)) == root
+    except ValueError:
+        return False
+
+
 def cache_path(path: str | None = None) -> Path:
     p = Path(path or os.environ.get("QMT_INSTRUMENT_CACHE_PATH", str(DEFAULT_CACHE_PATH)))
-    normalized = str(p).replace("\\", "/")
-    if normalized == "/broker" or normalized.startswith("/broker/"):
+    if _cache_path_is_allowed(
+        p,
+        platform_name=os.name,
+        local_appdata=os.environ.get("LOCALAPPDATA", ""),
+    ):
         return p
     if os.environ.get("QMT_MCP_TEST_MODE") == "1" or "pytest" in os.environ.get("PYTEST_CURRENT_TEST", ""):
         return p
-    raise McpCoreError("validation", "instrument cache path must live under /broker", {"path": str(p)})
+    allowed_root = r"%LOCALAPPDATA%\QMT-MCP" if os.name == "nt" else "/broker"
+    raise McpCoreError("validation", f"instrument cache path must live under {allowed_root}", {"path": str(p)})
 
 
 def load_cache(path: str | None = None) -> dict[str, Any] | None:

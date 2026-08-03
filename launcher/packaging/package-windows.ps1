@@ -148,7 +148,7 @@ Set-Content -Encoding ASCII (Join-Path $StageDirectory 'VERSION') $Version
 $EmbeddedPython = Join-Path $RuntimeDirectory 'python.exe'
 Invoke-Checked -Command $EmbeddedPython -CommandArguments @(
     '-c',
-    "import qmt_mcp; from qmt_mcp_core.runtime_paths import runtime_path; assert runtime_path(r'D:\QMT', 'nt') == r'D:\QMT'; print('native MCP import OK')"
+    "import os; import qmt_mcp; from pathlib import Path; from qmt_mcp_core.runtime_paths import runtime_path; from qmt_mcp_xtdata.search_cache import cache_path; assert runtime_path(r'D:\QMT', 'nt') == r'D:\QMT'; expected = Path(os.environ['LOCALAPPDATA']) / 'QMT-MCP' / 'cache' / 'instrument-search-v1.json'; assert cache_path(str(expected)) == expected; print('native MCP import and cache sandbox OK')"
 )
 
 $RequiredPaths = @(

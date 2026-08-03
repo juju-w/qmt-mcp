@@ -81,11 +81,9 @@ function Remove-PackagingOnlyFiles {
     Get-ChildItem $StageRoot -File -Recurse -Filter '*.pdb' |
         Remove-Item -Force
 
-    # The launcher always uses static-token auth. PyJWT handles a missing
-    # cryptography backend, while OAuth remains available in the appliance.
+    # The MCP server imports cryptography directly. Its current Windows wheel
+    # does not use the legacy cffi/pycparser packages for this runtime path.
     @(
-        'cryptography'
-        'cryptography-*.dist-info'
         'cffi'
         'cffi-*.dist-info'
         'pycparser'
@@ -198,7 +196,7 @@ Set-Content -Encoding ASCII (Join-Path $StageDirectory 'VERSION') $Version
 $EmbeddedPython = Join-Path $RuntimeDirectory 'python.exe'
 Invoke-Checked -Command $EmbeddedPython -CommandArguments @(
     '-c',
-    "import importlib.util, os; import numpy, pandas, qmt_mcp, win32api, win32job; from pathlib import Path; from qmt_mcp_core.runtime_paths import runtime_path; from qmt_mcp_xtdata.search_cache import cache_path; assert importlib.util.find_spec('asyncpg') is None; assert importlib.util.find_spec('cryptography') is None; assert runtime_path(r'D:\QMT', 'nt') == r'D:\QMT'; expected = Path(os.environ['LOCALAPPDATA']) / 'QMT-MCP' / 'cache' / 'instrument-search-v1.json'; assert cache_path(str(expected)) == expected; print('lean native MCP runtime OK')"
+    "import importlib.util, os; import cryptography, numpy, pandas, qmt_mcp, win32api, win32job; from pathlib import Path; from qmt_mcp_core.runtime_paths import runtime_path; from qmt_mcp_xtdata.search_cache import cache_path; assert importlib.util.find_spec('asyncpg') is None; assert importlib.util.find_spec('cffi') is None; assert runtime_path(r'D:\QMT', 'nt') == r'D:\QMT'; expected = Path(os.environ['LOCALAPPDATA']) / 'QMT-MCP' / 'cache' / 'instrument-search-v1.json'; assert cache_path(str(expected)) == expected; print('lean native MCP runtime OK')"
 )
 
 $RequiredPaths = @(

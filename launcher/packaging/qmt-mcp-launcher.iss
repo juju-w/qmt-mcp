@@ -36,6 +36,18 @@ VersionInfoDescription=Native Windows launcher for QMT-MCP
 CloseApplications=yes
 RestartApplications=no
 
+[InstallDelete]
+; Remove files left by the pre-single-file launcher and rebuild packaged trees.
+; User profiles, secrets, logs, and caches live outside {app} under QMT-MCP.
+Type: filesandordirs; Name: "{app}\runtime"
+Type: filesandordirs; Name: "{app}\server"
+Type: filesandordirs; Name: "{app}\Assets"
+Type: files; Name: "{app}\*.dll"
+Type: files; Name: "{app}\*.pdb"
+Type: files; Name: "{app}\*.deps.json"
+Type: files; Name: "{app}\*.runtimeconfig.json"
+Type: files; Name: "{app}\createdump.exe"
+
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

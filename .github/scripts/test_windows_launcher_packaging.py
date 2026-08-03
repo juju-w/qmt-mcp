@@ -29,8 +29,7 @@ class WindowsLauncherPackagingTests(unittest.TestCase):
         self.assertIn("<IncludeNativeLibrariesForSelfExtract>true", project)
         self.assertIn("-Filter '*.pdb'", script)
         self.assertIn("'test', 'tests'", script)
-        self.assertIn("import cryptography, numpy, pandas, qmt_mcp", script)
-        self.assertIn("importlib.util.find_spec('cffi') is None", script)
+        self.assertIn("import cffi, cryptography, numpy, pandas, qmt_mcp", script)
 
     def test_windows_lock_excludes_appliance_only_database_driver(self) -> None:
         requirements = WINDOWS_REQUIREMENTS.read_text(encoding="utf-8")

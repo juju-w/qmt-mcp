@@ -81,13 +81,9 @@ function Remove-PackagingOnlyFiles {
     Get-ChildItem $StageRoot -File -Recurse -Filter '*.pdb' |
         Remove-Item -Force
 
-    # The MCP server imports cryptography directly. Its current Windows wheel
-    # does not use the legacy cffi/pycparser packages for this runtime path.
+    # Keep cryptography, cffi and pycparser together: MCP imports the crypto
+    # bindings at startup and the Windows wheel loads _cffi_backend.
     @(
-        'cffi'
-        'cffi-*.dist-info'
-        'pycparser'
-        'pycparser-*.dist-info'
         'pythonwin'
         'win32com'
         'win32comext'
@@ -103,8 +99,6 @@ function Remove-PackagingOnlyFiles {
             Remove-Item (Join-Path $SitePackagesRoot $_) `
                 -Recurse -Force -ErrorAction SilentlyContinue
         }
-    Get-ChildItem $SitePackagesRoot -File -Filter '_cffi_backend*' -ErrorAction SilentlyContinue |
-        Remove-Item -Force
     Remove-Item (Join-Path $SitePackagesRoot 'PyWin32.chm') -Force -ErrorAction SilentlyContinue
 
     @(Get-ChildItem $SitePackagesRoot -Directory -Recurse -ErrorAction SilentlyContinue |
@@ -196,7 +190,7 @@ Set-Content -Encoding ASCII (Join-Path $StageDirectory 'VERSION') $Version
 $EmbeddedPython = Join-Path $RuntimeDirectory 'python.exe'
 Invoke-Checked -Command $EmbeddedPython -CommandArguments @(
     '-c',
-    "import importlib.util, os; import cryptography, numpy, pandas, qmt_mcp, win32api, win32job; from pathlib import Path; from qmt_mcp_core.runtime_paths import runtime_path; from qmt_mcp_xtdata.search_cache import cache_path; assert importlib.util.find_spec('asyncpg') is None; assert importlib.util.find_spec('cffi') is None; assert runtime_path(r'D:\QMT', 'nt') == r'D:\QMT'; expected = Path(os.environ['LOCALAPPDATA']) / 'QMT-MCP' / 'cache' / 'instrument-search-v1.json'; assert cache_path(str(expected)) == expected; print('lean native MCP runtime OK')"
+    "import importlib.util, os; import cffi, cryptography, numpy, pandas, qmt_mcp, win32api, win32job; from pathlib import Path; from qmt_mcp_core.runtime_paths import runtime_path; from qmt_mcp_xtdata.search_cache import cache_path; assert importlib.util.find_spec('asyncpg') is None; assert runtime_path(r'D:\QMT', 'nt') == r'D:\QMT'; expected = Path(os.environ['LOCALAPPDATA']) / 'QMT-MCP' / 'cache' / 'instrument-search-v1.json'; assert cache_path(str(expected)) == expected; print('lean native MCP runtime OK')"
 )
 
 $RequiredPaths = @(

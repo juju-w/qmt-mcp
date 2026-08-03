@@ -4,9 +4,9 @@
 
 ## 项目本质
 
-券商无关的 **QMT-MCP appliance**：Wine(new wow64) 在原生 amd64 上跑 Windows QMT 终端，
-`xtquant` 能力经 MCP(streamable-http+token) 暴露给 Agent。基础镜像 broker 中立，券商相关的终端/xtquant/
-配置作为运行时挂载的 **broker pack**（`/broker`）。详见 `README.md`。
+券商无关的 **QMT-MCP**：支持 Linux/NAS 上的 Docker + Wine appliance，也支持 Windows x64
+原生桌面启动器。两种拓扑共享 MCP server 与 streamable-http 工具契约，均不分发券商终端、
+`xtquant`、账号或凭据。详见 `README.md`。
 
 ## 当前状态（feature 进度）
 
@@ -39,13 +39,15 @@
 | 025 MCP 任务状态通知 | ✅ 完成——2026-07-28 `subscriptions/listen` + `notifications/tasks`，qmtctl 通知优先/轮询回退 |
 | 026 安全持久桌面 | ✅ 完成——xrdp 0.10 TLS-only、启动预建单会话、断线重连、loopback 默认与 manual 回滚 |
 | 027 VNC 远程访问 | ✅ 完成——可保存凭据/移动端 raw VNC，复用 026 的唯一 Xorg/QMT 会话，默认关闭与 loopback |
+| 028 Windows 原生启动器 | 🟡 实现中——.NET 10/Avalonia、中英文切换、DPAPI、终端探测/守护、内置 Python、ZIP/setup、Windows CI/Release |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。
 
 ## 工作环境（关键）
 
-- 开发机写代码，**构建/运行在一台原生 amd64 Linux 主机上**（Wine 需要真 amd64；可本机或远程）。
+- Docker appliance 构建/运行在**原生 amd64 Linux**（Wine 需要真 amd64）；Windows launcher
+  核心/UI 可在 macOS 开发，最终打包和安装 smoke 必须在 Windows x64 CI/真机完成。
 - 若用远程主机，访问信息放本地 `.env`（如 `SSH_*`）——**已 gitignore，绝不提交**。
 - 在该主机上用 docker 构建/部署。本地构建 tag `qmt-appliance-base:local`，发布镜像 `ghcr.io/juju-w/qmt-mcp`；容器按实例命名（如 `qmt-<broker-id>`）。
 - **Python 固定 3.12**：`xtquant` 官方最高只支持到 3.12，不要升级 Wine 内的 Python。
@@ -117,7 +119,7 @@ registry._tools['qmt_xtdata_snapshot']['callable'](codes=['000001.SZ'])
   `feat(cli): add command`、`fix(release): preserve cache`、`docs(skills): sync qmtctl usage`。
 - `feat` 触发 minor，`!` 或 `BREAKING CHANGE:` 触发 major，其他被接受的非破坏类型触发 patch。
 - 正常发布不要手改 `VERSION`、创建 tag 或手工发 Release。`main` CI 成功后自动生成 release commit，
-  构建 GHCR 镜像、可选国内镜像和 Linux/macOS/Windows × amd64/arm64 的 qmtctl 包。
+  构建 GHCR 镜像、可选国内镜像、六平台 qmtctl 包和 Windows x64 launcher ZIP/setup。
 - 合并后必须观察 `main` CI 和后续 Release 到终态；失败时修复根因并重新验证，不能只以 PR CI 通过收尾。
 - Dockerfile 按依赖失效边界分层：稳定系统/Wine/Python 依赖放在频繁变化的源码前，下载与清理留在同一层。
   最新版本可更新共享 `buildcache`，历史 tag 重试只能读取，不能覆盖。
@@ -142,6 +144,11 @@ cd ../..
 python -m unittest discover -s .github/scripts -p 'test_*.py'
 go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
 git diff --check
+
+cd launcher
+dotnet restore QmtMcp.Launcher.slnx --locked-mode
+dotnet build QmtMcp.Launcher.slnx --configuration Release --no-restore
+dotnet test QmtMcp.Launcher.slnx --configuration Release --no-build
 ```
 
 ## 流程

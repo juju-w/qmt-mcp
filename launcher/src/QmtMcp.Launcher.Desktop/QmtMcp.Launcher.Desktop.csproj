@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationTitle>QMT-MCP</ApplicationTitle>
+    <ApplicationIcon>Assets/app-icon.ico</ApplicationIcon>
+    <AssemblyName>QmtMcp.Launcher</AssemblyName>
+    <RootNamespace>QmtMcp.Launcher.Desktop</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <ProjectReference Include="../QmtMcp.Launcher.Core/QmtMcp.Launcher.Core.csproj" />
+    <ProjectReference Include="../QmtMcp.Launcher.Windows/QmtMcp.Launcher.Windows.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>QmtMcp.Launcher.Desktop.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

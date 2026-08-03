@@ -81,6 +81,91 @@ jobs:
       - name: Unit tests
         run: pytest -m 'not integration'
 
+  launcher-core:
+    name: Native launcher (.NET, macOS)
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: launcher
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: launcher/global.json
+          cache: true
+          cache-dependency-path: launcher/**/packages.lock.json
+      - name: Restore locked dependencies
+        run: dotnet restore QmtMcp.Launcher.slnx --locked-mode
+      - name: Build launcher
+        run: dotnet build QmtMcp.Launcher.slnx --configuration Release --no-restore
+      - name: Run launcher core tests
+        run: dotnet test QmtMcp.Launcher.slnx --configuration Release --no-build
+
+  launcher-windows-package:
+    name: Native launcher package (Windows x64)
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: launcher/global.json
+          cache: true
+          cache-dependency-path: launcher/**/packages.lock.json
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+          architecture: x64
+          cache: pip
+          cache-dependency-path: appliance/mcp/requirements.txt
+      - name: Install pinned Inno Setup
+        shell: pwsh
+        run: choco install innosetup --version=6.7.1 --yes --no-progress
+      - name: Build and test launcher
+        shell: pwsh
+        run: |
+          dotnet restore launcher/QmtMcp.Launcher.slnx --locked-mode
+          dotnet test launcher/QmtMcp.Launcher.slnx --configuration Release --no-restore
+      - name: Build ZIP and per-user installer
+        shell: pwsh
+        run: ./launcher/packaging/package-windows.ps1 -Version 0.0.0
+      - name: Smoke portable and installed layouts
+        shell: pwsh
+        run: |
+          $Zip = Resolve-Path 'launcher/artifacts/qmt-mcp-launcher_0.0.0_windows_x64.zip'
+          $Portable = Join-Path $env:GITHUB_WORKSPACE 'launcher/artifacts/portable-smoke'
+          Expand-Archive $Zip $Portable
+          & "$Portable/runtime/python/python.exe" -c "import qmt_mcp; print('portable import OK')"
+          if ($LASTEXITCODE -ne 0) { throw 'Portable embedded Python smoke failed.' }
+
+          $Setup = Resolve-Path 'launcher/artifacts/qmt-mcp-launcher_0.0.0_setup.exe'
+          $InstallRoot = Join-Path $env:LOCALAPPDATA 'Programs/QMT-MCP-CI'
+          $Install = Start-Process -FilePath $Setup.Path `
+            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$InstallRoot") `
+            -Wait -PassThru
+          if ($Install.ExitCode -ne 0) {
+            throw "Installer smoke failed with exit code $($Install.ExitCode)."
+          }
+          @('QmtMcp.Launcher.exe', 'runtime/python/python.exe', 'server/qmt_mcp.py') |
+            ForEach-Object {
+              if (-not (Test-Path (Join-Path $InstallRoot $_))) {
+                throw "Installed layout is missing $_"
+              }
+            }
+          $Uninstall = Start-Process -FilePath "$InstallRoot/unins000.exe" `
+            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') `
+            -Wait -PassThru
+          if ($Uninstall.ExitCode -ne 0) {
+            throw "Uninstaller smoke failed with exit code $($Uninstall.ExitCode)."
+          }
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: windows-launcher-smoke
+          path: |
+            launcher/artifacts/*.zip
+            launcher/artifacts/*.exe
+            launcher/artifacts/LAUNCHER_SHA256SUMS
+          if-no-files-found: error
+
   protocol-conformance:
     name: MCP 2026 + legacy conformance
     runs-on: ubuntu-latest

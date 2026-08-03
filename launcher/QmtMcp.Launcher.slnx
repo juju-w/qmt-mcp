@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/QmtMcp.Launcher.Core/QmtMcp.Launcher.Core.csproj" />
+  <Project Path="src/QmtMcp.Launcher.Windows/QmtMcp.Launcher.Windows.csproj" />
+  <Project Path="src/QmtMcp.Launcher.Desktop/QmtMcp.Launcher.Desktop.csproj" />
+  <Project Path="tests/QmtMcp.Launcher.Core.Tests/QmtMcp.Launcher.Core.Tests.csproj" />
+  <Project Path="tests/QmtMcp.Launcher.Desktop.Tests/QmtMcp.Launcher.Desktop.Tests.csproj" />
+  <Project Path="tests/QmtMcp.Launcher.Windows.Tests/QmtMcp.Launcher.Windows.Tests.csproj" />
+</Solution>

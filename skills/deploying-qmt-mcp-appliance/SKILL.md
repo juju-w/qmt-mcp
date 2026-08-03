@@ -8,6 +8,12 @@ description: Build, deploy, and verify the QMT-MCP appliance locally or on remot
 First-deploy and remote-deploy failures, and how to verify the result. For steady-state
 operations, tool tables, and `qmtctl` usage see **qmt-mcp-ops**.
 
+This skill owns the Linux/NAS Docker topology. For a Windows x64 host with QMT
+installed locally, use the native launcher Release instead: select/detect the
+client in its Setup view, review resolved paths, and start it without Docker or
+system Python/.NET. Do not apply Wine, broker-pack, RDP, or Compose diagnostics
+to that topology.
+
 ## Core principle
 
 Three things commonly break a first deploy: the **broker pack is incomplete**
@@ -22,12 +28,14 @@ that persistent display, not another headless QMT stack.
 | Check | Command | Requirement |
 |---|---|---|
 | Native amd64 | `dpkg --print-architecture` | `amd64`. Apple Silicon = emulation, QMT hits Rosetta AVX |
-| Disk | `df -h /` | **≥ 12 GB free.** Final image ≈ 8.7 GB, build cache adds ≈ 5 GB |
-| Real disk mount | — | Pack must NOT be on tmpfs/ramfs (RAM exhaustion) |
+| Disk | `df -h <build-dir> <pack-dir>` | **≥ 12 GB free** on the exact SSD/HDD mounts used for builds and broker data |
+| Real disk mount | `findmnt -T <build-dir>` | Never use system `/tmp`, tmpfs, or ramfs for the build workspace, Docker data/cache, broker pack, or task store |
 | Host tools | `command -v 7z unzip` | `make-broker-pack.sh` needs `7z`; `unzip` (zip) or `unrar` (RAR5) |
 
 Docker's real usage may live under `/var/lib/containerd`, not `/var/lib/docker` — check
-both when hunting space. `docker builder prune -af` reclaims the cache after a build.
+both when hunting space. On NAS hosts, place the workspace and Docker data root on
+an SSD or HDD-backed persistent mount before building. `docker builder prune -af`
+reclaims the cache after a build.
 
 ## Gotcha 1: CRLF from a Windows checkout kills the image
 
@@ -111,8 +119,8 @@ To verify the server headlessly without an RDP session:
 
 ```bash
 docker exec -u wineuser -d <container> bash -lc \
-  'nohup /usr/local/bin/qmt-supervisor.sh > /tmp/sup.log 2>&1'
-sleep 50 && docker exec <container> cat /tmp/sup.log   # expect "Application startup complete"
+  'mkdir -p /broker/logs && nohup /usr/local/bin/qmt-supervisor.sh > /broker/logs/supervisor-smoke.log 2>&1'
+sleep 50 && docker exec <container> cat /broker/logs/supervisor-smoke.log   # expect "Application startup complete"
 ```
 
 In either mode, `xtdata: degraded` + `无法连接xtquant服务` and
@@ -259,9 +267,9 @@ the path: `./scripts/harden-check.sh .env`.
 
 ## Release artifacts and project rules
 
-Each automatic GitHub Release publishes the appliance image plus qmtctl archives
-for Linux, macOS, and Windows on amd64 and arm64 with `SHA256SUMS`. Prefer those
-artifacts over rebuilding the CLI on an operator machine.
+Each automatic GitHub Release publishes the appliance image, qmtctl archives,
+and native Windows x64 launcher ZIP/setup with one `SHA256SUMS`. Prefer those
+artifacts over rebuilding on an operator machine.
 
 This skill owns deployment and validation only. Repository development,
 Conventional Commits, CI gates, automatic SemVer, Docker layering, and cache

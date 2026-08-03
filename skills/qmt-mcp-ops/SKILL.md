@@ -5,8 +5,9 @@ description: Deploy, operate, and troubleshoot the QMT-MCP appliance and qmtctl.
 
 # QMT-MCP Operations
 
-Operate the broker-neutral QMT appliance: Wine runs Windows QMT on native amd64,
-and streamable HTTP MCP exposes xtdata plus gated account and analysis features.
+Operate broker-neutral QMT-MCP: either Wine runs QMT in the Linux appliance, or
+the native Windows launcher supervises an installed QMT directly. Both expose
+xtdata plus gated account and analysis features over streamable HTTP MCP.
 The server and qmtctl prefer MCP `2026-07-28` and automatically retain the 2025
 initialize/session path for older clients at the same `/mcp` URL.
 
@@ -17,13 +18,13 @@ rules, follow `AGENT.md`.
 ## Architecture
 
 ```text
-ghcr.io/juju-w/qmt-mcp                 runtime mount
-Wine + Python 3.12 + MCP           <-- /broker
-broker-neutral image                   QMT + xtquant + broker.yaml + userdata
+Linux/NAS:  Docker + Wine + Python 3.12 + MCP  <-- mounted broker pack
+Windows:    native launcher + bundled Python   --> installed QMT + xtquant
 ```
 
-Switch brokers by mounting a different broker pack. Never bake a terminal,
-credentials, account data, or a personal strategy into the image.
+On Linux, switch brokers by mounting a different broker pack. On Windows, select
+another installed client profile. Never bake a terminal, credentials, account
+data, or a personal strategy into project releases.
 
 ```text
 appliance/mcp/
@@ -37,6 +38,17 @@ specs/                feature specifications
 ```
 
 ## Deploy
+
+### Windows x64
+
+Use the versioned launcher setup or portable ZIP from GitHub Releases. In the
+Setup view, select or detect the installed QMT client, review `xtquant` and
+`userdata_mini`, save, and start. The launcher owns one active profile, binds
+MCP to loopback, stores its token with current-user DPAPI, and waits truthfully
+for interactive broker login. It does not need Docker, a system Python, or a
+system .NET runtime.
+
+### Linux / NAS
 
 Requirements: native amd64 Linux, Docker Compose, and a broker pack containing
 the QMT terminal plus matching xtquant.
@@ -211,6 +223,13 @@ Market data, account queries, options, reference data, and portfolio analysis
 are read-only. Sector and formula families can mutate QMT-managed state or write
 factor output, so they are disabled by default and constrained server-side.
 
+The current xttrade surface is intentionally read-only: it exposes account,
+asset, position, order, trade, and portfolio queries when the broker grants
+permission. The connector, readiness, authorization, and scope model are the
+extension point for future guarded order and cancel tools, but no trading
+execution tool is registered today. Agents must not claim that conditional or
+scheduled orders can already be submitted through QMT-MCP.
+
 Important workflows:
 
 - Resolve a phrase with search/resolve before requesting snapshot or bars.
@@ -287,7 +306,7 @@ qmtctl --task-mode detach --json cache refresh --force
 qmtctl task wait tsk_<id>
 qmtctl --json task get tsk_<id>
 qmtctl subscription add --id strategy1 510300.SH,510500.SH
-qmtctl portfolio risk --account 123456789 --max-single-weight 0.3
+qmtctl portfolio risk --account <account-id> --max-single-weight 0.3
 qmtctl option vix-inputs --family 300ETF
 qmtctl ref financial 600000.SH --tables Income,CashFlow --start 20250101
 qmtctl sector import-json --sector MCP/strategy1/latest-signal --file result.json
@@ -321,7 +340,8 @@ qmtctl smoke --code 510300.SH
 - Put remote MCP behind HTTPS; bind RDP and optional raw VNC locally and reach
   them through VPN/SSH.
 - Run `appliance/scripts/harden-check.sh` before non-loopback deployment.
-- Keep destructive trading tools out of the default surface.
+- No trading execution tools are currently registered. Any future write family
+  must be separately gated, scoped, audited, and disabled by default.
 - Do not commit broker binaries, account identifiers, `.env`, or personal
   strategy data.
 

@@ -1,4 +1,4 @@
-# qmt-mcp · Run QMT in Docker, plug it into AI agents over MCP
+# qmt-mcp · Connect QMT to AI agents over MCP
 
 🌐 [简体中文](README.md) · **English**
 
@@ -10,14 +10,19 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/juju-w/qmt-mcp?style=social)](https://github.com/juju-w/qmt-mcp/stargazers)
 
-Run the Windows **QMT / MiniQMT terminal** under Wine **inside a Docker container**
-and expose its China A-share market-data and account capabilities to AI agents
-over **MCP (Model Context Protocol)**. `docker compose up` one container, mount a
-broker pack, and you're live.
+Expose the Windows **QMT / MiniQMT terminal** to AI agents over **MCP (Model
+Context Protocol)**. On Windows x64, the native desktop launcher discovers and
+supervises QMT without Docker or a system Python/.NET install. On Linux/NAS, the
+Docker appliance runs broker-neutral, isolated Wine instances.
 
 > **Core idea**: the base image is **broker-agnostic** — switch brokers by swapping
 > a mounted **broker pack**, never by rebuilding. One host can run several brokers
 > in parallel.
+
+<p align="center">
+  <img src="docs/illustrations/qmt-mcp-agent-workflow-en.webp" width="960" alt="A user gives an AI Agent several natural-language tasks; the Agent uses QMT-MCP xtdata and xttrade capabilities for market data, research, portfolio risk, and planned conditional trading">
+</p>
+<p align="center"><sub>xtdata scenarios are available today; xttrade account and portfolio queries require broker permission, while conditional trading remains a planned extension.</sub></p>
 
 ```text
 immutable base image  ghcr.io/juju-w/qmt-mcp           mounted at runtime
@@ -27,14 +32,6 @@ immutable base image  ghcr.io/juju-w/qmt-mcp           mounted at runtime
 
 ## Screenshots
 
-**✨ Fuzzy instrument search (the highlight)** — an AI agent asks in plain language
-("the best CSI 500 ETF") and MCP returns ranked candidates by liquidity; the agent
-never needs to know the raw QMT code:
-
-<p align="center">
-  <img src="docs/screenshots/fuzzy-search-etf.png" width="680" alt="AI agent fuzzy-searching ETFs via MCP">
-</p>
-
 | Stock snapshot | Sector board | QMT terminal in Docker (RDP) |
 |:---:|:---:|:---:|
 | <img src="docs/screenshots/snapshot-stock.png" width="250" alt="xtdata stock snapshot"> | <img src="docs/screenshots/sector-board.png" width="250" alt="xtdata sector board"> | <img src="docs/screenshots/rdp-qmt-in-docker.png" width="250" alt="RDP into the QMT terminal running in Docker"> |
@@ -43,6 +40,7 @@ never needs to know the raw QMT code:
 
 | Capability | State | Notes |
 |---|---|---|
+| Native Windows launcher | ✅ ready | no Docker/system Python/.NET; QMT discovery, tray supervision, DPAPI token, ZIP/setup releases |
 | Persistent QMT desktop + RDP/VNC | ✅ | terminal + MCP start at boot; RDP and optional VNC share one session |
 | Market data `xtdata` (snapshot/bars/instruments/sectors/calendar) | ✅ ready | MCP tools return structured JSON (11/11 verified live) |
 | **Fuzzy instrument search** (name/pinyin/alias/sector/theme) | ✅ ready | the agent locates instruments without knowing QMT codes |
@@ -185,6 +183,26 @@ qmtctl task update tsk_<id> \
 
 ## Quick start
 
+### Windows x64: no Docker
+
+1. Download `qmt-mcp-launcher_<version>_setup.exe` or the portable ZIP from
+   [Releases](https://github.com/juju-w/qmt-mcp/releases).
+2. Open QMT-MCP. In **Setup**, select the broker's `XtItClient.exe` or
+   `XtMiniQmt.exe`, or choose **Detect client**.
+3. Review the resolved `xtquant` and `userdata_mini` paths, save, and choose
+   **Start**.
+4. Complete the normal interactive broker login. Copy the local MCP connection
+   after **Market data** becomes **Ready**.
+
+The launcher binds only to `127.0.0.1` and protects its token with current-user
+Windows DPAPI. The release bundles Python 3.12, locked MCP dependencies, and this
+project's server source. It does not bundle QMT, `xtquant`, account data, or
+credentials, and it does not automate login or trading dialogs. The UI supports
+Simplified Chinese and English, defaults from the Windows display language, and
+remembers an explicit selection.
+
+### Linux / NAS: Docker appliance
+
 > Must build & run on a **native amd64 host** (Apple Silicon is emulation-only and
 > QMT may hit the Rosetta AVX assertion).
 
@@ -252,7 +270,8 @@ More: [broker pack guide](appliance/docs/BROKER-PACK.md) ·
 
 ## Requirements
 
-- **Native amd64** — don't run production on Apple Silicon (emulation may trigger
+- **Windows mode** — Windows 10 22H2 or Windows 11 x64, with a broker-provided QMT and matching `xtquant`.
+- **Docker mode** — native amd64 Linux; don't run production on Apple Silicon (emulation may trigger
   the Rosetta AVX crash).
 - **GBK locale** — QMT is a cp936 Chinese program; the image builds the Wine prefix
   with `zh_CN.GBK`.
@@ -262,6 +281,7 @@ More: [broker pack guide](appliance/docs/BROKER-PACK.md) ·
 ```text
 appliance/   # deployable appliance: Dockerfile · compose · scripts · mcp/ · brokers/ · docs/
 cli/         # qmtctl: compiled Go CLI client (streamable-http MCP)
+launcher/    # native Windows x64 desktop launcher, packaging, and installer
 skills/      # AI agent ops knowledge base (deploy/MCP/CLI/troubleshooting)
 specs/       # Spec-Driven Development (spec-kit): feature specs/plans/tasks
 ```
@@ -281,6 +301,7 @@ then publishes:
 
 - `ghcr.io/juju-w/qmt-mcp:X.Y.Z` and `latest` (appliance: linux/amd64 only)
 - qmtctl for Linux, macOS, and Windows on amd64 and arm64
+- native Windows x64 launcher ZIP and per-user setup
 - `SHA256SUMS` and one GitHub Release
 
 The image uses a persistent BuildKit cache, and MCP source-only changes no longer

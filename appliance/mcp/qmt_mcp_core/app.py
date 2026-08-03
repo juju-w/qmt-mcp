@@ -27,6 +27,7 @@ from .health import HealthState
 from .pagination import InvalidPaginationCursor, paginate_by_key
 from .readiness import ReadinessProbe
 from .registry import ToolRegistry
+from .runtime_paths import runtime_path
 from .task_notifications import TaskListenHandler, TaskSubscriptionsListenRequestParams
 from .task_store import TaskStore
 from .tasks_extension import (
@@ -42,7 +43,7 @@ def log(*parts: Any) -> None:
 
 
 def _add_xtquant_path(config: CoreConfig) -> None:
-    xtq = config.xtquant_dir_win.strip()
+    xtq = runtime_path(config.xtquant_dir_win)
     if xtq and xtq not in sys.path:
         sys.path.insert(0, xtq)
 
@@ -127,14 +128,6 @@ def _current_scopes() -> set[str] | None:
     return set(token.scopes) if token is not None else None
 
 
-def _win_to_unix(win_path: str) -> str:
-    """Heuristic Wine-path -> unix-path (Z:\\broker\\x -> /broker/x). Z: maps to /."""
-    p = win_path.strip().replace("\\", "/")
-    if len(p) >= 2 and p[1] == ":":
-        p = p[2:]  # drop the drive letter; Z: is the wine root (/)
-    return p or "/"
-
-
 def _make_readiness_probe(config: CoreConfig, health: HealthState) -> ReadinessProbe:
     """Real signals: userdata_mini present (fs) + a cheap xtdata call (sdk)."""
 
@@ -142,7 +135,7 @@ def _make_readiness_probe(config: CoreConfig, health: HealthState) -> ReadinessP
         ud = config.userdata_win.strip()
         if not ud:
             return False
-        return os.path.isdir(_win_to_unix(ud))
+        return os.path.isdir(runtime_path(ud))
 
     def sdk_ready() -> bool:
         from xtquant import xtdata  # type: ignore
@@ -559,7 +552,7 @@ def register_optional_xttrade(mcp: MCPServer, registry: ToolRegistry, health: He
                 "xttrade_query", "disabled", "enabled but no QMT_TRADE_ACCOUNTS allowlist — refusing (fail-closed)", []
             )
             return None
-        session = TraderSession(_win_to_unix(config.userdata_win), allowlist)
+        session = TraderSession(runtime_path(config.userdata_win), allowlist)
         register_xttrade_tools(mcp, registry, health, session, allowlist)
         health.set_family(
             "xttrade_query",

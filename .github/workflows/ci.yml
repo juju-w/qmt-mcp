@@ -142,6 +142,19 @@ jobs:
 
           $Setup = Resolve-Path 'launcher/artifacts/qmt-mcp-launcher_0.0.0_setup.exe'
           $InstallRoot = Join-Path $env:LOCALAPPDATA 'Programs/QMT-MCP-CI'
+          New-Item -ItemType Directory -Force `
+            -Path "$InstallRoot/runtime/python", "$InstallRoot/server", "$InstallRoot/Assets" |
+            Out-Null
+          @(
+            "$InstallRoot/legacy-runtime.dll"
+            "$InstallRoot/legacy-symbols.pdb"
+            "$InstallRoot/QmtMcp.Launcher.deps.json"
+            "$InstallRoot/QmtMcp.Launcher.runtimeconfig.json"
+            "$InstallRoot/createdump.exe"
+            "$InstallRoot/runtime/python/legacy-package.bin"
+            "$InstallRoot/server/legacy-module.py"
+            "$InstallRoot/Assets/legacy-icon.ico"
+          ) | ForEach-Object { Set-Content -Path $_ -Value 'obsolete' }
           $Install = Start-Process -FilePath $Setup.Path `
             -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$InstallRoot") `
             -Wait -PassThru
@@ -154,6 +167,20 @@ jobs:
                 throw "Installed layout is missing $_"
               }
             }
+          @(
+            'legacy-runtime.dll'
+            'legacy-symbols.pdb'
+            'QmtMcp.Launcher.deps.json'
+            'QmtMcp.Launcher.runtimeconfig.json'
+            'createdump.exe'
+            'runtime/python/legacy-package.bin'
+            'server/legacy-module.py'
+            'Assets/legacy-icon.ico'
+          ) | ForEach-Object {
+            if (Test-Path (Join-Path $InstallRoot $_)) {
+              throw "Installed layout retained obsolete file $_"
+            }
+          }
           $InstalledBytes = (Get-ChildItem $InstallRoot -File -Recurse |
             Measure-Object Length -Sum).Sum
           if ($InstalledBytes -gt 220MB) {

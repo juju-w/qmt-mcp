@@ -52,6 +52,18 @@ class WindowsLauncherPackagingTests(unittest.TestCase):
         self.assertIn("compact.exe", installer)
         self.assertIn("/EXE:LZX", installer)
 
+    def test_installer_removes_pre_single_file_runtime(self) -> None:
+        installer = INSTALLER.read_text(encoding="utf-8")
+        self.assertIn("[InstallDelete]", installer)
+        self.assertIn('Name: "{app}\\runtime"', installer)
+        self.assertIn('Name: "{app}\\server"', installer)
+        self.assertIn('Name: "{app}\\Assets"', installer)
+        self.assertIn('Name: "{app}\\*.dll"', installer)
+        self.assertIn('Name: "{app}\\*.pdb"', installer)
+        self.assertIn('Name: "{app}\\*.deps.json"', installer)
+        self.assertIn('Name: "{app}\\*.runtimeconfig.json"', installer)
+        self.assertIn('Name: "{app}\\createdump.exe"', installer)
+
     def test_icon_contains_native_tray_and_window_sizes(self) -> None:
         data = ICON.read_bytes()
         reserved, image_type, count = struct.unpack_from("<HHH", data)

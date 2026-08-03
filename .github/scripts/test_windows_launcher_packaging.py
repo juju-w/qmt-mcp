@@ -6,6 +6,8 @@ import unittest
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "launcher" / "packaging" / "package-windows.ps1"
 INSTALLER = ROOT / "launcher" / "packaging" / "qmt-mcp-launcher.iss"
+WINDOWS_REQUIREMENTS = ROOT / "launcher" / "packaging" / "requirements-windows.txt"
+PROJECT = ROOT / "launcher" / "src" / "QmtMcp.Launcher.Desktop" / "QmtMcp.Launcher.Desktop.csproj"
 ICON = ROOT / "launcher" / "src" / "QmtMcp.Launcher.Desktop" / "Assets" / "app-icon.ico"
 
 
@@ -17,6 +19,24 @@ class WindowsLauncherPackagingTests(unittest.TestCase):
         self.assertIn("Get-FileHash -Algorithm SHA256", script)
         self.assertIn("--require-hashes", script)
         self.assertIn("'restore', $Project, '--runtime', 'win-x64', '--locked-mode'", script)
+        self.assertIn("requirements-windows.txt", script)
+
+    def test_runtime_is_single_file_and_pruned(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        project = PROJECT.read_text(encoding="utf-8")
+        self.assertIn("<PublishSingleFile>true</PublishSingleFile>", project)
+        self.assertIn("<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>", project)
+        self.assertIn("<IncludeNativeLibrariesForSelfExtract>true", project)
+        self.assertIn("-Filter '*.pdb'", script)
+        self.assertIn("'test', 'tests'", script)
+        self.assertIn("importlib.util.find_spec('cryptography') is None", script)
+
+    def test_windows_lock_excludes_appliance_only_database_driver(self) -> None:
+        requirements = WINDOWS_REQUIREMENTS.read_text(encoding="utf-8")
+        self.assertNotIn("asyncpg==", requirements)
+        self.assertIn("mcp==2.0.0", requirements)
+        self.assertIn("numpy==2.5.1", requirements)
+        self.assertIn("pandas==3.0.5", requirements)
 
     def test_zip_and_installer_share_one_staging_directory(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
@@ -29,6 +49,8 @@ class WindowsLauncherPackagingTests(unittest.TestCase):
         self.assertIn("DefaultDirName={localappdata}\\Programs\\QMT-MCP", installer)
         self.assertIn("PrivilegesRequired=lowest", installer)
         self.assertIn("ArchitecturesAllowed=x64compatible", installer)
+        self.assertIn("compact.exe", installer)
+        self.assertIn("/EXE:LZX", installer)
 
     def test_icon_contains_native_tray_and_window_sizes(self) -> None:
         data = ICON.read_bytes()

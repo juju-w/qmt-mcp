@@ -6,6 +6,9 @@
     <ApplicationIcon>Assets/app-icon.ico</ApplicationIcon>
     <AssemblyName>QmtMcp.Launcher</AssemblyName>
     <RootNamespace>QmtMcp.Launcher.Desktop</RootNamespace>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" />

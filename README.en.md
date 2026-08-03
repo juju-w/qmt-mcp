@@ -190,9 +190,9 @@ qmtctl task update tsk_<id> \
 2. Open QMT-MCP. In **Setup**, select the broker's `XtItClient.exe` or
    `XtMiniQmt.exe`, or choose **Detect client**.
 3. Review the resolved `xtquant` and `userdata_mini` paths, save, and choose
-   **Start**. When a broker supplies `xtquant` separately, place its import root
-   below `%LOCALAPPDATA%\QMT-MCP\sdk\<broker>` for automatic discovery, or browse
-   to it in Setup.
+   **Start**. If the QMT installation does not contain `xtquant`, download/install
+   its Python SDK in the broker client, or extract the broker SDK package and
+   browse to the import root whose child folder is named `xtquant`.
 4. Complete the normal interactive broker login. Copy the local MCP connection
    after **Market data** becomes **Ready**.
 

@@ -74,65 +74,18 @@ public sealed class BrokerResolverTests
     }
 
     [Fact]
-    public void ExternalSdkRootResolvesWhenQmtTreeDoesNotContainXtquant()
+    public void XtquantOutsideQmtTreeIsNotGuessedWithoutExplicitSelection()
     {
         var fileSystem = new FakeFileSystem()
             .AddFile(@"G:\BrokerQmt\bin.x64\XtMiniQmt.exe")
             .AddFile(@"C:\Users\Example\AppData\Local\QMT-MCP\sdk\guangda\xtquant\__init__.py")
             .AddDirectory(@"G:\BrokerQmt\userdata_mini");
-        var resolver = new BrokerResolver(
-            fileSystem,
-            [@"C:\Users\Example\AppData\Local\QMT-MCP\sdk"]);
 
-        var result = resolver.Resolve(
-            new BrokerSelection(@"G:\BrokerQmt\bin.x64\XtMiniQmt.exe"),
-            TestContext.Current.CancellationToken);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(
-            @"C:\Users\Example\AppData\Local\QMT-MCP\sdk\guangda",
-            result.Broker!.XtquantRoot);
-        Assert.Contains(
-            @"xtquant:external:C:\Users\Example\AppData\Local\QMT-MCP\sdk\guangda",
-            result.Broker.Evidence);
-    }
-
-    [Fact]
-    public void QmtTreeXtquantWinsOverExternalSdkRoot()
-    {
-        var fileSystem = new FakeFileSystem()
-            .AddFile(@"D:\QMT\bin.x64\XtItClient.exe")
-            .AddFile(@"D:\QMT\xtquant\__init__.py")
-            .AddFile(@"C:\Users\Example\AppData\Local\QMT-MCP\sdk\other\xtquant\__init__.py")
-            .AddDirectory(@"D:\QMT\userdata_mini");
-        var resolver = new BrokerResolver(
-            fileSystem,
-            [@"C:\Users\Example\AppData\Local\QMT-MCP\sdk"]);
-
-        var result = resolver.Resolve(
-            new BrokerSelection(@"D:\QMT\bin.x64\XtItClient.exe"),
-            TestContext.Current.CancellationToken);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(@"D:\QMT", result.Broker!.XtquantRoot);
-    }
-
-    [Fact]
-    public void MultipleExternalSdkRootsRequireAChoice()
-    {
-        var fileSystem = new FakeFileSystem()
-            .AddFile(@"G:\BrokerQmt\bin.x64\XtMiniQmt.exe")
-            .AddFile(@"C:\Local\QMT-MCP\sdk\one\xtquant\__init__.py")
-            .AddFile(@"C:\Local\QMT-MCP\sdk\two\xtquant\__init__.py")
-            .AddDirectory(@"G:\BrokerQmt\userdata_mini");
-        var resolver = new BrokerResolver(fileSystem, [@"C:\Local\QMT-MCP\sdk"]);
-
-        var result = resolver.Resolve(
+        var result = new BrokerResolver(fileSystem).Resolve(
             new BrokerSelection(@"G:\BrokerQmt\bin.x64\XtMiniQmt.exe"),
             TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal("xtquant_ambiguous", result.Failure!.Code);
-        Assert.Equal(2, result.Failure.Candidates.Count);
+        Assert.Equal("xtquant_missing", result.Failure!.Code);
     }
 }

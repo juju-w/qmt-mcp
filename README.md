@@ -71,7 +71,9 @@ flowchart LR
    `qmt-mcp-launcher_<版本>_setup.exe`，或便携 ZIP。
 2. 打开 QMT-MCP，在 **设置** 选择券商 QMT 的 `XtItClient.exe` / `XtMiniQmt.exe`；
    也可以先点 **自动查找客户端**。
-3. 确认 `xtquant` 与 `userdata_mini` 路径，保存后点 **启动**。
+3. 确认 `xtquant` 与 `userdata_mini` 路径，保存后点 **启动**。若券商单独提供
+   `xtquant`，可把其导入根目录放在 `%LOCALAPPDATA%\QMT-MCP\sdk\<broker>` 下自动发现，
+   或在设置中手动浏览选择。
 4. 在正常弹出的券商窗口完成人工登录；状态页显示 **行情数据：已就绪** 后复制
    本地 MCP 连接。
 

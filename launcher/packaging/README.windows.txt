@@ -8,7 +8,9 @@ First run
 ---------
 1. Start QmtMcp.Launcher.exe.
 2. Open Setup and select your QMT client executable, or choose Detect client.
-3. Review the detected xtquant and userdata paths, then save the profile.
+3. Review the detected xtquant and userdata paths, then save the profile. If
+   xtquant is supplied separately, place its import root below
+   %LOCALAPPDATA%\QMT-MCP\sdk\<broker> for automatic discovery, or browse to it.
 4. Choose Start. Complete broker login in the normal QMT window when prompted.
 5. When Market data is Ready, copy the local MCP connection from Status.
 

@@ -16,6 +16,10 @@ project constitution's quality gates.
 
 No unreleased changes yet.
 
+## [0.14.4] - 2026-08-03
+
+See the generated GitHub release notes for the complete change list.
+
 ## [0.14.3] - 2026-08-03
 
 See the generated GitHub release notes for the complete change list.
@@ -210,7 +214,7 @@ See the generated GitHub release notes for the complete change list.
 - In-image pip deps are declared in `appliance/mcp/requirements.in`; the locked
   `requirements.txt` must be generated from an amd64 Wine build (constitution III).
 
-[Unreleased]: https://github.com/juju-w/qmt-mcp/compare/v0.14.3...HEAD
+[Unreleased]: https://github.com/juju-w/qmt-mcp/compare/v0.14.4...HEAD
 [0.2.0]: https://github.com/juju-w/qmt-mcp/compare/v0.1.0...v0.2.0
 [0.3.0]: https://github.com/juju-w/qmt-mcp/compare/v0.2.0...v0.3.0
 [0.3.1]: https://github.com/juju-w/qmt-mcp/compare/v0.3.0...v0.3.1
@@ -234,3 +238,4 @@ See the generated GitHub release notes for the complete change list.
 [0.14.1]: https://github.com/juju-w/qmt-mcp/compare/v0.14.0...v0.14.1
 [0.14.2]: https://github.com/juju-w/qmt-mcp/compare/v0.14.1...v0.14.2
 [0.14.3]: https://github.com/juju-w/qmt-mcp/compare/v0.14.2...v0.14.3
+[0.14.4]: https://github.com/juju-w/qmt-mcp/compare/v0.14.3...v0.14.4

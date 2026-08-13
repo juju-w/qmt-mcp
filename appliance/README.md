@@ -50,6 +50,11 @@ Ports (host → container):
 
 ## MCP transport controls
 
+The server accepts only MCP `2026-07-28` over stateless Streamable HTTP.
+Legacy SSE transport, initialize/session handshakes, and session IDs are not
+available in 1.0. The `http` transport spelling remains an alias for
+`streamable-http`.
+
 The server paginates the authorized `tools/list` catalog with opaque cursors.
 The default page size is 50; qmtctl consumes all pages automatically. This
 transport-level pagination is separate from business `limit` arguments on
@@ -70,8 +75,8 @@ layer.
 
 For stable MCP `2026-07-28` clients declaring
 `io.modelcontextprotocol/tasks`, selected long-running tools return a durable
-task handle. Supported 2025 clients and modern clients that do not declare the
-extension retain synchronous `tools/call` behavior on the same endpoint.
+task handle. Modern clients that do not declare the extension retain
+synchronous `tools/call` behavior on the same endpoint.
 
 Task state lives in the broker pack by default:
 
@@ -99,8 +104,8 @@ auto-confirm.
 Stable clients may also request task IDs through
 `subscriptions/listen.notifications.taskIds`. The acknowledgement is followed
 by current and changed `notifications/tasks` snapshots. This is an optional
-latency optimization: `tasks/get` remains the complete fallback for 2025,
-polling-only, disconnected, and not-yet-upgraded clients. qmtctl selects this
+latency optimization: `tasks/get` remains the complete fallback for polling-only
+or disconnected modern clients. qmtctl selects this
 path automatically and returns to server-guided polling if the stream cannot
 continue.
 

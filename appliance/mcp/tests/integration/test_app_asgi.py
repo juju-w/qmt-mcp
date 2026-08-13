@@ -409,7 +409,47 @@ def test_core_profile_hides_and_rejects_non_core_tools(fake_xtquant, tmp_path):
     assert hidden_doc.get("error") or hidden_doc["result"]["isError"] is True
 
 
-def test_legacy_initialize_and_session_share_modern_endpoint(fake_xtquant, tmp_path):
+@pytest.mark.parametrize(
+    ("headers", "payload", "expected_id", "requested"),
+    [
+        (
+            {"accept": "application/json, text/event-stream"},
+            {
+                "jsonrpc": "2.0",
+                "id": 41,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-11-25",
+                    "capabilities": {},
+                    "clientInfo": {"name": "legacy-test", "version": "1.0.0"},
+                },
+            },
+            41,
+            "",
+        ),
+        (
+            {
+                "accept": "application/json, text/event-stream",
+                "mcp-protocol-version": "2025-11-25",
+            },
+            {"jsonrpc": "2.0", "id": "old", "method": "tools/list", "params": {}},
+            "old",
+            "2025-11-25",
+        ),
+        (
+            {
+                "accept": "application/json, text/event-stream",
+                "mcp-protocol-version": "2099-01-01",
+            },
+            {"jsonrpc": "2.0", "id": 43, "method": "server/discover", "params": {}},
+            43,
+            "2099-01-01",
+        ),
+    ],
+)
+def test_non_modern_protocol_requests_are_rejected_without_session(
+    fake_xtquant, tmp_path, headers, payload, expected_id, requested
+):
     app, _cfg, _health, _reg = create_app(
         _config(
             tmp_path,
@@ -417,80 +457,67 @@ def test_legacy_initialize_and_session_share_modern_endpoint(fake_xtquant, tmp_p
             host="127.0.0.1",
             allow_unauth_loopback=True,
             enable_xtdata=False,
-            mcp_list_page_size=1,
         )
     )
-    accept = {"accept": "application/json, text/event-stream"}
-    initialize = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": "2025-11-25",
-            "capabilities": {},
-            "clientInfo": {"name": "legacy-integration-test", "version": "1.0.0"},
-        },
-    }
 
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
-        response = client.post("/mcp", json=initialize, headers=accept)
-        assert response.status_code == 200
-        session_id = response.headers["mcp-session-id"]
-        assert _response_json(response)["result"]["protocolVersion"] == "2025-11-25"
+        response = client.post("/mcp", json=payload, headers=headers)
 
-        session_headers = {
-            **accept,
-            "mcp-session-id": session_id,
-            "mcp-protocol-version": "2025-11-25",
-        }
-        initialized = client.post(
-            "/mcp",
-            json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-            headers=session_headers,
-        )
-        assert initialized.status_code == 202
+    assert response.status_code == 400
+    assert "mcp-session-id" not in response.headers
+    document = response.json()
+    assert document["id"] == expected_id
+    assert document["error"] == {
+        "code": -32022,
+        "message": "Unsupported MCP protocol version",
+        "data": {"supported": [MODERN_VERSION], "requested": requested},
+    }
 
-        listed = client.post(
-            "/mcp",
-            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
-            headers=session_headers,
-        )
-        assert listed.status_code == 200
-        first_page = _response_json(listed)["result"]
-        assert len(first_page["tools"]) == 1
-        assert first_page["nextCursor"]
-        for tool in first_page["tools"]:
-            _assert_complete_tool_contract(tool)
 
-        listed_next = client.post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": 4,
-                "method": "tools/list",
-                "params": {"cursor": first_page["nextCursor"]},
-            },
-            headers=session_headers,
-        )
-        assert listed_next.status_code == 200
-        second_page = _response_json(listed_next)["result"]
-        assert len(second_page["tools"]) == 1
-        assert "nextCursor" not in second_page
-        assert {first_page["tools"][0]["name"], second_page["tools"][0]["name"]} == {
-            "qmt_health",
-            "qmt_capabilities",
-        }
-        _assert_complete_tool_contract(second_page["tools"][0])
+def test_malformed_legacy_request_is_bounded_and_has_null_id(fake_xtquant, tmp_path):
+    app, _cfg, _health, _reg = create_app(
+        _config(tmp_path, "", host="127.0.0.1", allow_unauth_loopback=True, enable_xtdata=False)
+    )
 
-        called = client.post(
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        response = client.post(
             "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": 3,
-                "method": "tools/call",
-                "params": {"name": "qmt_capabilities", "arguments": {}},
-            },
-            headers=session_headers,
+            content=b'{"jsonrpc":"2.0","id":',
+            headers={"mcp-protocol-version": "2025-11-25"},
         )
-        assert called.status_code == 200
-        _assert_equivalent_result(_response_json(called)["result"], ok=True)
+
+    assert response.status_code == 400
+    assert response.json()["id"] is None
+    assert response.json()["error"]["code"] == -32022
+    assert "mcp-session-id" not in response.headers
+
+
+def test_oversized_legacy_request_is_rejected_without_buffering_an_id(fake_xtquant, tmp_path):
+    app, _cfg, _health, _reg = create_app(
+        _config(tmp_path, "", host="127.0.0.1", allow_unauth_loopback=True, enable_xtdata=False)
+    )
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        response = client.post(
+            "/mcp",
+            content=b"x" * (1_048_576 + 1),
+            headers={"mcp-protocol-version": "2025-11-25"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["id"] is None
+    assert response.json()["error"]["code"] == -32022
+
+
+@pytest.mark.parametrize("method", ["GET", "DELETE"])
+def test_standalone_session_methods_are_not_supported(fake_xtquant, tmp_path, method):
+    app, _cfg, _health, _reg = create_app(
+        _config(tmp_path, "", host="127.0.0.1", allow_unauth_loopback=True, enable_xtdata=False)
+    )
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        response = client.request(method, "/mcp", headers={"mcp-protocol-version": MODERN_VERSION})
+
+    assert response.status_code == 405
+    assert response.json()["error"]["code"] == -32600
+    assert "mcp-session-id" not in response.headers

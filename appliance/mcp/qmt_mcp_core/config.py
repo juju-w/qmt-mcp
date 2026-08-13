@@ -186,11 +186,11 @@ class CoreConfig:
         return str(Path(self.audit_path).with_name("mcp-tasks-v1.sqlite3"))
 
     def validate_security(self) -> None:
-        if self.transport not in {"streamable-http", "http", "sse"}:
+        if self.transport not in {"streamable-http", "http"}:
             raise McpCoreError(
                 "config",
                 "invalid QMT_MCP_TRANSPORT",
-                {"transport": self.transport, "allowed": ["streamable-http", "http", "sse"]},
+                {"transport": self.transport, "allowed": ["streamable-http", "http"]},
             )
         if self.auth_mode not in VALID_AUTH_MODES:
             raise McpCoreError(

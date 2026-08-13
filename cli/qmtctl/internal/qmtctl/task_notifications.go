@@ -13,12 +13,11 @@ import (
 )
 
 const (
-	stableTaskNotificationProtocol = "2026-07-28"
-	maxTaskNotificationFrame       = 16 * 1024 * 1024
-	subscriptionIDMetaKey          = "io.modelcontextprotocol/subscriptionId"
-	protocolVersionMetaKey         = "io.modelcontextprotocol/protocolVersion"
-	clientInfoMetaKey              = "io.modelcontextprotocol/clientInfo"
-	clientCapabilitiesMetaKey      = "io.modelcontextprotocol/clientCapabilities"
+	maxTaskNotificationFrame  = 16 * 1024 * 1024
+	subscriptionIDMetaKey     = "io.modelcontextprotocol/subscriptionId"
+	protocolVersionMetaKey    = "io.modelcontextprotocol/protocolVersion"
+	clientInfoMetaKey         = "io.modelcontextprotocol/clientInfo"
+	clientCapabilitiesMetaKey = "io.modelcontextprotocol/clientCapabilities"
 )
 
 type taskSubscriptionEnvelope struct {
@@ -42,7 +41,7 @@ func (c *Client) supportsTaskNotifications() bool {
 		return false
 	}
 	result := c.session.InitializeResult()
-	if result == nil || result.ProtocolVersion != stableTaskNotificationProtocol ||
+	if result == nil || result.ProtocolVersion != modernProtocolVersion ||
 		result.Capabilities == nil {
 		return false
 	}
@@ -79,7 +78,7 @@ func (c *Client) listenTask(
 	}
 	request.Header.Set("Accept", "application/json, text/event-stream")
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Mcp-Protocol-Version", stableTaskNotificationProtocol)
+	request.Header.Set("Mcp-Protocol-Version", modernProtocolVersion)
 	request.Header.Set("Mcp-Method", "subscriptions/listen")
 	if err := c.addHeaders(ctx, request); err != nil {
 		if ctx.Err() != nil {
@@ -170,7 +169,7 @@ func taskSubscriptionMeta(original json.RawMessage) map[string]any {
 	if len(original) > 0 && string(original) != "null" {
 		_ = json.Unmarshal(original, &meta)
 	}
-	meta[protocolVersionMetaKey] = stableTaskNotificationProtocol
+	meta[protocolVersionMetaKey] = modernProtocolVersion
 	meta[clientInfoMetaKey] = map[string]any{"name": "qmtctl", "version": Version}
 	meta[clientCapabilitiesMetaKey] = map[string]any{
 		"extensions": map[string]any{tasksExtensionID: map[string]any{}},

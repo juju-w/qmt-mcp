@@ -46,11 +46,16 @@ def mock_mcp(*, xtdata: str, tool_count: int):
 
             request = json.loads(body or b"{}")
             method = request.get("method")
-            if method == "initialize":
-                self.send(200, "{}", {"mcp-session-id": "test-session"})
+            if self.headers.get("Mcp-Protocol-Version") != "2026-07-28":
+                self.send(400)
                 return
-            if method == "notifications/initialized":
-                self.send(202)
+            if method == "server/discover":
+                payload = {
+                    "jsonrpc": "2.0",
+                    "id": request["id"],
+                    "result": {"supportedVersions": ["2026-07-28"], "capabilities": {}},
+                }
+                self.send(200, json.dumps(payload, separators=(",", ":")))
                 return
             if method == "tools/list":
                 payload = {

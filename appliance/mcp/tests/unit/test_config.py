@@ -54,6 +54,22 @@ def test_invalid_transport_rejected(monkeypatch, tmp_path):
     assert exc.value.error_type == "config"
 
 
+def test_legacy_sse_transport_rejected(monkeypatch, tmp_path):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv("QMT_MCP_TRANSPORT", "sse")
+    with pytest.raises(McpCoreError) as exc:
+        load_config(_empty_env(tmp_path))
+    assert exc.value.error_type == "config"
+    assert exc.value.details["allowed"] == ["streamable-http", "http"]
+
+
+def test_http_transport_alias_remains_available(monkeypatch, tmp_path):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv("QMT_MCP_TRANSPORT", "http")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.transport == "http"
+
+
 def test_defaults_and_env_file_overlay(monkeypatch, tmp_path):
     env_file = tmp_path / "mcp.env"
     env_file.write_text(

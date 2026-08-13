@@ -189,7 +189,7 @@ the tool count. Eligible JSON responses use negotiated gzip by default; set
 Stable `2026-07-28` clients may also use durable Tasks. Keep
 `QMT_MCP_TASK_STORE` on persistent real disk, never share one SQLite file among
 multiple active MCP replicas, and include it in backups when detached task
-recovery matters. Older and non-declaring clients remain synchronous.
+recovery matters. Modern non-declaring clients remain synchronous.
 Waiting tasks may expose standard MCP `inputRequests`; the prompt snapshot is
 durable, but response values are in-process only. A restart marks the task
 failed instead of replaying answers.
@@ -220,7 +220,7 @@ persists refresh rotation. MCP commands use an explicit access token first,
 then a static token, then the saved per-resource OAuth session.
 qmtctl's default task mode waits and prints the final tool result;
 it prefers task notifications and transparently resumes polling after stream
-loss. `--task-mode sync` exercises the old-client compatibility path. If wait returns
+loss. `--task-mode sync` exercises modern synchronous `tools/call`. If wait returns
 `task_input_required`, review its request data and use explicit
 `qmtctl task update`; never auto-accept a confirmation.
 
@@ -233,11 +233,10 @@ Manual probes worth knowing:
 | `docker inspect <c> --format '{{.State.Health.Status}}'` | `healthy` |
 | audit log `<pack>/logs/mcp-audit.jsonl` | one JSONL line per tool call |
 
-MCP calls need `Accept: application/json, text/event-stream`. Modern
-`2026-07-28` clients use `server/discover`, per-request metadata and standard
-MCP headers without a session id. Legacy 2025 clients retain the
-initialize/session flow and must echo the issued `mcp-session-id`; responses
-may be JSON or SSE (`event: message\ndata: {...}`).
+MCP calls need `Accept: application/json, text/event-stream`. QMT-MCP 1.0 only
+accepts `2026-07-28`: clients use `server/discover`, per-request metadata and
+standard MCP headers without a session id. A modern POST response may be JSON
+or SSE (`event: message\ndata: {...}`).
 
 Audit timestamps carry Wine's TZ offset (e.g. `+0100`) while the container is
 `Asia/Shanghai`. Same instant, different notation — not a misconfiguration.

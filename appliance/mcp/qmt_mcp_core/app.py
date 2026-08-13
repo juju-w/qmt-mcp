@@ -37,6 +37,8 @@ from .tasks_extension import (
 from .tool_contracts import ToolVisibilityPolicy
 from .workers import WorkerPool
 
+MODERN_PROTOCOL_VERSION = "2026-07-28"
+
 
 def log(*parts: Any) -> None:
     print("[qmt-mcp]", *parts, file=sys.stderr, flush=True)
@@ -66,7 +68,7 @@ async def _json_response(
 
 
 def _header_map(scope) -> dict[bytes, bytes]:
-    return dict(scope.get("headers") or [])
+    return {name.lower(): value for name, value in (scope.get("headers") or [])}
 
 
 def _base_url(scope, config: CoreConfig) -> str:
@@ -280,6 +282,84 @@ class CoreASGI:
             return
 
         await self.app(scope, receive, send)
+
+
+class ModernProtocolMiddleware:
+    """Keep the public MCP endpoint on the stateless 2026-07-28 contract."""
+
+    MAX_REJECTION_BODY = 1_048_576
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http" or scope.get("path") != "/mcp":
+            await self.app(scope, receive, send)
+            return
+
+        method = scope.get("method", "").upper()
+        if method in {"GET", "DELETE"}:
+            await _json_response(
+                send,
+                405,
+                {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {
+                        "code": -32600,
+                        "message": "Standalone MCP session methods are not supported",
+                    },
+                },
+                headers=[(b"allow", b"POST")],
+            )
+            return
+        if method != "POST":
+            await self.app(scope, receive, send)
+            return
+
+        headers = _header_map(scope)
+        requested = headers.get(b"mcp-protocol-version", b"").decode("utf-8", "replace").strip()
+        if requested == MODERN_PROTOCOL_VERSION:
+            await self.app(scope, receive, send)
+            return
+
+        request_id = await self._bounded_request_id(receive)
+        await _json_response(
+            send,
+            400,
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32022,
+                    "message": "Unsupported MCP protocol version",
+                    "data": {
+                        "supported": [MODERN_PROTOCOL_VERSION],
+                        "requested": requested,
+                    },
+                },
+            },
+        )
+
+    async def _bounded_request_id(self, receive):
+        body = bytearray()
+        more_body = True
+        while more_body:
+            message = await receive()
+            body.extend(message.get("body", b""))
+            more_body = message.get("more_body", False)
+            if len(body) > self.MAX_REJECTION_BODY:
+                return None
+        try:
+            document = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return None
+        if not isinstance(document, Mapping):
+            return None
+        request_id = document.get("id")
+        if isinstance(request_id, bool) or not isinstance(request_id, (str, int, float, type(None))):
+            return None
+        return request_id
 
 
 def _accepts_gzip(value: str) -> bool:
@@ -680,16 +760,12 @@ def create_app(config: CoreConfig | None = None):
         register_task_conformance_fixtures(mcp)
     registry.assert_no_write_tools()
 
-    if config.transport == "sse":
-        app = mcp.sse_app(host=config.host)
-    else:
-        # Stateful mode preserves legacy initialize/session semantics. The SDK
-        # routes 2026-07-28 requests through its stateless path at the same URL.
-        app = mcp.streamable_http_app(
-            streamable_http_path="/mcp",
-            stateless_http=False,
-            host=config.host,
-        )
+    app = mcp.streamable_http_app(
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        host=config.host,
+    )
+    app = ModernProtocolMiddleware(app)
     if config.tasks_enabled:
         app = TaskRoutingHeaderMiddleware(app)
     if config.mcp_gzip_minimum_size > 0:

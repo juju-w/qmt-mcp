@@ -8,8 +8,8 @@ description: Deploy, operate, and troubleshoot the QMT-MCP appliance and qmtctl.
 Operate broker-neutral QMT-MCP: either Wine runs QMT in the Linux appliance, or
 the native Windows launcher supervises an installed QMT directly. Both expose
 xtdata plus gated account and analysis features over streamable HTTP MCP.
-The server and qmtctl prefer MCP `2026-07-28` and automatically retain the 2025
-initialize/session path for older clients at the same `/mcp` URL.
+The server and qmtctl require MCP `2026-07-28` over stateless Streamable HTTP;
+there is no 2025 initialize/session fallback.
 
 For first deployment and deployment failures, use
 **deploying-qmt-mcp-appliance**. For repository development, CI, and release
@@ -154,8 +154,8 @@ must own compression.
 
 Stable MCP `2026-07-28` clients that declare
 `io.modelcontextprotocol/tasks` receive durable task handles for selected long
-operations. Supported 2025 clients and modern non-declaring clients remain
-synchronous on the same `/mcp` endpoint.
+operations. Modern non-declaring clients remain synchronous on the same `/mcp`
+endpoint.
 
 The default SQLite store is
 `/broker/cache/mcp-tasks-v1.sqlite3`. It keeps lifecycle metadata, owner

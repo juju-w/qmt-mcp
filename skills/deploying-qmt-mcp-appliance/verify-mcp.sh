@@ -69,31 +69,41 @@ else
   err "unauthenticated /mcp returned ${code}, expected 401 — endpoint may be open."
 fi
 
-# 3) MCP handshake. The session id comes back as a response header.
-curl -s --max-time 20 -D "$HDR" -o /dev/null -X POST "${BASE}/mcp" \
+# 3) Modern stateless MCP discovery. No session id is issued.
+discover="$(curl -s --max-time 20 -D "$HDR" -X POST "${BASE}/mcp" \
   -H "Authorization: Bearer ${TOKEN}" -H 'Content-Type: application/json' \
-  -H "Accept: ${ACCEPT}" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"verify-mcp","version":"1"}}}' \
-  2>/dev/null
-SESSION="$(grep -i '^mcp-session-id' "$HDR" | tr -d '\r' | cut -d' ' -f2)"
-if [ -n "$SESSION" ]; then
-  ok "initialize handshake succeeded."
+  -H "Accept: ${ACCEPT}" -H 'Mcp-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: server/discover' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"verify-mcp","version":"1"},"io.modelcontextprotocol/clientCapabilities":{}}}}' \
+  2>/dev/null)"
+if printf '%s' "$discover" | grep -q '2026-07-28' && ! grep -qi '^mcp-session-id:' "$HDR"; then
+  ok "MCP 2026-07-28 stateless discovery succeeded."
 else
-  err "initialize returned no mcp-session-id — bad token, or not an MCP endpoint."
+  err "modern discovery failed or returned a legacy session id."
   echo "verify-mcp: ${fail} failure(s)."
   exit 1
 fi
 
-call() {  # call <json-body> — authenticated, session-bound POST
+call() {  # call <method> <name-or-empty> <json-body> — authenticated stateless POST
+  local method="$1" name="$2" body="$3"
+  local headers=(
+    -H "Authorization: Bearer ${TOKEN}"
+    -H 'Content-Type: application/json'
+    -H "Accept: ${ACCEPT}"
+    -H 'Mcp-Protocol-Version: 2026-07-28'
+    -H "Mcp-Method: ${method}"
+  )
+  if [ -n "$name" ]; then
+    headers+=(-H "Mcp-Name: ${name}")
+  fi
   curl -s --max-time 60 -X POST "${BASE}/mcp" \
-    -H "Authorization: Bearer ${TOKEN}" -H 'Content-Type: application/json' \
-    -H "Accept: ${ACCEPT}" -H "mcp-session-id: ${SESSION}" -d "$1" 2>/dev/null
+    "${headers[@]}" -d "$body" 2>/dev/null
 }
 
-call '{"jsonrpc":"2.0","method":"notifications/initialized"}' >/dev/null
+META='"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"verify-mcp","version":"1"},"io.modelcontextprotocol/clientCapabilities":{}}'
 
 # 4) Tool registry. The standard readonly appliance registers 37 tools.
-tools="$(call '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+tools="$(call 'tools/list' '' "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{${META}}}" \
          | grep -o '"name":"qmt_[a-z0-9_]*"' | sort -u | wc -l | tr -d ' ')"
 if [ "${tools:-0}" -ge "$MIN_TOOLS" ]; then
   ok "tools/list returned ${tools} tools."
@@ -101,8 +111,8 @@ else
   err "tools/list returned only ${tools:-0} tools; expected at least ${MIN_TOOLS}."
 fi
 
-# 5) qmt_health. Parsed from the SSE data: line without assuming a JSON parser exists.
-health="$(call '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"qmt_health","arguments":{}}}')"
+# 5) qmt_health. Parsed from JSON/SSE text without assuming a JSON parser exists.
+health="$(call 'tools/call' 'qmt_health' "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"qmt_health\",\"arguments\":{},${META}}}")"
 field() { printf '%s' "$health" | grep -o "\"$1\":\"[a-z_]*\"" | head -1 | cut -d'"' -f4; }
 
 if printf '%s' "$health" | grep -q '"ok":true'; then

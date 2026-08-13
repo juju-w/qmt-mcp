@@ -88,7 +88,7 @@ func writeSSEFrames(t *testing.T, w http.ResponseWriter, frames ...map[string]an
 
 func verifyListenRequest(t *testing.T, r *http.Request, request map[string]any) string {
 	t.Helper()
-	if r.Header.Get("Mcp-Protocol-Version") != stableTaskNotificationProtocol ||
+	if r.Header.Get("Mcp-Protocol-Version") != modernProtocolVersion ||
 		r.Header.Get("Mcp-Method") != "subscriptions/listen" {
 		t.Fatalf(
 			"listen headers = protocol %q method %q",
@@ -103,7 +103,7 @@ func verifyListenRequest(t *testing.T, r *http.Request, request map[string]any) 
 		t.Fatalf("listen taskIds = %#v", taskIDs)
 	}
 	meta := params["_meta"].(map[string]any)
-	if meta[protocolVersionMetaKey] != stableTaskNotificationProtocol {
+	if meta[protocolVersionMetaKey] != modernProtocolVersion {
 		t.Fatalf("listen protocol metadata = %#v", meta)
 	}
 	caps := meta[clientCapabilitiesMetaKey].(map[string]any)

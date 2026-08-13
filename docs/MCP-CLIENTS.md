@@ -7,9 +7,12 @@ https://qmt.example.com/mcp
 Authorization: Bearer <credential>
 ```
 
-服务端主推最新稳定协议 `2026-07-28`。同一个 `/mcp` 自动兼容
-`2025-11-25`、`2025-06-18` 和 `2025-03-26` 客户端，不需要维护两套 URL
-或手动选择协议。
+QMT-MCP 1.0 只支持稳定协议 `2026-07-28`，并使用无会话 Streamable HTTP。
+客户端必须支持 `server/discover`、每请求 `_meta` 和标准 MCP 路由头；服务端不会
+接受 2025 协议、`initialize` 生命周期或 `Mcp-Session-Id`。
+
+从 0.x 升级时，应先升级 MCP Host 和 qmtctl，再升级服务端。旧客户端会收到
+`-32022 Unsupported MCP protocol version`，不会自动建立兼容会话。
 
 `tools/list` 使用标准 opaque cursor 分页，服务端决定页大小。客户端应持续请求
 `nextCursor` 直到该字段缺失；qmtctl 会自动完成这个过程。服务端还会在客户端
@@ -17,19 +20,18 @@ Authorization: Bearer <credential>
 WorkBuddy 等标准 HTTP 客户端通常无需额外配置。
 
 稳定版还提供 `io.modelcontextprotocol/tasks` 长任务扩展。只有明确声明该扩展
-的 `2026-07-28` 客户端才会收到任务句柄；2025 客户端和未声明扩展的现代客户
-端继续获得同步工具结果。因此工具还没升级的 Codex、Claude Code、WorkBuddy
-不需要改配置，也不会被服务端强行切换执行语义。
+的客户端才会收到任务句柄；未声明扩展的现代客户端继续获得同步工具结果，
+不会被服务端强行切换执行语义。
 
 新版 Tasks 还支持任务内多轮输入。任务可进入 `input_required`，并在
 `inputRequests` 中嵌入标准 MCP `{method, params}` 请求；客户端用
 `tasks/update.inputResponses` 按相同键回答。这个能力同样只在上述稳定版
-Tasks 路径启用，不影响旧客户端。
+Tasks 路径启用，不影响未声明扩展的现代客户端。
 
 支持订阅的稳定版客户端可以在 `subscriptions/listen` 的
 `params.notifications.taskIds` 中请求任务。服务端先确认实际授权的 ID，再发送
 当前和后续 `notifications/tasks` 完整状态。通知是可选加速层，不取代
-`tasks/get`；旧客户端、只实现轮询的客户端和断线重连都继续可用。服务端不会
+`tasks/get`；只实现轮询的客户端和断线重连都继续可用。服务端不会
 发送旧草案里的 `notifications/tasks/status`。
 
 最小连通性检查：
@@ -181,7 +183,8 @@ fixture 验证。
 
 ## qmtctl
 
-qmtctl 优先使用 `2026-07-28`，对旧服务自动回退到 2025 initialize/session。
+qmtctl 只使用 `2026-07-28`；若服务端不支持现代 discovery，它会返回协议错误，
+不会发送 2025 initialize 或继续调用业务工具。
 `qmtctl tools` 会合并所有目录页面，并通过 Go 标准 HTTP transport 自动解压
 gzip；不需要分页或压缩参数。
 
@@ -201,8 +204,8 @@ qmtctl task update tsk_<id> \
 等待模式先开 `subscriptions/listen`，严格校验确认帧、subscription ID、
 task ID、完整状态和时间戳；服务端不支持、未确认、返回坏帧或中途断流时自动
 按 `pollIntervalMs` 回到 `tasks/get`。`--timeout` 控制普通单次 HTTP 请求，
-`--task-timeout` 控制通知与轮询合计的完整等待周期。需要验证旧客户端路径时
-使用 `--task-mode sync`。
+`--task-timeout` 控制通知与轮询合计的完整等待周期。`--task-mode sync` 仍使用
+现代协议，但不声明 Tasks 扩展，用于验证同步 `tools/call` 路径。
 
 默认等待如果遇到 `input_required`，qmtctl 会停止轮询并返回
 `task_input_required`；JSON 错误数据包含 `taskId` 和完整
@@ -347,6 +350,7 @@ resource metadata；否则使用静态 header。只支持旧 SSE transport 的�
 | 现象 | 处理 |
 |---|---|
 | `connection refused` | 检查容器健康和 `QMT_DESKTOP_MODE`；仅 `manual` 模式需要先 RDP 登录。 |
+| `Unsupported MCP protocol version` | 客户端或服务端仍是 0.x/2025 协议实现；先升级 MCP Host 和 qmtctl，再升级服务端。 |
 | VNC 无法连接 | 确认使用了 `docker-compose.vnc.yml`、persistent 模式和回环隧道，并查看 desktop status 的 `vnc_state`。 |
 | `401 invalid_token` | 检查签名、`kid`、issuer、resource audience、时间和 JWT 算法；服务端不会在错误里泄漏细节。 |
 | `403 insufficient_scope` | 按 challenge 申请缺少的 family/management scope，重新登录。 |

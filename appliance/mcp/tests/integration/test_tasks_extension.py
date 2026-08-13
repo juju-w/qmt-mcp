@@ -501,8 +501,8 @@ def test_mrtr_resolves_before_task_creation_then_uses_response(fake_xtquant, tmp
         assert terminal["result"]["content"][0]["text"] == "Completed task for Alice"
 
 
-def test_legacy_interactive_fixtures_use_safe_synchronous_fallback(fake_xtquant, tmp_path):
-    app, _cfg, _health, _registry = create_app(_config(tmp_path))
+def test_legacy_interactive_request_is_rejected_before_task_dispatch(fake_xtquant, tmp_path):
+    app, config, _health, _registry = create_app(_config(tmp_path))
     accept = {"accept": "application/json, text/event-stream"}
     initialize = {
         "jsonrpc": "2.0",
@@ -515,45 +515,13 @@ def test_legacy_interactive_fixtures_use_safe_synchronous_fallback(fake_xtquant,
         },
     }
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
-        initialized = client.post("/mcp", json=initialize, headers=accept)
-        session_headers = {
-            **accept,
-            "mcp-session-id": initialized.headers["mcp-session-id"],
-            "mcp-protocol-version": "2025-11-25",
-        }
-        client.post(
-            "/mcp",
-            json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-            headers=session_headers,
-        )
+        response = client.post("/mcp", json=initialize, headers=accept)
 
-        confirmation = client.post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/call",
-                "params": {"name": "confirm_delete", "arguments": {"filename": "safe.txt"}},
-            },
-            headers=session_headers,
-        )
-        assert _response_json(confirmation)["result"]["content"][0]["text"] == (
-            "Deletion of safe.txt was not confirmed"
-        )
-
-        mrtr = client.post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": 3,
-                "method": "tools/call",
-                "params": {"name": "test_tool_with_task", "arguments": {}},
-            },
-            headers=session_headers,
-        )
-        assert _response_json(mrtr)["result"]["content"][0]["text"] == (
-            "Task input is unavailable for this legacy client"
-        )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == -32022
+    assert "mcp-session-id" not in response.headers
+    with sqlite3.connect(config.effective_task_store) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
 
 
 def test_expired_input_task_cleans_live_runtime(tmp_path):

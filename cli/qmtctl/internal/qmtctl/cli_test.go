@@ -177,6 +177,43 @@ func TestToolsAggregatesModernGzipPages(t *testing.T) {
 	}
 }
 
+func TestToolsRefusesLegacyFallbackBeforeInitializeRequest(t *testing.T) {
+	var methods []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode MCP request: %v", err)
+		}
+		method, _ := request["method"].(string)
+		methods = append(methods, method)
+		switch method {
+		case "server/discover":
+			writeRPCError(w, request["id"], -32601, "Method not found")
+		case "initialize":
+			t.Fatal("legacy initialize request reached the server")
+		default:
+			t.Fatalf("unexpected method %q", method)
+		}
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--url", server.URL, "tools"}, &stdout, &stderr)
+
+	if code != 1 {
+		t.Fatalf("exit %d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if got := strings.Join(methods, ","); got != "server/discover" {
+		t.Fatalf("server methods = %q", got)
+	}
+	if !strings.Contains(stderr.String(), "requires MCP 2026-07-28") {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+	if !strings.HasPrefix(stderr.String(), "protocol: ") {
+		t.Fatalf("error was not classified as protocol: %s", stderr.String())
+	}
+}
+
 func TestToolsRejectsPaginationCursorCycle(t *testing.T) {
 	var listCalls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -684,20 +721,21 @@ func readToolRequest(t *testing.T, w http.ResponseWriter, r *http.Request) (map[
 	}
 	switch req["method"] {
 	case "server/discover":
-		writeRPCError(w, req["id"], -32601, "Method not found")
-		return nil, false
-	case "initialize":
-		writeRPCResult(w, req["id"], map[string]any{
-			"protocolVersion": "2025-11-25",
-			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "qmtctl-test", "version": "1.0.0"},
-		})
-		return nil, false
-	case "notifications/initialized":
-		w.WriteHeader(http.StatusAccepted)
+		if got := r.Header.Get("Mcp-Protocol-Version"); got != modernProtocolVersion {
+			t.Fatalf("protocol header = %q", got)
+		}
+		writeRPCResult(w, req["id"], modernDiscoverResult())
 		return nil, false
 	}
 	return req, true
+}
+
+func modernDiscoverResult() map[string]any {
+	return map[string]any{
+		"resultType":        "complete",
+		"supportedVersions": []string{modernProtocolVersion},
+		"capabilities":      map[string]any{"tools": map[string]any{}},
+	}
 }
 
 func toolResult(payload map[string]any) map[string]any {

@@ -30,16 +30,17 @@
 | 016 xtdata 参考数据 | ✅ 完成——财务/分红/新股/可转债/ETF/周期等 9 工具（只读，按运行时能力降级）+ CLI |
 | 017 自定义板块管理 | ✅ 完成——文件夹及板块增删改查 7 工具（默认关闭，受管前缀沙箱）+ CLI |
 | 018 公式因子运行时 | ✅ 完成——调用/批量/生成/订阅/缓存等 7 工具（默认关闭，白名单 + 输出沙箱）+ CLI |
-| 019 MCP 协议基座 | ✅ 完成——官方 Python/Go SDK；主推 2026-07-28，同端点兼容 2025；官方 conformance 进 CI |
+| 019 MCP 协议基座 | ✅ 完成——官方 Python/Go SDK 与 conformance 基座；0.x 兼容策略由 029 取代 |
 | 020 工具契约与 Profile | ✅ 完成——统一 output schema/structuredContent/行为注解；6 种启动 profile + glob 裁剪 |
 | 021 OAuth 授权 | ✅ 完成——static/oauth/hybrid；JWT/JWKS resource server、scope 工具裁剪、qmtctl PKCE 登录/刷新 |
 | 022 MCP 分页与压缩 | ✅ 完成——授权后 `tools/list` opaque cursor 分页、qmtctl 有界聚合、JSON gzip/SSE 排除 |
-| 023 MCP Tasks | ✅ 完成——主推 2026-07-28 Tasks，持久化生命周期、qmtctl 等待/脱离/同步，旧客户端同步兼容 |
-| 024 MCP 任务多轮输入 | ✅ 完成——标准 inputRequests、部分回答、MRTR→Task 组合、qmtctl 显式响应，旧客户端同步兼容 |
+| 023 MCP Tasks | ✅ 完成——2026-07-28 Tasks，持久化生命周期、qmtctl 等待/脱离/现代同步路径 |
+| 024 MCP 任务多轮输入 | ✅ 完成——标准 inputRequests、部分回答、MRTR→Task 组合、qmtctl 显式响应 |
 | 025 MCP 任务状态通知 | ✅ 完成——2026-07-28 `subscriptions/listen` + `notifications/tasks`，qmtctl 通知优先/轮询回退 |
 | 026 安全持久桌面 | ✅ 完成——xrdp 0.10 TLS-only、启动预建单会话、断线重连、loopback 默认与 manual 回滚 |
 | 027 VNC 远程访问 | ✅ 完成——可保存凭据/移动端 raw VNC，复用 026 的唯一 Xorg/QMT 会话，默认关闭与 loopback |
 | 028 Windows 原生启动器 | ✅ 已发布——.NET 10/Avalonia、中英文切换、DPAPI、终端探测/守护、内置 Python、ZIP/setup、Windows CI/Release；真实 QMT xtdata 已验证 |
+| 029 MCP 1.0 协议基线 | ✅ 完成——仅支持 2026-07-28、无会话 Streamable HTTP；服务端/qmtctl 均拒绝 2025 fallback |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。

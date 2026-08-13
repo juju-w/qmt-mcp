@@ -418,51 +418,34 @@ def test_oauth_tasks_bind_stable_principal_and_original_scopes(fake_xtquant, tmp
         assert task_id not in hidden.text
 
 
-def test_legacy_tool_call_is_scope_enforced_without_modern_routing_header(fake_xtquant, tmp_path, monkeypatch):
+def test_protocol_validation_runs_after_oauth_authentication(fake_xtquant, tmp_path, monkeypatch):
     private, public = _key("key-1")
     _install_jwks(monkeypatch, {"keys": [public]})
     app, _cfg, _health, _registry = create_app(_config(tmp_path))
     bearer = f"Bearer {_token(private, 'key-1', 'qmt:read')}"
-    accept = {"accept": "application/json, text/event-stream", "authorization": bearer}
-    initialize = {
+    legacy = {
         "jsonrpc": "2.0",
         "id": 1,
         "method": "initialize",
         "params": {
             "protocolVersion": "2025-11-25",
             "capabilities": {},
-            "clientInfo": {"name": "oauth-legacy-test", "version": "1.0.0"},
+            "clientInfo": {"name": "oauth-protocol-test", "version": "1.0.0"},
         },
     }
 
     with TestClient(app, base_url="https://qmt.example.com") as client:
-        initialized_response = client.post("/mcp", json=initialize, headers=accept)
-        assert initialized_response.status_code == 200
-        session_headers = {
-            **accept,
-            "mcp-session-id": initialized_response.headers["mcp-session-id"],
-            "mcp-protocol-version": "2025-11-25",
-        }
-        notification = client.post(
+        authenticated = client.post(
             "/mcp",
-            json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-            headers=session_headers,
+            json=legacy,
+            headers={"accept": "application/json", "authorization": bearer},
         )
-        assert notification.status_code == 202
-        refused = client.post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/call",
-                "params": {"name": "qmt_xtdata_snapshot", "arguments": {"codes": ["510300.SH"]}},
-            },
-            headers=session_headers,
-        )
+        unauthenticated = client.post("/mcp", json=legacy, headers={"accept": "application/json"})
 
-    assert refused.status_code == 200
-    document = _response_json(refused)
-    assert document["error"]["message"] == "Insufficient scope"
+    assert authenticated.status_code == 400
+    assert authenticated.json()["error"]["code"] == -32022
+    assert "mcp-session-id" not in authenticated.headers
+    assert unauthenticated.status_code == 401
 
 
 def test_oauth_invalid_token_is_401_and_metadata_has_cors(fake_xtquant, tmp_path, monkeypatch):

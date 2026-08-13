@@ -1,9 +1,9 @@
 # qmtctl
 
 `qmtctl` is the compiled command-line client for QMT-MCP. It uses the official
-MCP Go SDK, prefers stable MCP `2026-07-28`, and automatically falls back to the
-supported 2025 initialize/session flow. It never imports `xtquant` or duplicates
-broker logic locally.
+MCP Go SDK and requires stable MCP `2026-07-28`. It refuses the SDK's legacy
+initialize/session fallback before that request reaches the server. It never
+imports `xtquant` or duplicates broker logic locally.
 
 `qmtctl tools` follows every standard `tools/list` cursor and presents one
 complete catalog. It also uses Go's standard transparent gzip negotiation and

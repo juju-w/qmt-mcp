@@ -15,6 +15,9 @@ QMT 与 MCP；Linux/NAS 上使用 Docker + Wine 常驻多个隔离实例。Codex
 Code、自建 Agent 和 `qmtctl` 都通过 Streamable HTTP MCP 获取行情和可选的账户
 只读数据。
 
+> **1.0 协议要求**：QMT-MCP 仅支持稳定版 MCP `2026-07-28`，使用无会话的
+> Streamable HTTP。MCP Host 必须支持 `server/discover` 和每请求元数据。
+
 <p align="center">
   <img src="docs/illustrations/qmt-mcp-agent-workflow.webp" width="960" alt="用户向 AI Agent 提出多个自然语言任务，Agent 通过 QMT-MCP 的 xtdata 和 xttrade 能力获取行情、研究、组合风险以及计划中的条件交易结果">
 </p>
@@ -64,6 +67,12 @@ flowchart LR
 ```
 
 ## 快速开始
+
+### 从 0.x 升级到 1.0
+
+先升级 MCP Host 和 `qmtctl`，再升级服务端。1.0 移除了 2025 协议的
+`initialize` / `notifications/initialized`、`Mcp-Session-Id` 和旧 HTTP+SSE
+transport；旧客户端会收到明确的 unsupported-protocol 错误，不会建立兼容会话。
 
 ### Windows x64：不用 Docker
 
@@ -171,7 +180,7 @@ export QMT_MCP_TOKEN=<token>
 | PostgreSQL 持久化 | ✅ 可选 | 行情仓库，`QMT_DB_URL` 打开，默认关闭 |
 | 账户只读查询 `xttrade` | ⚠️ 需券商权限 | 默认关闭；需要程序化交易/外部 Python 权限和账户白名单 |
 | 自定义板块 / 公式因子 | ✅ 可选 | 默认关闭；受管前缀、白名单和输出沙箱 |
-| MCP 2026 协议能力 | ✅ | Tasks、状态通知、多轮输入、工具分页、gzip、结构化结果 |
+| MCP `2026-07-28` | ✅ 唯一版本 | 无会话 Streamable HTTP；Tasks、状态通知、多轮输入、工具分页、gzip、结构化结果 |
 | OAuth 2.1 授权 | ✅ 可用 | static/oauth/hybrid；JWT/JWKS 校验、scope 裁剪、qmtctl PKCE 登录与刷新 |
 
 ## MCP 工具怎么用
@@ -205,8 +214,8 @@ export QMT_MCP_TOKEN=<token>
 ## 安全模型
 
 每个可见工具都发布 `title`、输入/输出 JSON Schema 和只读/破坏性/幂等/
-外部访问行为注解。新版客户端直接读取 `structuredContent`；旧客户端仍可读取
-语义相同的 JSON 文本块。业务字段不因 schema 校验被增删。
+外部访问行为注解。客户端可读取 `structuredContent`；不消费该字段的调用方仍可
+读取语义相同的 JSON 文本块。业务字段不因 schema 校验被增删。
 
 可以在 `appliance/.env` 按 Agent 用途缩小工具面：
 
@@ -232,7 +241,7 @@ token。完整配置和 scope 表见 [客户端接入](docs/MCP-CLIENTS.md) 与
 
 服务端以稳定版 `2026-07-28` 的 `io.modelcontextprotocol/tasks` 扩展承载下载、
 财务数据、批量公式、因子生成和缓存刷新等长操作。声明该扩展的客户端可断开后
-继续查询或取消任务；旧客户端仍走同步 `tools/call`。
+继续查询或取消任务；未声明该扩展的现代客户端仍走同步 `tools/call`。
 
 ```bash
 qmtctl cache refresh --force

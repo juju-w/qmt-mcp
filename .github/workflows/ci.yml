@@ -202,7 +202,7 @@ jobs:
           if-no-files-found: error
 
   protocol-conformance:
-    name: MCP 2026 + legacy conformance
+    name: MCP 2026-07-28 conformance
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -291,14 +291,6 @@ jobs:
             --force \
             --output-dir \
               conformance-results/server-modern-tasks-status-notifications
-          for scenario in server-initialize ping tools-list; do
-            npx --yes "$CONFORMANCE_PACKAGE" server \
-              --url http://127.0.0.1:18766/mcp \
-              --spec-version 2025-11-25 \
-              --scenario "$scenario" \
-              --output-dir "conformance-results/server-legacy-${scenario}"
-          done
-
           go build -C cli/qmtctl \
             -o "${RUNNER_TEMP}/qmtctl-conformance" \
             ./cmd/conformance
@@ -308,13 +300,6 @@ jobs:
               --spec-version 2026-07-28 \
               --scenario "$scenario" \
               --output-dir "conformance-results/client-modern-${scenario}"
-          done
-          for scenario in initialize tools_call; do
-            npx --yes "$CONFORMANCE_PACKAGE" client \
-              --command "${RUNNER_TEMP}/qmtctl-conformance" \
-              --spec-version 2025-11-25 \
-              --scenario "$scenario" \
-              --output-dir "conformance-results/client-legacy-${scenario}"
           done
       - name: Upload conformance evidence
         if: always()

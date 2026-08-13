@@ -598,7 +598,7 @@ def register_task_conformance_fixtures(mcp) -> None:
     async def test_tool_with_task(ctx: Context) -> str | InputRequiredResult:
         """Resolve synchronous input before starting a synthetic durable task."""
         if ctx.protocol_version != STABLE_PROTOCOL_VERSION:
-            return "Task input is unavailable for this legacy client"
+            return "Task input requires MCP 2026-07-28"
         input_request = ElicitRequest(
             params=ElicitRequestFormParams(
                 message="What is your name?",

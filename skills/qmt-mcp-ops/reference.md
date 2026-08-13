@@ -2,9 +2,9 @@
 
 Detailed configuration and request examples for **qmt-mcp-ops**.
 
-Protocol baseline: MCP `2026-07-28` is preferred. The same streamable HTTP
-endpoint accepts legacy `2025-11-25`, `2025-06-18`, and `2025-03-26` clients.
-qmtctl negotiates this automatically through the official Go SDK.
+Protocol baseline: MCP `2026-07-28` is required over stateless Streamable HTTP.
+QMT-MCP 1.0 rejects legacy initialize/session requests, and qmtctl does not
+fallback to them through the official Go SDK.
 
 ## Environment Variables
 
@@ -102,8 +102,8 @@ proxy owns compression.
 | `QMT_MCP_TASK_TOOLS` | six long-running tools | CSV task-capable production tool allowlist |
 
 The store excludes tool arguments, credentials, authorization headers, and raw
-principal identifiers. Supported 2025 clients and modern clients that do not
-declare Tasks continue synchronous calls. Stable declaring clients may observe
+principal identifiers. Modern clients that do not declare Tasks continue
+synchronous calls. Stable declaring clients may observe
 `input_required`: pending standard MCP request snapshots are durable, while
 answer values are transient and are not stored or logged.
 
@@ -111,8 +111,8 @@ Task status subscriptions require no server setting beyond Tasks. A stable
 client may request up to 64 task IDs under
 `subscriptions/listen.notifications.taskIds`; only authorized IDs are
 acknowledged. The server sends current state followed by complete
-`notifications/tasks` snapshots. Polling-only and supported 2025 clients remain
-valid, and the removed `notifications/tasks/status` method is never emitted.
+`notifications/tasks` snapshots. Polling-only modern clients remain valid, and
+the removed `notifications/tasks/status` method is never emitted.
 
 ### Feature gates
 

@@ -52,13 +52,13 @@ type AppError struct {
 	Data    any    `json:"data,omitempty"`
 }
 
-const maxToolListPages = 1000
-
 const (
-	tasksExtensionID = "io.modelcontextprotocol/tasks"
-	taskModeWait     = "wait"
-	taskModeDetach   = "detach"
-	taskModeSync     = "sync"
+	modernProtocolVersion = "2026-07-28"
+	maxToolListPages      = 1000
+	tasksExtensionID      = "io.modelcontextprotocol/tasks"
+	taskModeWait          = "wait"
+	taskModeDetach        = "detach"
+	taskModeSync          = "sync"
 )
 
 func (e *AppError) Error() string {
@@ -287,7 +287,7 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 			mode:   c.taskMode,
 		}
 		mcpHTTPClient := &http.Client{
-			Transport:     taskTransport,
+			Transport:     modernOnlyRoundTripper{base: taskTransport},
 			CheckRedirect: c.httpClient.CheckRedirect,
 			Jar:           c.httpClient.Jar,
 		}
@@ -314,7 +314,7 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 				return
 			}
 		}
-		c.session, c.initErr = sdkClient.Connect(
+		session, err := sdkClient.Connect(
 			ctx,
 			&mcp.StreamableClientTransport{
 				Endpoint:             c.baseURL,
@@ -324,11 +324,49 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 			},
 			nil,
 		)
-		if c.initErr != nil {
-			c.initErr = sdkError(c.initErr)
+		if err != nil {
+			c.initErr = sdkError(err)
+			return
 		}
+		result := session.InitializeResult()
+		if result == nil || result.ProtocolVersion != modernProtocolVersion {
+			_ = session.Close()
+			negotiated := ""
+			if result != nil {
+				negotiated = result.ProtocolVersion
+			}
+			c.initErr = &AppError{
+				Kind:    "protocol",
+				Message: fmt.Sprintf("qmtctl requires MCP %s", modernProtocolVersion),
+				Data: map[string]any{
+					"required":   modernProtocolVersion,
+					"negotiated": negotiated,
+				},
+			}
+			return
+		}
+		c.session = session
 	})
 	return c.initErr
+}
+
+type modernOnlyRoundTripper struct {
+	base http.RoundTripper
+}
+
+func (transport modernOnlyRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	requested := request.Header.Get("Mcp-Protocol-Version")
+	if requested != modernProtocolVersion {
+		return nil, &AppError{
+			Kind:    "protocol",
+			Message: fmt.Sprintf("qmtctl requires MCP %s and does not use legacy initialize fallback", modernProtocolVersion),
+			Data: map[string]any{
+				"required":  modernProtocolVersion,
+				"requested": requested,
+			},
+		}
+	}
+	return transport.base.RoundTrip(request)
 }
 
 func (c *Client) Close() error {
@@ -362,6 +400,10 @@ func sdkError(err error) error {
 				"inputRequests": decodeBrief(inputRequired.InputRequests),
 			},
 		}
+	}
+	var appError *AppError
+	if errors.As(err, &appError) {
+		return appError
 	}
 	return &AppError{Kind: "mcp", Message: err.Error()}
 }

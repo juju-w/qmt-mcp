@@ -18,7 +18,7 @@ python3 -m pytest -m 'not integration'
 
 Exercises app assembly + the ASGI auth/`/healthz` path. It installs official `mcp`
 and injects a **fake `xtquant`** (see `conftest.py::fake_xtquant`), so it still
-needs no Wine or broker pack. It covers stable/legacy MCP negotiation, OAuth,
+needs no Wine or broker pack. It covers modern-only protocol enforcement, OAuth,
 durable Tasks, partial task input, MRTR-to-Task composition, and transient
 answer handling. Task notification coverage includes the real Streamable HTTP
 SSE transport, acknowledgement/current/terminal ordering, mixed filters,

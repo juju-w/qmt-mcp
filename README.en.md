@@ -24,6 +24,10 @@ Docker appliance runs broker-neutral, isolated Wine instances.
 </p>
 <p align="center"><sub>xtdata scenarios are available today; xttrade account and portfolio queries require broker permission, while conditional trading remains a planned extension.</sub></p>
 
+> **1.0 protocol requirement**: QMT-MCP supports only stable MCP `2026-07-28`
+> over stateless Streamable HTTP. Hosts must support `server/discover` and
+> per-request metadata.
+
 ```text
 immutable base image  ghcr.io/juju-w/qmt-mcp           mounted at runtime
 (Wine wow64 + Win Python 3.12 + MCP + xrdp)  ◄── broker pack → /broker
@@ -47,7 +51,7 @@ immutable base image  ghcr.io/juju-w/qmt-mcp           mounted at runtime
 | Read-only account queries `xttrade` | ⚠️ needs broker permission | degrades to `not_authorized` (no crash) when not enabled |
 | Database persistence (PostgreSQL, optional) | ✅ ready | market-data warehouse, read/write-through, off by default |
 | `qmtctl` CLI | ✅ ready | compiled Go CLI client for health/search/quotes/account queries |
-| MCP protocol | ✅ dual-era | prefers stable `2026-07-28`; the same `/mcp` endpoint accepts 2025 clients |
+| MCP protocol | ✅ `2026-07-28` only | stateless Streamable HTTP; no initialize/session fallback |
 | MCP durable tasks | ✅ ready | persistent lifecycle, explicit input, optional status push, and polling fallback |
 | MCP contracts / profiles | ✅ ready | structured results and behavior hints; full/readonly/market/account/core/custom surfaces |
 | OAuth 2.1 authorization | ✅ ready | static/oauth/hybrid, JWT/JWKS validation, scoped tools, qmtctl PKCE login and refresh |
@@ -113,8 +117,8 @@ explicit feature gates, a namespace/sandbox, and OAuth `qmt:manage`.
 ### Tool contracts and profiles
 
 Every visible tool publishes a title, input/output JSON Schema, and read-only,
-destructive, idempotent, and open-world behavior hints. Modern clients consume
-`structuredContent`; legacy clients retain an equivalent JSON text block.
+destructive, idempotent, and open-world behavior hints. Clients can consume
+`structuredContent`; callers that ignore it retain an equivalent JSON text block.
 Schema validation does not add or remove business fields.
 
 The default `full` profile preserves the complete surface. Narrow one agent's
@@ -155,8 +159,8 @@ QMT_MCP_GZIP_MIN_SIZE=1024
 
 Stable `2026-07-28` clients that declare
 `io.modelcontextprotocol/tasks` receive durable handles for selected long
-operations. Supported 2025 clients and modern clients that do not declare the
-extension keep synchronous `tools/call` behavior on the same endpoint.
+operations. Modern clients that do not declare the extension keep synchronous
+`tools/call` behavior on the same endpoint.
 
 Task state is stored in a bounded SQLite database in the broker pack. It keeps
 lifecycle state, owner/scope digests, pending standard `inputRequests`, and
@@ -182,6 +186,13 @@ qmtctl task update tsk_<id> \
 ```
 
 ## Quick start
+
+### Upgrading from 0.x to 1.0
+
+Upgrade the MCP host and qmtctl before the server. Version 1.0 removes the 2025
+`initialize` / `notifications/initialized` lifecycle, `Mcp-Session-Id`, and the
+legacy HTTP+SSE transport. Older clients receive an explicit unsupported-protocol
+error instead of a compatibility session.
 
 ### Windows x64: no Docker
 

@@ -124,7 +124,7 @@ does not double-compress an already encoded response and emits
 ## Durable task storage
 
 Stable MCP `2026-07-28` clients can opt into durable Tasks for selected
-long-running tools. Older and non-declaring clients remain synchronous.
+long-running tools. Modern non-declaring clients remain synchronous.
 
 ```env
 QMT_MCP_TASKS_ENABLED=1

@@ -28,7 +28,7 @@ func main() {
 
 	var err error
 	switch scenario {
-	case "initialize", "request-metadata":
+	case "request-metadata":
 		_, err = client.ListTools(ctx)
 	case "tools_call":
 		err = callNamedTool(ctx, client, "add_numbers", map[string]any{"a": 5, "b": 3})

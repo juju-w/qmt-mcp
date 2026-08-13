@@ -161,15 +161,7 @@ func TestAuthLoginPKCEResourceScopesAndPersistence(t *testing.T) {
 			}
 			switch request["method"] {
 			case "server/discover":
-				writeRPCError(w, request["id"], -32601, "Method not found")
-			case "initialize":
-				writeRPCResult(w, request["id"], map[string]any{
-					"protocolVersion": "2025-11-25",
-					"capabilities":    map[string]any{"tools": map[string]any{}},
-					"serverInfo":      map[string]any{"name": "oauth-fixture", "version": "1.0.0"},
-				})
-			case "notifications/initialized":
-				w.WriteHeader(http.StatusAccepted)
+				writeRPCResult(w, request["id"], modernDiscoverResult())
 			case "tools/list":
 				writeRPCResult(w, request["id"], map[string]any{"tools": []any{}})
 			default:
@@ -526,15 +518,7 @@ func TestSavedOAuthSessionStepsUpAndPersistsScopes(t *testing.T) {
 			}
 			switch request["method"] {
 			case "server/discover":
-				writeRPCError(w, request["id"], -32601, "Method not found")
-			case "initialize":
-				writeRPCResult(w, request["id"], map[string]any{
-					"protocolVersion": "2025-11-25",
-					"capabilities":    map[string]any{"tools": map[string]any{}},
-					"serverInfo":      map[string]any{"name": "step-up-fixture", "version": "1.0.0"},
-				})
-			case "notifications/initialized":
-				w.WriteHeader(http.StatusAccepted)
+				writeRPCResult(w, request["id"], modernDiscoverResult())
 			case "tools/call":
 				writeRPCResult(w, request["id"], toolResult(map[string]any{"ok": true, "data": []any{}}))
 			default:

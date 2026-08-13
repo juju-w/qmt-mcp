@@ -109,6 +109,9 @@ class ToolRegistry:
         destructive: bool = False,
         idempotent: bool = True,
         open_world: bool | None = None,
+        app_resource_uri: str | None = None,
+        app_visibility: tuple[str, ...] = ("model", "app"),
+        text_renderer: Callable[[dict[str, Any]], str] | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             if name in self._tools:
@@ -185,6 +188,9 @@ class ToolRegistry:
                     title=tool_title,
                     description=description,
                     behavior=behavior,
+                    resource_uri=app_resource_uri,
+                    app_visibility=app_visibility,
+                    text_renderer=text_renderer,
                 )
             self._tools[name] = {
                 "family": family,
@@ -195,6 +201,7 @@ class ToolRegistry:
                 "callable": wrapped,
                 "mcp_callable": mcp_callable,
                 "required_scopes": required_oauth_scopes(family=family, read_only=read_only),
+                "app_resource_uri": app_resource_uri,
             }
             self.health.update_family_tools(family, self.tool_names(family))
             return wrapped

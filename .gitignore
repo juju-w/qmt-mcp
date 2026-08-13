@@ -27,6 +27,8 @@ venv/
 # tool caches
 .ruff_cache/
 .pytest_cache/
+node_modules/
+coverage/
 
 # .NET launcher build output
 **/bin/

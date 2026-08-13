@@ -71,6 +71,19 @@ QMT_MCP_GZIP_MIN_SIZE=1024
 Set `QMT_MCP_GZIP_MIN_SIZE=0` if a reverse proxy should be the only compression
 layer.
 
+## Interactive MCP App
+
+When xtdata is enabled and visible in the active tool profile, the server
+advertises `io.modelcontextprotocol/ui` and exposes
+`qmt_xtdata_kline_chart`. Apps-capable hosts read the versioned
+`ui://qmt-mcp/kline-chart-v1.html` resource and render a responsive candlestick,
+moving-average, and volume view. Other clients receive the same call as concise
+text plus structured chart data.
+
+The HTML resource is self-contained and requests no external origins or device
+permissions. Node is required only when rebuilding frontend source; it is not
+part of the Docker image or Windows runtime.
+
 ## Durable MCP Tasks
 
 For stable MCP `2026-07-28` clients declaring

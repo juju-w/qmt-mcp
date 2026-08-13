@@ -121,6 +121,9 @@ def register_mcp_tool(
     title: str,
     description: str,
     behavior: ToolBehavior,
+    resource_uri: str | None = None,
+    app_visibility: tuple[str, ...] = ("model", "app"),
+    text_renderer: Callable[[dict[str, Any]], str] | None = None,
 ) -> Callable[..., Any]:
     """Register the audited callable through the rich SDK when it is installed.
 
@@ -155,7 +158,11 @@ def register_mcp_tool(
                 "error": "tool returned a non-object result",
                 "details": {"tool": name},
             }
-        text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        text = (
+            text_renderer(payload)
+            if text_renderer is not None
+            else json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        )
         return CallToolResult(
             content=[TextContent(type="text", text=text)],
             structuredContent=payload,
@@ -173,10 +180,16 @@ def register_mcp_tool(
         idempotentHint=behavior.idempotent,
         openWorldHint=behavior.open_world,
     )
+    kwargs: dict[str, Any] = {
+        "name": name,
+        "title": title,
+        "description": description,
+        "annotations": annotations,
+        "structured_output": True,
+    }
+    if resource_uri is not None:
+        kwargs["resource_uri"] = resource_uri
+        kwargs["visibility"] = list(app_visibility)
     return mcp.tool(
-        name=name,
-        title=title,
-        description=description,
-        annotations=annotations,
-        structured_output=True,
+        **kwargs,
     )(adapter)

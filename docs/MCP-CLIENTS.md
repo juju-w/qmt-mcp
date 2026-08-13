@@ -23,6 +23,17 @@ WorkBuddy 等标准 HTTP 客户端通常无需额外配置。
 的客户端才会收到任务句柄；未声明扩展的现代客户端继续获得同步工具结果，
 不会被服务端强行切换执行语义。
 
+行情 profile 还会发布 `io.modelcontextprotocol/ui` MCP Apps 扩展。客户端声明该
+扩展并在设置中包含 `text/html;profile=mcp-app` 后，调用
+`qmt_xtdata_kline_chart` 可按工具 `_meta.ui.resourceUri` 读取
+`ui://qmt-mcp/kline-chart-v1.html`，在沙箱 iframe 内渲染交互式 K 线。未声明 Apps
+的客户端仍按普通 `tools/call` 处理，获得简短文字摘要与完整
+`structuredContent`；这不是错误或降级告警。
+
+模板与行情数据分离，客户端可以缓存版本化 HTML。模板不加载外部脚本、不访问
+第三方网络，也不申请设备权限。日周月/复权切换依赖 Host 的 `serverTools`
+能力；不支持时初始图表照常显示，相关控件保持不可用。
+
 新版 Tasks 还支持任务内多轮输入。任务可进入 `input_required`，并在
 `inputRequests` 中嵌入标准 MCP `{method, params}` 请求；客户端用
 `tasks/update.inputResponses` 按相同键回答。这个能力同样只在上述稳定版

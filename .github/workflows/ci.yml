@@ -81,6 +81,31 @@ jobs:
       - name: Unit tests
         run: pytest -m 'not integration'
 
+  mcp-app:
+    name: MCP App build & tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: appliance/mcp/apps/kline
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: appliance/mcp/apps/kline/package-lock.json
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Typecheck and test
+        run: |
+          npm run typecheck
+          npm test
+      - name: Rebuild the single-file App resource
+        run: npm run build
+      - name: Verify the tracked resource is current
+        working-directory: .
+        run: git diff --exit-code -- appliance/mcp/qmt_mcp_apps/resources/kline-chart-v1.html
+
   launcher-core:
     name: Native launcher (.NET, macOS)
     runs-on: macos-15

@@ -200,6 +200,7 @@ $RequiredPaths = @(
     'runtime\python\python312._pth'
     'server\qmt_mcp.py'
     'server\qmt_mcp_core\app.py'
+    'server\qmt_mcp_apps\resources\kline-chart-v1.html'
     'LICENSE'
     'README.txt'
     'VERSION'

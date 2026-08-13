@@ -8,6 +8,7 @@ mcp/.venv/
 mcp/.ruff_cache/
 mcp/.pytest_cache/
 mcp/tests/
+mcp/apps/
 # broker packs are mounted at runtime, never part of the image build context
 brokers/*/pack/
 workspace/**

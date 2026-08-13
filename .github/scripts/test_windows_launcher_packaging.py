@@ -30,6 +30,7 @@ class WindowsLauncherPackagingTests(unittest.TestCase):
         self.assertIn("-Filter '*.pdb'", script)
         self.assertIn("'test', 'tests'", script)
         self.assertIn("import cffi, cryptography, numpy, pandas, qmt_mcp", script)
+        self.assertIn("server\\qmt_mcp_apps\\resources\\kline-chart-v1.html", script)
 
     def test_windows_lock_excludes_appliance_only_database_driver(self) -> None:
         requirements = WINDOWS_REQUIREMENTS.read_text(encoding="utf-8")

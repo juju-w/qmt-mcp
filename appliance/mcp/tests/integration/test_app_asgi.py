@@ -17,8 +17,12 @@ pytestmark = pytest.mark.integration
 
 from starlette.testclient import TestClient  # noqa: E402
 
+from qmt_mcp_apps.kline import KLINE_RESOURCE_URI, KLINE_TOOL_NAME  # noqa: E402
 from qmt_mcp_core.app import NegotiatedGZipMiddleware, _accepts_gzip, create_app  # noqa: E402
 from qmt_mcp_core.config import CoreConfig  # noqa: E402
+
+APPS_EXTENSION_ID = "io.modelcontextprotocol/ui"
+APPS_MIME_TYPE = "text/html;profile=mcp-app"
 
 MODERN_VERSION = "2026-07-28"
 MODERN_META = {
@@ -105,6 +109,17 @@ def _modern_request(method: str, request_id: int, params: dict | None = None) ->
         {"jsonrpc": "2.0", "id": request_id, "method": method, "params": request_params},
         headers,
     )
+
+
+def _apps_request(method: str, request_id: int, params: dict | None = None) -> tuple[dict, dict]:
+    payload, headers = _modern_request(method, request_id, params)
+    payload["params"]["_meta"] = {
+        **MODERN_META,
+        "io.modelcontextprotocol/clientCapabilities": {
+            "extensions": {APPS_EXTENSION_ID: {"mimeTypes": [APPS_MIME_TYPE]}}
+        },
+    }
+    return payload, headers
 
 
 def _assert_complete_tool_contract(tool: dict) -> None:
@@ -214,6 +229,7 @@ def test_modern_discover_is_stateless_and_cache_hinted(fake_xtquant, tmp_path):
     assert "mcp-session-id" not in response.headers
     result = _response_json(response)["result"]
     assert result["supportedVersions"] == ["2026-07-28"]
+    assert APPS_EXTENSION_ID not in result["capabilities"].get("extensions", {})
     assert result["ttlMs"] == 0
     assert result["cacheScope"] == "private"
 
@@ -259,6 +275,91 @@ def test_modern_tool_contracts_and_structured_results(fake_xtquant, tmp_path):
     error_result = _response_json(refused)["result"]
     _assert_equivalent_result(error_result, ok=False)
     assert error_result["structuredContent"]["error_type"] == "validation"
+
+
+def test_kline_app_discovery_resource_and_text_fallback(fake_xtquant, tmp_path):
+    times = ["20260813", "20260814"]
+    values = {
+        "open": [130.0, 134.8],
+        "high": [136.0, 136.8],
+        "low": [129.0, 133.9],
+        "close": [135.0, 136.42],
+        "volume": [100_000, 120_000],
+        "amount": [13_500_000, 16_370_400],
+    }
+
+    def market_data(*_args):
+        return {
+            "688234.SH": {
+                field: {time: field_values[index] for index, time in enumerate(times)}
+                for field, field_values in values.items()
+            }
+        }
+
+    fake_xtquant.get_market_data_ex = market_data
+    fake_xtquant.get_instrument_detail = lambda *_args: {"InstrumentName": "天岳先进"}
+    app, _cfg, _health, registry = create_app(
+        _config(tmp_path, "", host="127.0.0.1", allow_unauth_loopback=True, enable_xtdata=True)
+    )
+    discover_payload, discover_headers = _apps_request("server/discover", 50)
+    list_payload, list_headers = _apps_request("tools/list", 51)
+    resource_payload, resource_headers = _apps_request("resources/read", 52, {"uri": KLINE_RESOURCE_URI})
+    resource_headers["mcp-name"] = KLINE_RESOURCE_URI
+    call_payload, call_headers = _apps_request(
+        "tools/call",
+        53,
+        {
+            "name": KLINE_TOOL_NAME,
+            "arguments": {"code": "688234.SH", "period": "1d", "count": 120, "dividend_type": "front"},
+        },
+    )
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        discovered = client.post("/mcp", json=discover_payload, headers=discover_headers)
+        listed = client.post("/mcp", json=list_payload, headers=list_headers)
+        resource = client.post("/mcp", json=resource_payload, headers=resource_headers)
+        called = client.post("/mcp", json=call_payload, headers=call_headers)
+
+    capabilities = _response_json(discovered)["result"]["capabilities"]
+    assert capabilities["extensions"][APPS_EXTENSION_ID] == {}
+
+    tools = {tool["name"]: tool for tool in _response_json(listed)["result"]["tools"]}
+    chart_tool = tools[KLINE_TOOL_NAME]
+    assert chart_tool["_meta"]["ui"] == {
+        "resourceUri": KLINE_RESOURCE_URI,
+        "visibility": ["model", "app"],
+    }
+    assert chart_tool["annotations"]["readOnlyHint"] is True
+    assert "resolve_instrument" in chart_tool["description"]
+    assert "qmt_xtdata_bars" in chart_tool["description"]
+
+    contents = _response_json(resource)["result"]["contents"]
+    assert len(contents) == 1
+    assert contents[0]["uri"] == KLINE_RESOURCE_URI
+    assert contents[0]["mimeType"] == APPS_MIME_TYPE
+    assert "@modelcontextprotocol/ext-apps" not in contents[0]["text"]
+    assert "QMT K-Line" in contents[0]["text"]
+    assert len(contents[0]["text"].encode()) < 1_048_576
+
+    result = _response_json(called)["result"]
+    structured = result["structuredContent"]
+    assert result["isError"] is False
+    assert structured["instrument"] == {"code": "688234.SH", "name": "天岳先进"}
+    assert structured["range"] == {"start": "20260813", "end": "20260814", "bar_count": 2}
+    assert round(structured["summary"]["change"], 2) == 1.42
+    assert result["content"][0]["text"].startswith("天岳先进 (688234.SH) 1d K-line")
+    assert not result["content"][0]["text"].startswith("{")
+    assert registry.required_scopes(KLINE_TOOL_NAME) == ("qmt:read", "qmt:market")
+
+    raw = registry._tools["qmt_xtdata_bars"]["callable"](
+        codes=["688234.SH"],
+        period="1d",
+        fields=list(values),
+        count=120,
+        dividend_type="front",
+    )
+    assert [row["time"] for row in raw["rows"]] == [bar["time"] for bar in structured["bars"]]
+    assert [row["close"] for row in raw["rows"]] == [bar["close"] for bar in structured["bars"]]
 
 
 def test_modern_tools_list_uses_stable_cursor_pages_and_rejects_invalid_cursor(fake_xtquant, tmp_path):
@@ -404,6 +505,7 @@ def test_core_profile_hides_and_rejects_non_core_tools(fake_xtquant, tmp_path):
 
     names = {tool["name"] for tool in _response_json(listed)["result"]["tools"]}
     assert names == {"qmt_health", "qmt_capabilities"}
+    assert app.apps_extension is None
     assert registry.visibility_summary()["hidden_count"] > 0
     hidden_doc = _response_json(hidden_call)
     assert hidden_doc.get("error") or hidden_doc["result"]["isError"] is True

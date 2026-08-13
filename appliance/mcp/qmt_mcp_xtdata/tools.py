@@ -163,6 +163,84 @@ def _call_market_data(
     raise last_error or McpCoreError("dependency", "no compatible xtdata market-data function is available")
 
 
+def read_bars_data(
+    health: HealthState,
+    warehouse,
+    *,
+    codes: list[str],
+    period: str = "1d",
+    fields: list[str] | None = None,
+    start_time: str = "",
+    end_time: str = "",
+    count: int = -1,
+    dividend_type: str = "none",
+    fill_data: bool = True,
+    enable_read_from_server: bool = True,
+) -> dict[str, Any]:
+    """Read validated bars for raw and App-facing tools through one data path."""
+
+    clean_codes = validate_codes(codes)
+    clean_period = validate_period(period)
+    clean_fields = validate_fields(fields)
+    start = validate_date(start_time, "start_time")
+    end = validate_date(end_time, "end_time")
+    div = validate_dividend(dividend_type)
+    if count < -1 or count > 10000:
+        raise McpCoreError("validation", "count out of bounds", {"min": -1, "max": 10000})
+
+    # 012 read-through: a single code over a closed range may be served from the
+    # DB warehouse without re-downloading. Any DB error degrades to the xtdata path.
+    warehoused = warehouse is not None and len(clean_codes) == 1 and bool(start) and bool(end)
+    if warehoused:
+        try:
+            from qmt_mcp_db.coverage import is_covered
+
+            cov = warehouse.coverage(clean_codes[0], clean_period, div)
+            if is_covered(cov["min"], cov["max"], start, end):
+                rows = warehouse.read_bars(clean_codes[0], clean_period, div, start, end)
+                return ok_envelope(period=clean_period, source="db-warehouse", rows=rows)
+        except Exception as exc:
+            health.database = "degraded"
+            health.last_error = f"db read fell back: {type(exc).__name__}"
+
+    func_name, raw = _call_market_data(
+        clean_fields,
+        clean_codes,
+        clean_period,
+        start,
+        end,
+        count,
+        div,
+        fill_data,
+        enable_read_from_server,
+    )
+    rows = bars_rows(raw, clean_codes, clean_fields)
+
+    # 012 write-through: cache the fetched single-code closed-range bars.
+    if warehoused and rows:
+        try:
+            warehouse.upsert_bars(clean_codes[0], clean_period, div, rows)
+        except Exception as exc:
+            health.database = "degraded"
+            health.last_error = f"db write fell back: {type(exc).__name__}"
+
+    return ok_envelope(period=clean_period, source=func_name, rows=rows)
+
+
+def instrument_display_name(code: str) -> str:
+    """Best-effort display name; chart data remains useful when detail is absent."""
+
+    try:
+        detail = json_clean(_call_xtdata("get_instrument_detail", code, False)) or {}
+    except McpCoreError:
+        return code
+    if isinstance(detail, dict):
+        for key in ("InstrumentName", "instrument_name", "name", "Name"):
+            if detail.get(key):
+                return str(detail[key])
+    return code
+
+
 def _search_cache_for_call(
     health: HealthState,
     refresh: str,
@@ -465,52 +543,19 @@ def register_xtdata_tools(mcp: MCPServer, registry: ToolRegistry, health: Health
         fill_data: bool = True,
         enable_read_from_server: bool = True,
     ) -> dict[str, Any]:
-        clean_codes = validate_codes(codes)
-        clean_period = validate_period(period)
-        clean_fields = validate_fields(fields)
-        start = validate_date(start_time, "start_time")
-        end = validate_date(end_time, "end_time")
-        div = validate_dividend(dividend_type)
-        if count < -1 or count > 10000:
-            raise McpCoreError("validation", "count out of bounds", {"min": -1, "max": 10000})
-
-        # 012 read-through: a single code over a closed range may be served from the
-        # DB warehouse without re-downloading. Any DB error degrades to the xtdata path.
-        warehoused = warehouse is not None and len(clean_codes) == 1 and bool(start) and bool(end)
-        if warehoused:
-            try:
-                from qmt_mcp_db.coverage import is_covered
-
-                cov = warehouse.coverage(clean_codes[0], clean_period, div)
-                if is_covered(cov["min"], cov["max"], start, end):
-                    rows = warehouse.read_bars(clean_codes[0], clean_period, div, start, end)
-                    return ok_envelope(period=clean_period, source="db-warehouse", rows=rows)
-            except Exception as exc:
-                health.database = "degraded"
-                health.last_error = f"db read fell back: {type(exc).__name__}"
-
-        func_name, raw = _call_market_data(
-            clean_fields,
-            clean_codes,
-            clean_period,
-            start,
-            end,
-            count,
-            div,
-            fill_data,
-            enable_read_from_server,
+        return read_bars_data(
+            health,
+            warehouse,
+            codes=codes,
+            period=period,
+            fields=fields,
+            start_time=start_time,
+            end_time=end_time,
+            count=count,
+            dividend_type=dividend_type,
+            fill_data=fill_data,
+            enable_read_from_server=enable_read_from_server,
         )
-        rows = bars_rows(raw, clean_codes, clean_fields)
-
-        # 012 write-through: cache the fetched single-code closed-range bars.
-        if warehoused and rows:
-            try:
-                warehouse.upsert_bars(clean_codes[0], clean_period, div, rows)
-            except Exception as exc:
-                health.database = "degraded"
-                health.last_error = f"db write fell back: {type(exc).__name__}"
-
-        return ok_envelope(period=clean_period, source=func_name, rows=rows)
 
     @registry.register(
         mcp,

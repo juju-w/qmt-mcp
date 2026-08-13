@@ -612,6 +612,18 @@ def register_optional_xtdata(
         health.set_family("xtdata", "error", f"failed to register xtdata tools: {type(exc).__name__}", [])
 
 
+def register_optional_apps(registry: ToolRegistry, health: HealthState, config: CoreConfig, warehouse=None):
+    """Create UI extensions before MCPServer consumes extension contributions."""
+
+    if not config.enable_xtdata or not registry.visibility.visible(
+        name="qmt_xtdata_kline_chart", family="xtdata", read_only=True
+    ):
+        return None
+    from qmt_mcp_apps.kline import register_kline_app
+
+    return register_kline_app(registry, health, warehouse=warehouse)
+
+
 def register_optional_xttrade(mcp: MCPServer, registry: ToolRegistry, health: HealthState, config: CoreConfig):
     """Register the read-only account-query family iff enabled + allow-listed.
 
@@ -683,6 +695,11 @@ def create_app(config: CoreConfig | None = None):
         health.audit = "error"
         raise
 
+    workers = WorkerPool(config.worker_limit)
+    visibility = ToolVisibilityPolicy(config.tool_profile, config.tool_allowlist, config.tool_denylist)
+    registry = ToolRegistry(health, audit, workers, visibility)
+    warehouse = _make_warehouse(config, health)
+
     private_no_cache = CacheHint(ttl_ms=0, scope="private")
     subscriptions = InMemorySubscriptionBus()
     tasks_extension = None
@@ -717,6 +734,9 @@ def create_app(config: CoreConfig | None = None):
             subscriptions=subscriptions,
         )
         extensions.append(tasks_extension)
+    apps_extension = register_optional_apps(registry, health, config, warehouse=warehouse)
+    if apps_extension is not None:
+        extensions.append(apps_extension)
     token_verifier = build_token_verifier(config) if config.sdk_oauth_enabled else None
     auth_settings = None
     if config.sdk_oauth_enabled:
@@ -745,14 +765,10 @@ def create_app(config: CoreConfig | None = None):
     task_notifications = None
     if tasks_extension is not None:
         task_notifications = mcp.install_task_notifications(tasks_extension)
-    workers = WorkerPool(config.worker_limit)
-    visibility = ToolVisibilityPolicy(config.tool_profile, config.tool_allowlist, config.tool_denylist)
-    registry = ToolRegistry(health, audit, workers, visibility)
     mcp.tool_registry = registry
     if tasks_extension is not None:
         tasks_extension.bind_registry(registry)
     register_core_tools(mcp, registry, health)
-    warehouse = _make_warehouse(config, health)
     register_optional_xtdata(mcp, registry, health, config, warehouse=warehouse)
     trader_session = register_optional_xttrade(mcp, registry, health, config)
     register_optional_portfolio(mcp, registry, health, config, trader_session=trader_session)
@@ -773,6 +789,7 @@ def create_app(config: CoreConfig | None = None):
     core = CoreASGI(app, config, health, registry, token_verifier)
     core.tasks_extension = tasks_extension
     core.task_notifications = task_notifications
+    core.apps_extension = apps_extension
     # Build (do not start) the background readiness probe / trader connector.
     # main() starts them; tests can drive .step()/.attempt() directly.
     if config.enable_xtdata:

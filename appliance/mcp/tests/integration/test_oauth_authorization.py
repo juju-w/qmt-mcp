@@ -314,6 +314,7 @@ def test_oauth_tools_list_and_modern_scope_step_up(fake_xtquant, tmp_path, monke
 
     market_names = {tool["name"] for tool in _response_json(market_listed)["result"]["tools"]}
     assert "qmt_xtdata_snapshot" in market_names
+    assert "qmt_xtdata_kline_chart" in market_names
     assert "qmt_xtdata_download_history" not in market_names
     manage_names = {tool["name"] for tool in _response_json(manage_listed)["result"]["tools"]}
     assert "qmt_xtdata_download_history" in manage_names

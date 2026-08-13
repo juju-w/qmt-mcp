@@ -162,6 +162,11 @@ export QMT_MCP_TOKEN=<token>
 
 ## 运行中的样子
 
+<p align="center">
+  <img src="docs/screenshots/kline-mcp-app.png" width="960" alt="QMT-MCP 对话内交互式 K 线 App，包含日周月切换、复权、均线、成交量和悬浮行情">
+</p>
+<p align="center"><sub>支持 MCP Apps 的 Host 可直接在对话中查看和操作 K 线；其他客户端仍会收到文本摘要和完整结构化数据。</sub></p>
+
 | 个股行情快照 | 行业板块成分 | Docker 内 QMT 终端（RDP） |
 |:---:|:---:|:---:|
 | <img src="docs/screenshots/snapshot-stock.png" width="250" alt="xtdata 个股行情"> | <img src="docs/screenshots/sector-board.png" width="250" alt="xtdata 行业板块"> | <img src="docs/screenshots/rdp-qmt-in-docker.png" width="250" alt="RDP 登录 Docker 内的 QMT 终端"> |
@@ -173,6 +178,7 @@ export QMT_MCP_TOKEN=<token>
 | Windows 原生启动器 | ✅ | 无需 Docker、系统 Python 或 .NET；中英文界面、自动发现 QMT、托盘守护、DPAPI token、ZIP/setup 发布 |
 | 持久 QMT 桌面 + RDP/VNC | ✅ | 启动即拉起终端 + MCP；RDP 与可选 VNC 共用单会话 |
 | 行情 `xtdata` | ✅ | 快照、K线、下载历史、合约详情、板块、日历、指数权重 |
+| 交互式 MCP App | ✅ | 单标的 K 线、成交量、MA5/10/20、悬浮读数、缩放、日周月切换；普通 Host 自动文本回退 |
 | 合约模糊搜索 | ✅ | 中文名、代码、别名、拼音首字母、板块、主题；支持流动性排序 |
 | 行情订阅热缓存 | ✅ | 官方 `subscribe_quote` 优先，轮询兜底 |
 | 期权 / 参考数据 | ✅ | 期权链、报价、IV 输入；财务、新股、分红、可转债、ETF 参考数据 |
@@ -190,14 +196,14 @@ export QMT_MCP_TOKEN=<token>
 1. 先用 `qmt_xtdata_search_instruments` 或 `qmt_xtdata_resolve_instrument`
    找合约，尤其是用户只说中文名、ETF 主题、简称或拼音首字母时。
 2. 高置信候选再调用 `qmt_xtdata_snapshot`、`qmt_xtdata_bars`、
-   `qmt_xtdata_instrument_detail`。
+   `qmt_xtdata_kline_chart`、`qmt_xtdata_instrument_detail`。
 3. 低置信或 `resolved=false` 时让用户澄清，不要编代码。
 
 | 工具 | 说明 |
 |---|---|
 | `qmt_health` · `qmt_capabilities` | 健康 / 能力状态（鉴权、依赖、工具族） |
 | 搜索与解析 | `qmt_xtdata_search_instruments`、`qmt_xtdata_resolve_instrument`、`qmt_xtdata_search_sectors` |
-| 行情 | `qmt_xtdata_snapshot`、`qmt_xtdata_bars`、`qmt_xtdata_download_history`、`qmt_xtdata_download_history_batch` |
+| 行情 | `qmt_xtdata_snapshot`、`qmt_xtdata_bars`、`qmt_xtdata_kline_chart`、`qmt_xtdata_download_history`、`qmt_xtdata_download_history_batch` |
 | 合约与板块 | `qmt_xtdata_instrument_detail`、`qmt_xtdata_sector_list`、`qmt_xtdata_sector_constituents`、`qmt_xtdata_index_weight` |
 | 日历 | `qmt_xtdata_trading_dates`、`qmt_xtdata_trading_calendar`、`qmt_xtdata_holidays` |
 | 订阅缓存 | `qmt_xtdata_quote_subscribe`、`qmt_xtdata_quote_unsubscribe`、`qmt_xtdata_quote_subscriptions`、`qmt_xtdata_quote_subscription_status` |
@@ -210,6 +216,17 @@ export QMT_MCP_TOKEN=<token>
 撤单或划转工具。账户查询需 `QMT_ENABLE_XTTRADE_QUERY=1`、`QMT_TRADE_ACCOUNTS`
 白名单，以及券商开通「程序化交易 / 外部 Python 接口」权限；未开通时返回
 `not_authorized`，服务不崩溃。
+
+### 交互式 K 线 MCP App
+
+可以直接对 Agent 说「显示天岳先进最近 120 天的日 K」或「把 510500 的周线画出来」。
+Agent 先解析标的，再调用 `qmt_xtdata_kline_chart`。声明
+`io.modelcontextprotocol/ui` 的 MCP Apps Host 会在对话里显示可缩放、可悬浮查看
+OHLC/成交量、可切换日周月和复权方式的图表；普通 Host、qmtctl 和脚本仍得到简短
+文字摘要与完整 `structuredContent`，不会出现空白结果。
+
+App 模板使用版本化 `ui://` 资源，全部 CSS/JavaScript/图表引擎已打进单个 HTML；
+运行时不需要 Node、CDN 或额外端口，也不请求摄像头、麦克风、定位等权限。
 
 ## 安全模型
 

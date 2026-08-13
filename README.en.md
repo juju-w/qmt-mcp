@@ -36,6 +36,11 @@ immutable base image  ghcr.io/juju-w/qmt-mcp           mounted at runtime
 
 ## Screenshots
 
+<p align="center">
+  <img src="docs/screenshots/kline-mcp-app.png" width="960" alt="Interactive QMT-MCP K-line App with period and adjustment controls, moving averages, volume, and hover market data">
+</p>
+<p align="center"><sub>MCP Apps hosts render this chart directly in the conversation; other clients still receive a concise text summary and complete structured data.</sub></p>
+
 | Stock snapshot | Sector board | QMT terminal in Docker (RDP) |
 |:---:|:---:|:---:|
 | <img src="docs/screenshots/snapshot-stock.png" width="250" alt="xtdata stock snapshot"> | <img src="docs/screenshots/sector-board.png" width="250" alt="xtdata sector board"> | <img src="docs/screenshots/rdp-qmt-in-docker.png" width="250" alt="RDP into the QMT terminal running in Docker"> |
@@ -47,6 +52,7 @@ immutable base image  ghcr.io/juju-w/qmt-mcp           mounted at runtime
 | Native Windows launcher | ✅ ready | no Docker/system Python/.NET; QMT discovery, tray supervision, DPAPI token, ZIP/setup releases |
 | Persistent QMT desktop + RDP/VNC | ✅ | terminal + MCP start at boot; RDP and optional VNC share one session |
 | Market data `xtdata` (snapshot/bars/instruments/sectors/calendar) | ✅ ready | MCP tools return structured JSON (11/11 verified live) |
+| Interactive MCP App | ✅ ready | single-instrument K-line, volume, MA5/10/20, hover values, zoom, period/adjustment controls; text fallback elsewhere |
 | **Fuzzy instrument search** (name/pinyin/alias/sector/theme) | ✅ ready | the agent locates instruments without knowing QMT codes |
 | Read-only account queries `xttrade` | ⚠️ needs broker permission | degrades to `not_authorized` (no crash) when not enabled |
 | Database persistence (PostgreSQL, optional) | ✅ ready | market-data warehouse, read/write-through, off by default |
@@ -77,6 +83,7 @@ front; it searches by Chinese name / pinyin initials / alias / sector / theme
 | `qmt_xtdata_instrument_detail` | metadata for one instrument |
 | `qmt_xtdata_snapshot` | real-time snapshot (last price / bid-ask / …) |
 | `qmt_xtdata_bars` | OHLC bars (tick / minute / day / week / month…) |
+| `qmt_xtdata_kline_chart` | interactive single-instrument candlestick/volume MCP App, with concise text + structured fallback |
 | `qmt_xtdata_sector_list` · `qmt_xtdata_sector_constituents` | sector list / constituents |
 | `qmt_xtdata_index_weight` | index weights |
 | `qmt_xtdata_trading_dates` · `qmt_xtdata_trading_calendar` · `qmt_xtdata_holidays` | trading calendar |
@@ -107,6 +114,19 @@ All trading and account tools are **read-only**, authenticated, audited, and
 return structured JSON (no order/cancel/transfer tools). Managed sectors and
 formula output are non-trading mutations that are off by default and require
 explicit feature gates, a namespace/sandbox, and OAuth `qmt:manage`.
+
+### Interactive K-line MCP App
+
+Ask an agent to “show the last 120 daily candles for 688234.SH” or “chart the
+weekly K-line for 510500.” The agent resolves a name first, then calls
+`qmt_xtdata_kline_chart`. Hosts that declare `io.modelcontextprotocol/ui` render
+an in-conversation chart with hover OHLC/volume, zoom, daily/weekly/monthly
+periods, and adjustment controls. Other hosts, qmtctl, and scripts still receive
+a concise text summary and complete `structuredContent`.
+
+The versioned `ui://` template bundles its CSS, JavaScript, Apps client, and
+chart engine into one HTML resource. It needs no Node runtime, CDN, extra port,
+or camera/microphone/location permissions.
 
 > **Account queries (feature 04)** are off by default; enable with
 > `QMT_ENABLE_XTTRADE_QUERY=1` **and** an account allowlist `QMT_TRADE_ACCOUNTS`,

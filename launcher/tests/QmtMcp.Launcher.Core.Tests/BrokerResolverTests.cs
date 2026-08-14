@@ -24,6 +24,28 @@ public sealed class BrokerResolverTests
     }
 
     [Fact]
+    public void GuangdaNestedSdkTreeResolvesWithoutOverrides()
+    {
+        var fileSystem = new FakeFileSystem()
+            .AddFile(@"C:\Program Files\guangda_qmt\bin.x64\XtMiniQmt.exe")
+            .AddFile(@"C:\Program Files\guangda_qmt\bin.x64\Lib\site-packages\xtquant\__init__.py")
+            .AddDirectory(@"C:\Program Files\guangda_qmt\userdata_mini");
+
+        var result = new BrokerResolver(fileSystem).Resolve(
+            new BrokerSelection(@"C:\Program Files\guangda_qmt\bin.x64\XtMiniQmt.exe"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(@"C:\Program Files\guangda_qmt", result.Broker!.QmtRoot);
+        Assert.Equal(
+            @"C:\Program Files\guangda_qmt\bin.x64\Lib\site-packages",
+            result.Broker.XtquantRoot);
+        Assert.Equal(
+            @"C:\Program Files\guangda_qmt\userdata_mini",
+            result.Broker.UserdataPath);
+    }
+
+    [Fact]
     public void MissingClientFailsBeforeGuessing()
     {
         var result = new BrokerResolver(new FakeFileSystem()).Resolve(

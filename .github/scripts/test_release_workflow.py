@@ -35,7 +35,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_windows_packaging_inputs_are_pinned(self) -> None:
         self.assertIn("actions/setup-dotnet@v6.0.0", self.workflow)
         self.assertIn("--version=6.7.1", self.workflow)
-        self.assertIn('python-version: "3.12"', self.workflow)
+        self.assertIn('python-version: "3.11"', self.workflow)
 
 
 if __name__ == "__main__":

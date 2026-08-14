@@ -87,7 +87,7 @@ transport；旧客户端会收到明确的 unsupported-protocol 错误，不会�
    本地 MCP 连接。
 
 启动器只监听 `127.0.0.1`，token 用当前 Windows 用户的 DPAPI 加密。发行包内置
-Python 3.12、MCP 依赖和本项目服务端源码，但不包含券商终端、`xtquant`、账号或
+Python 3.11（兼容券商提供的 `cp311` xtquant 扩展）、MCP 依赖和本项目服务端源码，但不包含券商终端、`xtquant`、账号或
 登录凭据，也不会自动填写密码、验证码或交易确认。界面支持简体中文和英文，首次
 启动跟随 Windows 显示语言，右上角可以即时切换并记住选择。
 

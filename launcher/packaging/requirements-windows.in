@@ -1,7 +1,7 @@
-# Native launcher runtime. OAuth and PostgreSQL are appliance-only features;
-# the Windows launcher always uses static-token auth and local state.
+# Native Python 3.11 launcher runtime. OAuth and PostgreSQL are appliance-only
+# features; the Windows launcher always uses static-token auth and local state.
 
 mcp==2.0.0
 uvicorn==0.52.0
-numpy==2.5.1
+numpy==2.4.6
 pandas==3.0.5

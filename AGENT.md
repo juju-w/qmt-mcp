@@ -42,6 +42,7 @@
 | 028 Windows 原生启动器 | ✅ 已发布——.NET 10/Avalonia、中英文切换、DPAPI、终端探测/守护、内置 Python、ZIP/setup、Windows CI/Release；真实 QMT xtdata 已验证 |
 | 029 MCP 1.0 协议基线 | ✅ 完成——仅支持 2026-07-28、无会话 Streamable HTTP；服务端/qmtctl 均拒绝 2025 fallback |
 | 030 MCP K线 App | ✅ 完成——官方 Apps 扩展、单标的交互式 K线/成交量/均线、主机内刷新与全屏、文本与结构化回退 |
+| 031 MCP App 故事原型 | ✅ 完成——单 HTML、Agent/App/状态分组、Codex/Claude 风格宿主会话、四个 App 页面、长页滚动与离线预览 |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。
@@ -157,3 +158,6 @@ dotnet test QmtMcp.Launcher.slnx --configuration Release --no-build
 
 Spec-Driven（spec-kit）：`/speckit-specify → clarify → plan → tasks → implement`，一次一个 feature，
 plan 必过宪章检查（`.specify/memory/constitution.md`）。范围蔓延就新开 spec，不要往进行中的 spec 里塞。
+
+新增 MCP App 先按 [`docs/MCP-APP-PROTOTYPES.md`](docs/MCP-APP-PROTOTYPES.md)
+制作一个离线单 HTML 故事原型。先判断普通文本、对话内确认还是 App；不要把每个工具结果都包装成 App。

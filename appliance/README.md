@@ -84,6 +84,11 @@ The HTML resource is self-contained and requests no external origins or device
 permissions. Node is required only when rebuilding frontend source; it is not
 part of the Docker image or Windows runtime.
 
+Future Apps follow the repository's
+[`MCP App prototype convention`](../docs/MCP-APP-PROTOTYPES.md): review the
+complete host conversation in one offline HTML artifact before registering a
+production tool or `ui://` resource, and keep simple answers host-native.
+
 ## Durable MCP Tasks
 
 For stable MCP `2026-07-28` clients declaring

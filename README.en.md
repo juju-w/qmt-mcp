@@ -37,9 +37,9 @@ immutable base image  ghcr.io/juju-w/qmt-mcp           mounted at runtime
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/kline-mcp-app.png" width="960" alt="Interactive QMT-MCP K-line App with period and adjustment controls, moving averages, volume, and hover market data">
+  <img src="docs/screenshots/mcp-app-storyboard.png" width="960" alt="Complete QMT-MCP story prototype inside an AI conversation host, including a natural-language request, tool calls, and an embedded K-line App">
 </p>
-<p align="center"><sub>MCP Apps hosts render this chart directly in the conversation; other clients still receive a concise text summary and complete structured data.</sub></p>
+<p align="center"><sub>From a natural-language request to tool calls, an embedded App, and the agent conclusion. <a href="docs/prototypes/qmt-mcp-app-story.html">Open the single-file interactive prototype</a>.</sub></p>
 
 | Stock snapshot | Sector board | QMT terminal in Docker (RDP) |
 |:---:|:---:|:---:|
@@ -127,6 +127,11 @@ a concise text summary and complete `structuredContent`.
 The versioned `ui://` template bundles its CSS, JavaScript, Apps client, and
 chart engine into one HTML resource. It needs no Node runtime, CDN, extra port,
 or camera/microphone/location permissions.
+
+New Apps start with a single-file story prototype inside a complete agent
+conversation. We reserve Apps for visual exploration, comparison, risk, and
+confirmation tasks where plain text is insufficient. See
+[`docs/MCP-APP-PROTOTYPES.md`](docs/MCP-APP-PROTOTYPES.md).
 
 > **Account queries (feature 04)** are off by default; enable with
 > `QMT_ENABLE_XTTRADE_QUERY=1` **and** an account allowlist `QMT_TRADE_ACCOUNTS`,

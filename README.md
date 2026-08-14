@@ -163,9 +163,9 @@ export QMT_MCP_TOKEN=<token>
 ## 运行中的样子
 
 <p align="center">
-  <img src="docs/screenshots/kline-mcp-app.png" width="960" alt="QMT-MCP 对话内交互式 K 线 App，包含日周月切换、复权、均线、成交量和悬浮行情">
+  <img src="docs/screenshots/mcp-app-storyboard.png" width="960" alt="QMT-MCP 在 AI 对话宿主中的完整故事原型，包含自然语言提问、工具调用和内嵌 K 线 App">
 </p>
-<p align="center"><sub>支持 MCP Apps 的 Host 可直接在对话中查看和操作 K 线；其他客户端仍会收到文本摘要和完整结构化数据。</sub></p>
+<p align="center"><sub>从自然语言问题到工具调用、内嵌 App 和 Agent 结论。<a href="docs/prototypes/qmt-mcp-app-story.html">打开单文件交互原型</a>。</sub></p>
 
 | 个股行情快照 | 行业板块成分 | Docker 内 QMT 终端（RDP） |
 |:---:|:---:|:---:|
@@ -227,6 +227,10 @@ OHLC/成交量、可切换日周月和复权方式的图表；普通 Host、qmtc
 
 App 模板使用版本化 `ui://` 资源，全部 CSS/JavaScript/图表引擎已打进单个 HTML；
 运行时不需要 Node、CDN 或额外端口，也不请求摄像头、麦克风、定位等权限。
+
+新 App 先在完整 Agent 对话里做单文件故事原型，只有图形、比较、风险和确认等
+文本难以高效表达的任务才使用 App。约定与判断表见
+[`docs/MCP-APP-PROTOTYPES.md`](docs/MCP-APP-PROTOTYPES.md)。
 
 ## 安全模型
 

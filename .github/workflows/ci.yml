@@ -100,11 +100,16 @@ jobs:
         run: |
           npm run typecheck
           npm test
-      - name: Rebuild the single-file App resource
-        run: npm run build
-      - name: Verify the tracked resource is current
+      - name: Rebuild single-file App resources and story prototype
+        run: |
+          npm run build
+          npm run build:story
+      - name: Verify tracked frontend artifacts are current
         working-directory: .
-        run: git diff --exit-code -- appliance/mcp/qmt_mcp_apps/resources/kline-chart-v1.html
+        run: |
+          git diff --exit-code -- \
+            appliance/mcp/qmt_mcp_apps/resources/kline-chart-v1.html \
+            docs/prototypes/qmt-mcp-app-story.html
 
   launcher-core:
     name: Native launcher (.NET, macOS)

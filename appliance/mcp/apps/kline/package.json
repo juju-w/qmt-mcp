@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:story": "vite build --config vite.story.config.ts",
     "dev": "vite",
+    "dev:story": "vite --config vite.story.config.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

@@ -233,8 +233,8 @@ error instead of a compatibility session.
    after **Market data** becomes **Ready**.
 
 The launcher binds only to `127.0.0.1` and protects its token with current-user
-Windows DPAPI. The release bundles Python 3.12, locked MCP dependencies, and this
-project's server source. It does not bundle QMT, `xtquant`, account data, or
+Windows DPAPI. The release bundles Python 3.11 for compatibility with broker-provided
+`cp311` xtquant extensions, locked MCP dependencies, and this project's server source. It does not bundle QMT, `xtquant`, account data, or
 credentials, and it does not automate login or trading dialogs. The UI supports
 Simplified Chinese and English, defaults from the Windows display language, and
 remembers an explicit selection.

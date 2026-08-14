@@ -14,10 +14,12 @@ ICON = ROOT / "launcher" / "src" / "QmtMcp.Launcher.Desktop" / "Assets" / "app-i
 class WindowsLauncherPackagingTests(unittest.TestCase):
     def test_python_runtime_download_is_versioned_and_hash_verified(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("$PythonVersion = '3.12.10'", script)
-        self.assertIn("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3", script)
+        self.assertIn("$PythonVersion = '3.11.9'", script)
+        self.assertIn("009d6bf7e3b2ddca3d784fa09f90fe54336d5b60f0e0f305c37f400bf83cfd3b", script)
         self.assertIn("Get-FileHash -Algorithm SHA256", script)
         self.assertIn("--require-hashes", script)
+        self.assertIn("DependencyPython must be Python 3.11", script)
+        self.assertIn("python311._pth", script)
         self.assertIn("'restore', $Project, '--runtime', 'win-x64', '--locked-mode'", script)
         self.assertIn("requirements-windows.txt", script)
 
@@ -36,7 +38,7 @@ class WindowsLauncherPackagingTests(unittest.TestCase):
         requirements = WINDOWS_REQUIREMENTS.read_text(encoding="utf-8")
         self.assertNotIn("asyncpg==", requirements)
         self.assertIn("mcp==2.0.0", requirements)
-        self.assertIn("numpy==2.5.1", requirements)
+        self.assertIn("numpy==2.4.6", requirements)
         self.assertIn("pandas==3.0.5", requirements)
 
     def test_zip_and_installer_share_one_staging_directory(self) -> None:
@@ -45,13 +47,13 @@ class WindowsLauncherPackagingTests(unittest.TestCase):
         self.assertIn('"/DStageDir=$StageDirectory"', script)
         self.assertIn("LAUNCHER_SHA256SUMS", script)
 
-    def test_installer_is_per_user_and_x64(self) -> None:
+    def test_installer_is_per_user_x64_and_has_no_post_install_recompression(self) -> None:
         installer = INSTALLER.read_text(encoding="utf-8")
         self.assertIn("DefaultDirName={localappdata}\\Programs\\QMT-MCP", installer)
         self.assertIn("PrivilegesRequired=lowest", installer)
         self.assertIn("ArchitecturesAllowed=x64compatible", installer)
-        self.assertIn("compact.exe", installer)
-        self.assertIn("/EXE:LZX", installer)
+        self.assertNotIn("compact.exe", installer)
+        self.assertNotIn("/EXE:LZX", installer)
 
     def test_installer_removes_pre_single_file_runtime(self) -> None:
         installer = INSTALLER.read_text(encoding="utf-8")

@@ -16,8 +16,8 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$PythonVersion = '3.12.10'
-$PythonSha256 = '4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3'
+$PythonVersion = '3.11.9'
+$PythonSha256 = '009d6bf7e3b2ddca3d784fa09f90fe54336d5b60f0e0f305c37f400bf83cfd3b'
 $PythonUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-embed-amd64.zip"
 
 $LauncherRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -155,15 +155,19 @@ Expand-Archive -Path $Archive -DestinationPath $RuntimeDirectory
 $SitePackages = Join-Path $RuntimeDirectory 'Lib\site-packages'
 New-Item -ItemType Directory -Force -Path $SitePackages | Out-Null
 @(
-    'python312.zip'
+    'python311.zip'
     '.'
     'Lib'
     'Lib\site-packages'
     '..\..\server'
     'import site'
-) | Set-Content -Encoding ASCII (Join-Path $RuntimeDirectory 'python312._pth')
+) | Set-Content -Encoding ASCII (Join-Path $RuntimeDirectory 'python311._pth')
 
 $Requirements = Join-Path $PSScriptRoot 'requirements-windows.txt'
+Invoke-Checked -Command $DependencyPython -CommandArguments @(
+    '-c',
+    "import sys; assert sys.version_info[:2] == (3, 11), 'DependencyPython must be Python 3.11'"
+)
 Invoke-Checked -Command $DependencyPython -CommandArguments @(
     '-m', 'pip', 'install',
     '--disable-pip-version-check',
@@ -190,14 +194,14 @@ Set-Content -Encoding ASCII (Join-Path $StageDirectory 'VERSION') $Version
 $EmbeddedPython = Join-Path $RuntimeDirectory 'python.exe'
 Invoke-Checked -Command $EmbeddedPython -CommandArguments @(
     '-c',
-    "import importlib.util, os; import cffi, cryptography, numpy, pandas, qmt_mcp, win32api, win32job; from pathlib import Path; from qmt_mcp_core.runtime_paths import runtime_path; from qmt_mcp_xtdata.search_cache import cache_path; assert importlib.util.find_spec('asyncpg') is None; assert runtime_path(r'D:\QMT', 'nt') == r'D:\QMT'; expected = Path(os.environ['LOCALAPPDATA']) / 'QMT-MCP' / 'cache' / 'instrument-search-v1.json'; assert cache_path(str(expected)) == expected; print('lean native MCP runtime OK')"
+    "import importlib.util, os, sys; import cffi, cryptography, numpy, pandas, qmt_mcp, win32api, win32job; from pathlib import Path; from qmt_mcp_core.runtime_paths import runtime_path; from qmt_mcp_xtdata.search_cache import cache_path; assert sys.version_info[:2] == (3, 11); assert importlib.util.find_spec('asyncpg') is None; assert runtime_path(r'D:\QMT', 'nt') == r'D:\QMT'; expected = Path(os.environ['LOCALAPPDATA']) / 'QMT-MCP' / 'cache' / 'instrument-search-v1.json'; assert cache_path(str(expected)) == expected; print('lean native MCP runtime OK')"
 )
 
 $RequiredPaths = @(
     'QmtMcp.Launcher.exe'
     'Assets\app-icon.ico'
     'runtime\python\python.exe'
-    'runtime\python\python312._pth'
+    'runtime\python\python311._pth'
     'server\qmt_mcp.py'
     'server\qmt_mcp_core\app.py'
     'server\qmt_mcp_apps\resources\kline-chart-v1.html'

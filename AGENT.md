@@ -53,7 +53,8 @@
   核心/UI 可在 macOS 开发，最终打包和安装 smoke 必须在 Windows x64 CI/真机完成。
 - 若用远程主机，访问信息放本地 `.env`（如 `SSH_*`）——**已 gitignore，绝不提交**。
 - 在该主机上用 docker 构建/部署。本地构建 tag `qmt-appliance-base:local`，发布镜像 `ghcr.io/juju-w/qmt-mcp`；容器按实例命名（如 `qmt-<broker-id>`）。
-- **Python 固定 3.12**：`xtquant` 官方最高只支持到 3.12，不要升级 Wine 内的 Python。
+- **Python ABI 分平台固定**：Docker/Wine 使用 3.12；Windows 原生启动器使用 3.11，以兼容券商包常见的
+  `cp311` xtquant 扩展。不要脱离真实券商包和发行 smoke 单独升级任一运行时。
 - **Go 固定 1.25**：qmtctl 使用官方 MCP Go SDK 1.7.x，开发、CI、发布工具链必须一致。
 - **free-threading（无 GIL）已调研、不采用**：无 GIL 是 3.13t/3.14t（不是 3.12）；导入未标记 FT 安全的 C 扩展会让解释器**自动重开 GIL**，而 `xtquant` 是专有编译扩展、不可能标 FT 安全 → 零收益且未测有风险；况且本服务是 I/O 密集（HTTP/asyncpg/共享内存），GIL 非瓶颈。结论：保持 3.12 + GIL。
 

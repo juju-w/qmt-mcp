@@ -55,5 +55,4 @@ Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs c
 Name: "{group}\QMT-MCP"; Filename: "{app}\QmtMcp.Launcher.exe"; WorkingDir: "{app}"
 
 [Run]
-Filename: "{sys}\compact.exe"; Parameters: "/C /S:""{app}\runtime\python"" /I /Q /EXE:LZX ""{app}\runtime\python\*"""; StatusMsg: "Optimizing the embedded Python runtime..."; Flags: runhidden waituntilterminated
 Filename: "{app}\QmtMcp.Launcher.exe"; Description: "Launch QMT-MCP"; Flags: nowait postinstall skipifsilent

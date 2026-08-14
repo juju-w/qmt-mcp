@@ -25,7 +25,7 @@ whose `.github/workflows/` content differs from the default branch, even with
 
 `launcher/packaging/package-windows.ps1` builds both Windows assets from one
 staging directory. It publishes the Avalonia app self-contained, verifies the
-pinned Python 3.12.10 embeddable archive SHA256, installs the hash-locked MCP
+pinned Python 3.11.9 embeddable archive SHA256, installs the hash-locked MCP
 requirements into that runtime, copies broker-neutral server source, runs an
 embedded-Python import smoke, and then creates:
 

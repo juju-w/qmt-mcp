@@ -42,7 +42,7 @@
 | 028 Windows 原生启动器 | ✅ 已发布——.NET 10/Avalonia、中英文切换、DPAPI、终端探测/守护、内置 Python、ZIP/setup、Windows CI/Release；真实 QMT xtdata 已验证 |
 | 029 MCP 1.0 协议基线 | ✅ 完成——仅支持 2026-07-28、无会话 Streamable HTTP；服务端/qmtctl 均拒绝 2025 fallback |
 | 030 MCP K线 App | ✅ 完成——官方 Apps 扩展、单标的交互式 K线/成交量/均线、主机内刷新与全屏、文本与结构化回退 |
-| 031 MCP App 故事原型 | ✅ 完成——单 HTML、Agent/App/状态分组、Codex/Claude 风格宿主会话、四个 App 页面、长页滚动与离线预览 |
+| 031 MCP App 故事原型 | ✅ 完成——单 HTML、Codex/Claude 风格宿主会话；当前仅公开完成度达标的 K 线 App，其余六个场景保留源码但隐藏 |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。

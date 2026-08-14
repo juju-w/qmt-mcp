@@ -38,8 +38,8 @@ import type { IChartApi } from "lightweight-charts";
 import { renderKlineChart } from "./chart";
 import { resolveSceneId, sceneById } from "./model";
 import { renderSceneApp, type SceneUiState } from "./renderers";
-import { storyScenes } from "./scenes";
-import { localized, type PreviewMode, type StoryLocale, type StoryTheme } from "./types";
+import { visibleStoryScenes } from "./scenes";
+import { localized, type PreviewMode, type StoryLocale, type StoryPresentation, type StoryTheme } from "./types";
 import "./style.css";
 
 interface StoryState {
@@ -183,19 +183,25 @@ function updateUrl(): void {
 }
 
 function renderSceneRail(): string {
-  const renderItems = (ids: string[]) => storyScenes
-    .filter((item) => ids.includes(item.id))
+  const renderItems = (presentations: StoryPresentation[]) => visibleStoryScenes
+    .filter((item) => presentations.includes(item.presentation))
     .map(
       (item) => `<button type="button" class="scene-link ${item.id === state.sceneId ? "is-active" : ""}" data-scene="${item.id}" aria-current="${item.id === state.sceneId ? "page" : "false"}">
-        <span class="scene-number">${item.order}</span>
+        <span class="scene-number">${visibleStoryScenes.indexOf(item) + 1}</span>
         ${icon(item.icon)}
         <span>${localized(item.title, state.locale)}</span>
       </button>`,
     )
     .join("");
-  return `<section class="scene-group"><h2>${t().agentConversation}</h2>${renderItems(["demand", "search"])}</section>
-    <section class="scene-group is-app-group"><h2>${t().appPages}</h2>${renderItems(["kline", "etf", "portfolio", "trade"])}</section>
-    <section class="scene-group"><h2>${t().systemStatus}</h2>${renderItems(["recovery"])}</section>`;
+  return [
+    { label: t().agentConversation, presentations: ["conversation", "confirmation"] as StoryPresentation[], className: "" },
+    { label: t().appPages, presentations: ["app"] as StoryPresentation[], className: " is-app-group" },
+    { label: t().systemStatus, presentations: ["status"] as StoryPresentation[], className: "" },
+  ]
+    .map((group) => ({ ...group, items: renderItems(group.presentations) }))
+    .filter((group) => group.items)
+    .map((group) => `<section class="scene-group${group.className}"><h2>${group.label}</h2>${group.items}</section>`)
+    .join("");
 }
 
 function renderToolRows(): string {

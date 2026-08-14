@@ -22,14 +22,15 @@ conversation that motivates and contains the corresponding MCP App.
 
 **Acceptance**:
 
-1. The left rail exposes all seven scenes and groups them as Agent conversation,
-   MCP App pages, and system status.
+1. The left rail exposes only the review-ready K-line scene. Draft scenes remain
+   in source fixtures but are not user reachable, and empty groups are omitted.
 2. Selecting a scene updates the title, user message, assistant narration, tool
    rows, embedded App, assistant conclusion, schema, and capability status.
 3. The right side is recognizably a real AI chat surface, not a standalone
    dashboard or screenshot gallery.
-4. Only K-line, ETF comparison, portfolio risk, and trade confirmation use a
-   framed MCP App. Simpler steps remain normal conversation or inline results.
+4. Only the review-ready K-line scene uses a framed MCP App. Simpler steps
+   remain normal conversation or inline results; unfinished App concepts stay
+   hidden until they meet the same product-quality bar.
 
 ### US2 - Exercise the prototype (P1)
 
@@ -39,10 +40,9 @@ changes without making network calls.
 **Acceptance**:
 
 1. Tool rows expand and collapse.
-2. K-line period controls, search selection, ETF ranking, portfolio view,
-   guarded trade-plan preview, and connection retry have meaningful local
-   behavior.
-3. Trade-plan scenes remain explicitly non-executing and permission-gated.
+2. K-line period controls have meaningful local behavior.
+3. All non-K-line draft scenes cannot be opened from navigation or direct URL
+   parameters.
 
 ### US3 - Review host and responsive variants (P2)
 
@@ -83,6 +83,8 @@ renderer without changing the prototype shell.
 - **FR-009**: Visible UI controls MUST be keyboard reachable and have accessible
   labels and focus states.
 - **FR-010**: CI MUST rebuild the artifact and fail on drift.
+- **FR-011**: Scene fixtures MUST declare public or draft visibility. Navigation
+  and URL resolution MUST exclude draft scenes without deleting their source.
 
 ## Non-Goals
 
@@ -94,7 +96,7 @@ renderer without changing the prototype shell.
 ## Success Criteria
 
 - A new reviewer can understand the full QMT-MCP App story from the single file.
-- All seven scenes switch without reload and their primary controls work.
+- The public K-line scene and its primary controls work without network access.
 - The final build loads with one HTML request, zero external requests, and zero
   browser-console errors.
 - Visual QA records no overlap or document-width overflow at the required

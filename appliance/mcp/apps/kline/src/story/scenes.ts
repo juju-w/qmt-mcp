@@ -6,6 +6,7 @@ export const storyScenes: StoryScene[] = [
   {
     id: "demand",
     order: 1,
+    visibility: "draft",
     icon: "MessageSquare",
     availability: "ready",
     title: text("提出需求", "Ask QMT"),
@@ -27,6 +28,7 @@ export const storyScenes: StoryScene[] = [
   {
     id: "search",
     order: 2,
+    visibility: "draft",
     icon: "Search",
     availability: "ready",
     title: text("搜索标的", "Resolve instrument"),
@@ -54,6 +56,7 @@ export const storyScenes: StoryScene[] = [
   {
     id: "kline",
     order: 3,
+    visibility: "public",
     icon: "ChartCandlestick",
     availability: "ready",
     title: text("K线分析", "K-line analysis"),
@@ -81,6 +84,7 @@ export const storyScenes: StoryScene[] = [
   {
     id: "etf",
     order: 4,
+    visibility: "draft",
     icon: "BarChart3",
     availability: "ready",
     title: text("ETF比较", "Compare ETFs"),
@@ -108,6 +112,7 @@ export const storyScenes: StoryScene[] = [
   {
     id: "portfolio",
     order: 5,
+    visibility: "draft",
     icon: "ShieldCheck",
     availability: "permission",
     title: text("组合风险", "Portfolio risk"),
@@ -135,6 +140,7 @@ export const storyScenes: StoryScene[] = [
   {
     id: "trade",
     order: 6,
+    visibility: "draft",
     icon: "ClipboardCheck",
     availability: "permission",
     title: text("交易计划", "Trade plan"),
@@ -157,6 +163,7 @@ export const storyScenes: StoryScene[] = [
   {
     id: "recovery",
     order: 7,
+    visibility: "draft",
     icon: "RefreshCw",
     availability: "recovery",
     title: text("异常恢复", "Recover errors"),
@@ -176,3 +183,5 @@ export const storyScenes: StoryScene[] = [
     presentation: "status",
   },
 ];
+
+export const visibleStoryScenes = storyScenes.filter((scene) => scene.visibility === "public");

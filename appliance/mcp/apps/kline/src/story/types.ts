@@ -6,6 +6,7 @@ export type ToolState = "success" | "permission" | "error";
 export type StoryRenderer = "demand" | "search" | "kline" | "etf" | "portfolio" | "trade" | "recovery";
 export type StorySceneId = StoryRenderer;
 export type StoryPresentation = "conversation" | "confirmation" | "app" | "status";
+export type StoryVisibility = "public" | "draft";
 
 export interface LocalizedText {
   "zh-CN": string;
@@ -23,6 +24,7 @@ export interface StoryToolActivity {
 export interface StoryScene {
   id: StorySceneId;
   order: number;
+  visibility: StoryVisibility;
   icon: string;
   availability: Availability;
   title: LocalizedText;

@@ -5,8 +5,8 @@
 - Accepted concept:
   `~/.codex/generated_images/019e8947-cd73-7760-83d6-5fe085d9d01a/exec-eaba404d-4443-4c1b-b479-88838bb554f9.png`
   (`1505x1045`).
-- Native-size implementation capture: `output/playwright/story-native.png`
-  (`1505x1045`, local QA artifact).
+- Native-size implementation capture: temporary Playwright/Chrome capture at
+  `1505x1045`, removed after `view_image` inspection.
 - Tracked README capture: `docs/screenshots/mcp-app-storyboard.png`
   (`1536x1048`).
 - Side-by-side evidence:
@@ -21,7 +21,7 @@
 | App anatomy | Quote header, period control, OHLC strip, K-line, volume, source footer | Same hierarchy with real Lightweight Charts canvas | Matched |
 | Typography and density | Compact utility typography and tabular market values | Segoe/PingFang fallbacks, stable rows, no viewport-scaled type | Matched |
 | Palette | True white/cool gray, green actions, red-up/green-down market colors | Same flat palette in light and dark themes; no gradients | Matched |
-| Navigation model | Seven numbered story scenes | Seven scenes retained and grouped by Agent/App/system role | Intentional user-approved improvement |
+| Navigation model | Seven numbered story scenes | Only the review-ready K-line scene is visible | Intentional user-approved improvement; unfinished scenes are hidden |
 | Height model | Single-screen concept | Long scenes grow and use document scrolling; composer remains reachable | Intentional user-approved improvement |
 | Simple scenes | Concept framed every selected output | Demand is pure transcript; search is a compact disambiguation confirmation | Intentional user-approved improvement |
 
@@ -32,15 +32,17 @@
   fixture mode, output format, schema, and response time.
 - Added visible group labels (`Agent 对话`, `MCP App 页面`, `系统状态`) are from
   the user's later direction. No other unapproved above-the-fold copy remains.
-- Exercised all seven scene links, tool disclosure, search alternatives and
-  confirmation, K-line period switching, ETF ranking, portfolio view, guarded
-  trade preview, recovery retry, theme, locale, preview mode, and composer.
-- Trade preview explicitly states that no order or real account connection was
-  created.
+- Exercised tool disclosure, K-line period switching, theme, locale, preview
+  mode, and composer on the public scene.
+- Confirmed that all six draft-scene deep links resolve to K-line and cannot
+  expose their unfinished surfaces.
 
 ## Responsive And Runtime QA
 
 - Viewports `1536x1048`, `1024x900`, `768x900`, and `390x844` were inspected.
+- The post-hide pass repeated the accepted concept's native `1505x1045`
+  viewport; document width matched the viewport and the final 9 vertical pixels
+  remained available through normal page scrolling.
 - At every measured width, document `scrollWidth == clientWidth`; longer scenes
   extend vertically and remain reachable by scrolling.
 - Mobile navigation scrolls the selected scene into view without widening the
@@ -59,6 +61,9 @@
    compact, expandable confirmation result.
 4. Removed fixed transcript height and repaired mobile grid min-width overflow.
 5. Added active-scene auto-scroll for narrow horizontal navigation.
+6. Hid all six non-K-line drafts after product review found their current
+   presentation too close to formatted Markdown; retained their typed fixtures
+   and renderers for a later redesign.
 
 No blocking fidelity, responsiveness, interaction, accessibility, or asset
 issues remain. The intentional differences above implement explicit user

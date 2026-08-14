@@ -1,4 +1,4 @@
-import { storyScenes } from "./scenes";
+import { visibleStoryScenes } from "./scenes";
 import type { StoryScene, StorySceneId } from "./types";
 
 export interface EtfCandidate {
@@ -13,11 +13,11 @@ export interface EtfCandidate {
 export type EtfRank = "liquidity" | "cost" | "tracking";
 
 export function resolveSceneId(value: string | null | undefined): StorySceneId {
-  return storyScenes.some((scene) => scene.id === value) ? (value as StorySceneId) : "kline";
+  return visibleStoryScenes.some((scene) => scene.id === value) ? (value as StorySceneId) : "kline";
 }
 
 export function sceneById(id: StorySceneId): StoryScene {
-  return storyScenes.find((scene) => scene.id === id) ?? storyScenes[2]!;
+  return visibleStoryScenes.find((scene) => scene.id === id) ?? visibleStoryScenes.find((scene) => scene.id === "kline")!;
 }
 
 export function rankEtfs(candidates: EtfCandidate[], rank: EtfRank): EtfCandidate[] {

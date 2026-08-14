@@ -6,7 +6,7 @@
 |---|---|
 | TypeScript | `npm run typecheck` passed |
 | Vitest | 7 tests passed across 2 files |
-| Single-file build | 241.83 KB raw / 77.35 KB gzip |
+| Single-file build | 242.11 KB raw / 77.44 KB gzip; deterministic SHA-256 `306c1d86032b53b04dd87a084b286fa36f7ef99d37f0acd7f6665d85a03a3849` |
 | Runtime requests | one HTML request; zero subresource or external requests |
 | Browser console | zero errors and warnings |
 | Python | ruff passed; 243 unit tests passed, 1 PostgreSQL test skipped |
@@ -20,20 +20,19 @@ and does not connect to QMT, MCP, account, or trading services.
 
 ## Product Contract
 
-- Seven selectable scenes are grouped as Agent conversation, MCP App pages,
-  and system status.
-- Only K-line, ETF comparison, portfolio risk, and trade confirmation render a
-  framed App. Demand stays in the transcript and search uses inline
-  disambiguation confirmation.
+- Only the review-ready K-line scene is visible. The other six scenes remain
+  typed draft fixtures but are hidden from navigation and deep links.
+- Empty Agent conversation and system-status groups are omitted from the rail.
 - Scene, locale, theme, and desktop/mobile preview are reflected in the URL.
-- Trading is visibly proposed and permission-gated; the preview creates no
-  order and connects to no account.
 - Long scenes grow naturally and use document scrolling instead of a fixed
   screenshot height.
 
 ## Browser Evidence
 
-- Exercised all scene links and scene-specific controls with Playwright CLI.
+- Exercised the public K-line scene and period controls with Playwright using
+  the installed Chrome channel because the bundled Chromium cache was
+  unavailable.
+- Verified every non-K-line deep link resolves to the public K-line scene.
 - Checked Chinese/English, light/dark, tool disclosure, composer feedback, and
   recovery transitions.
 - Verified `1536x1048`, `1024x900`, `768x900`, and `390x844`; measured no

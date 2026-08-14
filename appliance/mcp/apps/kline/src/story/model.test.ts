@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { storyScenes } from "./scenes";
+import { storyScenes, visibleStoryScenes } from "./scenes";
 import { rankEtfs, resolveSceneId, validateStoryScenes } from "./model";
 
 describe("story fixture contract", () => {
@@ -9,10 +9,14 @@ describe("story fixture contract", () => {
     expect(validateStoryScenes(storyScenes)).toEqual([]);
     expect(storyScenes.map((scene) => scene.order)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(storyScenes.filter((scene) => scene.presentation === "app").map((scene) => scene.id)).toEqual(["kline", "etf", "portfolio", "trade"]);
+    expect(visibleStoryScenes.map((scene) => scene.id)).toEqual(["kline"]);
+    expect(visibleStoryScenes.filter((scene) => scene.presentation === "app").map((scene) => scene.id)).toEqual(["kline"]);
   });
 
-  it("uses a stable default for unknown deep links", () => {
-    expect(resolveSceneId("search")).toBe("search");
+  it("uses a stable default for unknown and draft deep links", () => {
+    expect(resolveSceneId("kline")).toBe("kline");
+    expect(resolveSceneId("search")).toBe("kline");
+    expect(resolveSceneId("trade")).toBe("kline");
     expect(resolveSceneId("unknown")).toBe("kline");
     expect(resolveSceneId(null)).toBe("kline");
   });

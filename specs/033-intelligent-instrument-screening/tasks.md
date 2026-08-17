@@ -396,7 +396,7 @@ the normal PR/release process.
   pytest suites from `appliance/mcp/`; fix failures without broad refactors.
 - [x] T070 Run MCP integration tests with the official SDK, including profiles,
   OAuth, Tasks, cancellation, structured/text output, and K-line App regression.
-- [ ] T071 [P] Run optional PostgreSQL tests, Go test/vet/build/conformance,
+- [x] T071 [P] Run optional PostgreSQL tests, Go test/vet/build/conformance,
   launcher restore/build/test, release-policy tests, actionlint, and packaging
   checks required by `AGENT.md`.
 - [x] T072 Run live QMT smoke for one strict ETF exposure and one narrow stock
@@ -412,7 +412,7 @@ the normal PR/release process.
 - [x] T075 Update the 033 feature row in `AGENT.md` only after required automated
   and live verification is complete; keep unsupported P1 capabilities described
   as gated rather than implemented everywhere.
-- [ ] T076 Commit with a Conventional Commit, open a PR from the dedicated 033
+- [x] T076 Commit with a Conventional Commit, open a PR from the dedicated 033
   feature branch, and observe every PR check to a terminal green result.
 - [ ] T077 Merge only after green CI, then observe main CI and release automation
   to a terminal result and record any release-specific follow-up.

@@ -21,6 +21,7 @@ Run from `appliance/mcp` unless noted otherwise:
 | `.github/scripts` unittest discovery | 16 passed |
 | `actionlint@v1.7.12` | passed with Go 1.25.13 |
 | `git diff --check` | passed |
+| PR #36 CI | all nine jobs passed; one GitHub `setup-go` download received 429 during runner setup and passed on failed-job retry |
 
 The local machine has no `dotnet`, so launcher restore/build/test could not run.
 The optional PostgreSQL live test could not run because `asyncpg` and a test DSN

@@ -27,7 +27,7 @@ from .health import HealthState
 from .pagination import InvalidPaginationCursor, paginate_by_key
 from .readiness import ReadinessProbe
 from .registry import ToolRegistry
-from .runtime_paths import runtime_path
+from .runtime_paths import append_runtime_path, runtime_path
 from .task_notifications import TaskListenHandler, TaskSubscriptionsListenRequestParams
 from .task_store import TaskStore
 from .tasks_extension import (
@@ -45,14 +45,7 @@ def log(*parts: Any) -> None:
 
 
 def _add_xtquant_path(config: CoreConfig) -> None:
-    xtq = runtime_path(config.xtquant_dir_win)
-    if not xtq:
-        return
-    while xtq in sys.path:
-        sys.path.remove(xtq)
-    # Broker SDK directories often contain NumPy/Pandas wheels built for the
-    # broker's older Python. Keep the packaged 3.11 runtime dependencies first.
-    sys.path.append(xtq)
+    append_runtime_path(config.xtquant_dir_win)
 
 
 async def _json_response(

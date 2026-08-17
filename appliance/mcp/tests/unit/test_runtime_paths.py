@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import sys
-from types import SimpleNamespace
-
-from qmt_mcp_core.app import _add_xtquant_path
-from qmt_mcp_core.runtime_paths import runtime_path
+from qmt_mcp_core.runtime_paths import append_runtime_path, runtime_path
 
 
 def test_native_windows_path_keeps_drive_and_normalizes_separators() -> None:
@@ -23,10 +19,11 @@ def test_empty_path_stays_empty() -> None:
     assert runtime_path("   ", "nt") == ""
 
 
-def test_xtquant_path_follows_packaged_runtime_dependencies(monkeypatch) -> None:
+def test_xtquant_path_follows_packaged_runtime_dependencies() -> None:
     xtquant_path = "/broker/Lib/site-packages"
-    monkeypatch.setattr(sys, "path", [xtquant_path, "/runtime/Lib/site-packages"])
+    search_path = [xtquant_path, "/runtime/Lib/site-packages"]
 
-    _add_xtquant_path(SimpleNamespace(xtquant_dir_win=xtquant_path))
+    resolved = append_runtime_path(xtquant_path, search_path, "posix")
 
-    assert sys.path == ["/runtime/Lib/site-packages", xtquant_path]
+    assert resolved == xtquant_path
+    assert search_path == ["/runtime/Lib/site-packages", xtquant_path]

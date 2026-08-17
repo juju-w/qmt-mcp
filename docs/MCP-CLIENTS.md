@@ -155,6 +155,17 @@ Tasks 用于下载历史数据、批量下载财务数据、批量公式、因�
 扩展取决于各自版本；未声明时服务端自动同步回退。不要仅因为客户端能连接
 `2026-07-28` 就假定它已经支持 Tasks。
 
+`qmt_screen_instruments` 也在默认 Task 工具集合中。Host 未声明 Tasks 时仍会同步
+获得同样的结构化结果；声明后可在大 universe 上获得 task ID 并取消执行。
+`qmt_factor_catalog` 与 `qmt_explain_screen_result` 始终是短同步调用。解释依赖筛选
+返回的短期 `screen_id`，只读取该次进程内快照，不重新拉取行情。默认 15 分钟后、
+服务重启后或 LRU 淘汰后，客户端应重新调用筛选，而不是拼接旧数据。
+
+三个筛选工具属于 `xtdata` family，需要 `qmt:read qmt:market`，并服从启动时
+profile/allowlist/denylist。它们适合个人 NAS 或受控内网中的单个有状态 QMT 实例，
+不应把进程内结果缓存当成多用户公网研究数据库。筛选不会隐式下载本地数据；客户端
+收到 capability 错误后，应把是否调用显式下载工具交给用户决定。
+
 若客户端实现 SEP-2575/SEP-2663，可订阅一个或多个自己有权访问的 task ID。
 确认帧之后会先收到当前快照，因此断线后重新订阅不依赖服务端保存事件回放。
 任务 ID 会同时检查创建 principal 和原始工具 scope；未知、过期和越权 ID

@@ -43,6 +43,7 @@
 | 029 MCP 1.0 协议基线 | ✅ 完成——仅支持 2026-07-28、无会话 Streamable HTTP；服务端/qmtctl 均拒绝 2025 fallback |
 | 030 MCP K线 App | ✅ 完成——官方 Apps 扩展、单标的交互式 K线/成交量/均线、主机内刷新与全屏、文本与结构化回退 |
 | 031 MCP App 故事原型 | ✅ 完成——单 HTML、Codex/Claude 风格宿主会话；当前仅公开完成度达标的 K 线 App，其余六个场景保留源码但隐藏 |
+| 033 智能标的筛选 | ✅ 完成——股票/ETF 分型因子目录、严格敞口与行业边界、时点筛选/排序/解释、Tasks 与缓存；P1 ETF IOPV/基准/成分能力继续按运行时门控 |
 
 每个 feature 的 `specs/<id>/` 下有 spec/plan/tasks/research/data-model/contracts。
 发布镜像：`ghcr.io/juju-w/qmt-mcp`（broker 中立基础镜像，可安全公开分发）。

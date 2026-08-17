@@ -1,0 +1,23 @@
+{
+  "Income": [
+    {"report_date": "20230930", "announce_time": "20231028", "revenue": 80, "net_profit": 8},
+    {"report_date": "20231231", "announce_time": "20240320", "revenue": 120, "net_profit": 12},
+    {"report_date": "20240930", "announce_time": "20241028", "revenue": 100, "net_profit": 15},
+    {"report_date": "20241231", "announce_time": "20250320", "revenue": 150, "net_profit": 20}
+  ],
+  "CashFlow": [
+    {"report_date": "20230930", "announce_time": "20231028", "operating_cash_flow": 10},
+    {"report_date": "20231231", "announce_time": "20240320", "operating_cash_flow": 14},
+    {"report_date": "20240930", "announce_time": "20241028", "operating_cash_flow": 18}
+  ],
+  "Balance": [
+    {"report_date": "20230930", "announce_time": "20231028", "total_assets": 190, "total_liabilities": 75, "equity": 120},
+    {"report_date": "20231231", "announce_time": "20240320", "total_assets": 200, "total_liabilities": 80, "equity": 120},
+    {"report_date": "20240930", "announce_time": "20241028", "total_assets": 240, "total_liabilities": 90, "equity": 150}
+  ],
+  "Capital": [
+    {"report_date": "20231231", "announce_time": "20240320", "float_shares": 900000000, "total_shares": 1100000000},
+    {"report_date": "20240930", "announce_time": "20241028", "float_shares": 1000000000, "total_shares": 1200000000},
+    {"report_date": "20241231", "announce_time": "20250320", "float_shares": 1500000000, "total_shares": 1800000000}
+  ]
+}

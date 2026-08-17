@@ -1,0 +1,14 @@
+{
+  "sector_members": {
+    "沪深A股": ["600001.SH", "600002.SH", "600003.SH", "600004.SH"],
+    "银行": ["600002.SH"],
+    "证券": ["600003.SH"],
+    "保险": ["600004.SH"]
+  },
+  "records": [
+    {"code": "600001.SH", "name": "示例制造", "instrument_type": "stock", "market": "SH"},
+    {"code": "600002.SH", "name": "示例银行", "instrument_type": "stock", "market": "SH"},
+    {"code": "600003.SH", "name": "示例证券", "instrument_type": "stock", "market": "SH"},
+    {"code": "600004.SH", "name": "示例保险", "instrument_type": "stock", "market": "SH"}
+  ]
+}

@@ -108,6 +108,28 @@ def _call_first_available(names: list[str], *args: Any, **kwargs: Any) -> tuple[
     raise last_missing or McpCoreError("dependency", "no compatible xtdata function is available")
 
 
+def _call_sector_members(sector: str, real_timetag: int | str = -1) -> Any:
+    """Call both current and legacy xtdata sector-membership signatures."""
+
+    try:
+        return _call_xtdata("get_stock_list_in_sector", sector, real_timetag)
+    except McpCoreError as exc:
+        text = exc.message.lower()
+        signature_mismatch = exc.error_type == "dependency" and (
+            "typeerror" in text or "takes" in text or "positional" in text
+        )
+        if not signature_mismatch:
+            raise
+    return _call_xtdata("get_stock_list_in_sector", sector)
+
+
+def _call_search_xtdata(func_name: str, *args: Any, **kwargs: Any) -> Any:
+    if func_name == "get_stock_list_in_sector" and args:
+        real_timetag = args[1] if len(args) > 1 else -1
+        return _call_sector_members(str(args[0]), real_timetag)
+    return _call_xtdata(func_name, *args, **kwargs)
+
+
 def _is_unsupported_function_error(exc: McpCoreError) -> bool:
     text = exc.message.lower()
     return exc.error_type == "dependency" and (
@@ -249,7 +271,7 @@ def _search_cache_for_call(
 ) -> dict[str, Any]:
     if refresh == "force":
         return refresh_cache(
-            _call_xtdata,
+            _call_search_xtdata,
             broker_id=health.config.broker_id,
             sectors=sectors,
             include_external=include_external,
@@ -258,7 +280,7 @@ def _search_cache_for_call(
     if refresh == "stale":
         try:
             return refresh_cache(
-                _call_xtdata,
+                _call_search_xtdata,
                 broker_id=health.config.broker_id,
                 sectors=sectors,
                 include_external=include_external,
@@ -614,7 +636,7 @@ def register_xtdata_tools(mcp: MCPServer, registry: ToolRegistry, health: Health
             raise McpCoreError("validation", "sector must not be empty")
         if limit < 1 or limit > MAX_SECTOR_LIMIT:
             raise McpCoreError("validation", "limit out of bounds", {"max": MAX_SECTOR_LIMIT})
-        raw = _call_xtdata("get_stock_list_in_sector", sector, real_timetag)
+        raw = _call_sector_members(sector, real_timetag)
         codes = (json_clean(raw) or [])[:limit]
         return ok_envelope(sector=sector, real_timetag=real_timetag, codes=codes)
 
@@ -831,7 +853,7 @@ def register_xtdata_tools(mcp: MCPServer, registry: ToolRegistry, health: Health
         if max_metric_codes < 0 or max_metric_codes > 5000:
             raise McpCoreError("validation", "max_metric_codes out of bounds", {"min": 0, "max": 5000})
         cache = refresh_cache(
-            _call_xtdata,
+            _call_search_xtdata,
             broker_id=health.config.broker_id,
             sectors=clean_sectors or None,
             include_external=include_external,
@@ -864,6 +886,62 @@ def register_xtdata_tools(mcp: MCPServer, registry: ToolRegistry, health: Health
     def qmt_xtdata_instrument_cache_status() -> dict[str, Any]:
         cache = usable_cache_or_seed(health.config.broker_id)
         return ok_envelope(**cache_state(cache))
+
+    from qmt_mcp_screening.cache import FactorObservationCache, ScreenResultStore
+    from qmt_mcp_screening.service import ScreeningService, UniverseResolver
+    from qmt_mcp_screening.sources import ScreeningSource
+    from qmt_mcp_screening.tools import register_screening_tools
+
+    def screening_capabilities() -> set[str]:
+        try:
+            module = _xtdata()
+        except McpCoreError:
+            return set()
+        capabilities = set()
+        if callable(getattr(module, "get_market_data_ex", None)) or callable(getattr(module, "get_market_data", None)):
+            capabilities.add("daily_bars")
+        if callable(getattr(module, "get_full_tick", None)):
+            capabilities.add("snapshot")
+        if callable(getattr(module, "get_instrument_detail", None)):
+            capabilities.add("instrument_detail")
+        if callable(getattr(module, "get_financial_data", None)):
+            capabilities.add("financial_data")
+        return capabilities
+
+    def screening_sector_members(sector: str) -> list[str] | None:
+        try:
+            raw = json_clean(_call_sector_members(sector))
+        except McpCoreError:
+            return None
+        return [str(code) for code in raw] if isinstance(raw, list) else None
+
+    screening_source = ScreeningSource(
+        _call_xtdata,
+        broker_id=health.config.broker_id,
+        capability_provider=screening_capabilities,
+        read_bars=lambda **kwargs: read_bars_data(health, warehouse, **kwargs),
+    )
+    screening_resolver = UniverseResolver(
+        cache_provider=lambda: usable_cache_or_seed(health.config.broker_id),
+        sector_provider=screening_sector_members,
+        max_codes=health.config.screen_max_universe_codes,
+    )
+    screening_service = ScreeningService(
+        resolver=screening_resolver,
+        source=screening_source,
+        factor_cache=FactorObservationCache(max_items=health.config.screen_factor_cache_max),
+        result_store=ScreenResultStore(
+            max_items=health.config.screen_result_cache_max,
+            max_bytes=health.config.screen_result_cache_max_bytes,
+            ttl_seconds=health.config.screen_result_ttl_seconds,
+        ),
+        limits={
+            "max_universe_codes": health.config.screen_max_universe_codes,
+            "max_factor_refs": health.config.screen_max_factor_refs,
+            "max_results": health.config.screen_max_results,
+        },
+    )
+    register_screening_tools(mcp, registry, screening_service)
 
     health.xtdata = "not_ready"
     health.set_family(

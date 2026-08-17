@@ -46,8 +46,13 @@ def log(*parts: Any) -> None:
 
 def _add_xtquant_path(config: CoreConfig) -> None:
     xtq = runtime_path(config.xtquant_dir_win)
-    if xtq and xtq not in sys.path:
-        sys.path.insert(0, xtq)
+    if not xtq:
+        return
+    while xtq in sys.path:
+        sys.path.remove(xtq)
+    # Broker SDK directories often contain NumPy/Pandas wheels built for the
+    # broker's older Python. Keep the packaged 3.11 runtime dependencies first.
+    sys.path.append(xtq)
 
 
 async def _json_response(

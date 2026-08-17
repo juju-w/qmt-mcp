@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
+
+from qmt_mcp_core.app import _add_xtquant_path
 from qmt_mcp_core.runtime_paths import runtime_path
 
 
@@ -17,3 +21,12 @@ def test_legacy_posix_conversion_preserves_non_z_drive_behavior() -> None:
 
 def test_empty_path_stays_empty() -> None:
     assert runtime_path("   ", "nt") == ""
+
+
+def test_xtquant_path_follows_packaged_runtime_dependencies(monkeypatch) -> None:
+    xtquant_path = "/broker/Lib/site-packages"
+    monkeypatch.setattr(sys, "path", [xtquant_path, "/runtime/Lib/site-packages"])
+
+    _add_xtquant_path(SimpleNamespace(xtquant_dir_win=xtquant_path))
+
+    assert sys.path == ["/runtime/Lib/site-packages", xtquant_path]

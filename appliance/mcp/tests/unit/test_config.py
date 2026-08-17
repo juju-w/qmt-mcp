@@ -254,6 +254,58 @@ def test_task_knobs_from_env(monkeypatch, tmp_path):
     assert cfg.task_conformance_fixtures is True
 
 
+def test_screening_bounds_and_task_defaults(monkeypatch, tmp_path):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.screen_max_universe_codes == 5000
+    assert cfg.screen_max_factor_refs == 24
+    assert cfg.screen_max_results == 100
+    assert cfg.screen_result_ttl_seconds == 900
+    assert cfg.screen_result_cache_max == 100
+    assert cfg.screen_result_cache_max_bytes == 67_108_864
+    assert cfg.screen_factor_cache_max == 50_000
+    assert "qmt_screen_instruments" in cfg.task_tools
+
+
+def test_screening_bounds_load_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv("QMT_SCREEN_MAX_UNIVERSE_CODES", "123")
+    monkeypatch.setenv("QMT_SCREEN_MAX_FACTOR_REFS", "7")
+    monkeypatch.setenv("QMT_SCREEN_MAX_RESULTS", "9")
+    monkeypatch.setenv("QMT_SCREEN_RESULT_TTL_SECONDS", "60")
+    monkeypatch.setenv("QMT_SCREEN_RESULT_CACHE_MAX", "11")
+    monkeypatch.setenv("QMT_SCREEN_RESULT_CACHE_MAX_BYTES", "4096")
+    monkeypatch.setenv("QMT_SCREEN_FACTOR_CACHE_MAX", "321")
+    cfg = load_config(_empty_env(tmp_path))
+    assert cfg.screen_max_universe_codes == 123
+    assert cfg.screen_max_factor_refs == 7
+    assert cfg.screen_max_results == 9
+    assert cfg.screen_result_ttl_seconds == 60
+    assert cfg.screen_result_cache_max == 11
+    assert cfg.screen_result_cache_max_bytes == 4096
+    assert cfg.screen_factor_cache_max == 321
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("QMT_SCREEN_MAX_UNIVERSE_CODES", "0"),
+        ("QMT_SCREEN_MAX_FACTOR_REFS", "101"),
+        ("QMT_SCREEN_MAX_RESULTS", "0"),
+        ("QMT_SCREEN_RESULT_TTL_SECONDS", "0"),
+        ("QMT_SCREEN_RESULT_CACHE_MAX", "0"),
+        ("QMT_SCREEN_RESULT_CACHE_MAX_BYTES", "1023"),
+        ("QMT_SCREEN_FACTOR_CACHE_MAX", "0"),
+    ],
+)
+def test_invalid_screening_bounds_fail_closed(monkeypatch, tmp_path, name, value):
+    monkeypatch.setenv("QMT_MCP_TOKEN", "s3cret")
+    monkeypatch.setenv(name, value)
+    with pytest.raises(McpCoreError) as exc:
+        load_config(_empty_env(tmp_path))
+    assert exc.value.error_type == "config"
+
+
 @pytest.mark.parametrize(
     ("name", "value"),
     [

@@ -1,0 +1,10 @@
+{
+  "records": [
+    {"code": "510500.SH", "name": "中证500ETF南方", "instrument_type": "etf", "market": "SH", "open_date": "20130206"},
+    {"code": "512500.SH", "name": "中证500ETF华夏", "instrument_type": "etf", "market": "SH", "open_date": "20150505"},
+    {"code": "159922.SZ", "name": "中证500ETF嘉实", "instrument_type": "etf", "market": "SZ", "open_date": "20130206"},
+    {"code": "513500.SH", "name": "标普500ETF博时", "instrument_type": "etf", "market": "SH", "open_date": "20131205"},
+    {"code": "515000.SH", "name": "科技ETF", "instrument_type": "etf", "market": "SH", "open_date": "20190722"},
+    {"code": "516500.SH", "name": "生物科技ETF", "instrument_type": "etf", "market": "SH", "open_date": "20210204"}
+  ]
+}

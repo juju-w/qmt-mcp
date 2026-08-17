@@ -180,6 +180,7 @@ export QMT_MCP_TOKEN=<token>
 | 行情 `xtdata` | ✅ | 快照、K线、下载历史、合约详情、板块、日历、指数权重 |
 | 交互式 MCP App | ✅ | 单标的 K 线、成交量、MA5/10/20、悬浮读数、缩放、日周月切换；普通 Host 自动文本回退 |
 | 合约模糊搜索 | ✅ | 中文名、代码、别名、拼音首字母、板块、主题；支持流动性排序 |
+| 智能选股 / ETF 筛选 | ✅ | 严格 universe、点时因子、硬过滤、可解释百分位排名、短期结果快照 |
 | 行情订阅热缓存 | ✅ | 官方 `subscribe_quote` 优先，轮询兜底 |
 | 期权 / 参考数据 | ✅ | 期权链、报价、IV 输入；财务、新股、分红、可转债、ETF 参考数据 |
 | qmtctl CLI | ✅ | 单文件命令行客户端，覆盖常用 MCP 工具 |
@@ -203,6 +204,7 @@ export QMT_MCP_TOKEN=<token>
 |---|---|
 | `qmt_health` · `qmt_capabilities` | 健康 / 能力状态（鉴权、依赖、工具族） |
 | 搜索与解析 | `qmt_xtdata_search_instruments`、`qmt_xtdata_resolve_instrument`、`qmt_xtdata_search_sectors` |
+| 智能筛选 | `qmt_factor_catalog`、`qmt_screen_instruments`、`qmt_explain_screen_result` |
 | 行情 | `qmt_xtdata_snapshot`、`qmt_xtdata_bars`、`qmt_xtdata_kline_chart`、`qmt_xtdata_download_history`、`qmt_xtdata_download_history_batch` |
 | 合约与板块 | `qmt_xtdata_instrument_detail`、`qmt_xtdata_sector_list`、`qmt_xtdata_sector_constituents`、`qmt_xtdata_index_weight` |
 | 日历 | `qmt_xtdata_trading_dates`、`qmt_xtdata_trading_calendar`、`qmt_xtdata_holidays` |
@@ -216,6 +218,39 @@ export QMT_MCP_TOKEN=<token>
 撤单或划转工具。账户查询需 `QMT_ENABLE_XTTRADE_QUERY=1`、`QMT_TRADE_ACCOUNTS`
 白名单，以及券商开通「程序化交易 / 外部 Python 接口」权限；未开通时返回
 `not_authorized`，服务不崩溃。
+
+### 智能选股与 ETF 筛选
+
+筛选工具面向私人 QMT 实例，是只读但有短期内存状态的研究能力：先调用
+`qmt_factor_catalog` 发现当前终端真实可用的 factor、窗口、单位、profile、预设和
+ETF 暴露组，再由 `qmt_screen_instruments` 在一个严格可比的 universe 内过滤和排名，
+最后用返回的 `screen_id` 调用 `qmt_explain_screen_result` 查看某个候选的过滤轨迹、
+原始值、百分位、权重和贡献。
+
+例如“筛选中证500 ETF，排除 20 日平均成交额低于 5000 万的产品，再按流动性和
+波动率排序”。Agent 必须先解析为 `exposure=csi_500`；代码里碰巧带 `500` 的标普、
+科技或生物科技 ETF 不会混入。股票和 ETF 不跨资产排名，普通公司财务因子不会用于
+银行、证券或保险；财务口径按公告时间截断，比例参数用小数表示（`0.10` 即 10%）。
+显式历史 `as_of` 的市值和换手率使用当时已公告的股本，缺少 `Capital` 数据时返回
+missing，不会回退到当前股本。基准映射、IOPV 和 ETF 成分重合度等 P1 因子在服务端
+实现与终端权限都满足前会留在目录中但标记为 unavailable。
+
+`qmt_screen_instruments` 可由 MCP `2026-07-28` Host 作为 Task 执行。结果只保存在有
+TTL、数量和 64 MiB 总预算的进程内 LRU 中，默认 15 分钟；服务重启或过期后需要重跑。
+同一交易会话的日线/财务观察可短期复用，实时价差仅复用 5 秒，源错误使用更短负缓存。
+它不依赖 PostgreSQL，不会自动调用历史/财务/ETF 下载工具，也不会下单。缺少本地数据
+或权限时会返回具体 capability 和修复建议。当前筛选结果使用 Host 原生文字与结构化
+内容；需要查看单标的走势时再调用独立的 K 线 MCP App。
+
+```env
+QMT_SCREEN_MAX_UNIVERSE_CODES=5000
+QMT_SCREEN_MAX_FACTOR_REFS=24
+QMT_SCREEN_MAX_RESULTS=100
+QMT_SCREEN_RESULT_TTL_SECONDS=900
+QMT_SCREEN_RESULT_CACHE_MAX=100
+QMT_SCREEN_RESULT_CACHE_MAX_BYTES=67108864
+QMT_SCREEN_FACTOR_CACHE_MAX=50000
+```
 
 ### 交互式 K 线 MCP App
 

@@ -21,6 +21,7 @@ DEFAULT_TASK_TOOLS = (
     "qmt_xtdata_formula_call_batch",
     "qmt_xtdata_formula_generate_factor",
     "qmt_xtdata_refresh_instrument_cache",
+    "qmt_screen_instruments",
 )
 
 
@@ -123,6 +124,14 @@ class CoreConfig:
     enable_formula_runtime: bool = False
     formula_allowlist: str = ""
     formula_output_sandbox: str = "/broker/formula-output"
+    # 033 bounded intelligent instrument screening.
+    screen_max_universe_codes: int = 5000
+    screen_max_factor_refs: int = 24
+    screen_max_results: int = 100
+    screen_result_ttl_seconds: int = 900
+    screen_result_cache_max: int = 100
+    screen_result_cache_max_bytes: int = 67_108_864
+    screen_factor_cache_max: int = 50_000
     # MCP authorization discovery compatibility. The appliance remains a
     # resource server; token issuance is delegated to an external authorization server.
     public_base_url: str = ""
@@ -237,6 +246,26 @@ class CoreConfig:
                 "config",
                 "QMT_MCP_TASK_TOOLS must contain at most 100 bounded qmt_ tool names",
             )
+        screen_bounds = {
+            "QMT_SCREEN_MAX_UNIVERSE_CODES": (self.screen_max_universe_codes, 1, 100_000),
+            "QMT_SCREEN_MAX_FACTOR_REFS": (self.screen_max_factor_refs, 1, 100),
+            "QMT_SCREEN_MAX_RESULTS": (self.screen_max_results, 1, 1000),
+            "QMT_SCREEN_RESULT_TTL_SECONDS": (self.screen_result_ttl_seconds, 1, 86_400),
+            "QMT_SCREEN_RESULT_CACHE_MAX": (self.screen_result_cache_max, 1, 10_000),
+            "QMT_SCREEN_RESULT_CACHE_MAX_BYTES": (
+                self.screen_result_cache_max_bytes,
+                1024,
+                1024 * 1024 * 1024,
+            ),
+            "QMT_SCREEN_FACTOR_CACHE_MAX": (self.screen_factor_cache_max, 1, 1_000_000),
+        }
+        for name, (value, minimum, maximum) in screen_bounds.items():
+            if not minimum <= value <= maximum:
+                raise McpCoreError(
+                    "config",
+                    f"{name} must be between {minimum} and {maximum}",
+                    {"value": value, "min": minimum, "max": maximum},
+                )
         if (
             self.auth_mode == "static"
             and not self.token
@@ -351,6 +380,13 @@ def load_config(mcp_env_path: Path = DEFAULT_MCP_ENV) -> CoreConfig:
         formula_allowlist=env.get("QMT_FORMULA_ALLOWLIST", ""),
         formula_output_sandbox=env.get("QMT_FORMULA_OUTPUT_SANDBOX", "/broker/formula-output")
         or "/broker/formula-output",
+        screen_max_universe_codes=int(env.get("QMT_SCREEN_MAX_UNIVERSE_CODES", "5000")),
+        screen_max_factor_refs=int(env.get("QMT_SCREEN_MAX_FACTOR_REFS", "24")),
+        screen_max_results=int(env.get("QMT_SCREEN_MAX_RESULTS", "100")),
+        screen_result_ttl_seconds=int(env.get("QMT_SCREEN_RESULT_TTL_SECONDS", "900")),
+        screen_result_cache_max=int(env.get("QMT_SCREEN_RESULT_CACHE_MAX", "100")),
+        screen_result_cache_max_bytes=int(env.get("QMT_SCREEN_RESULT_CACHE_MAX_BYTES", "67108864")),
+        screen_factor_cache_max=int(env.get("QMT_SCREEN_FACTOR_CACHE_MAX", "50000")),
         auth_mode=(env.get("QMT_MCP_AUTH_MODE", "static") or "static").strip().lower(),
         public_base_url=env.get("QMT_MCP_PUBLIC_BASE_URL", "").rstrip("/"),
         oauth_authorization_servers=_split_csv(env.get("QMT_MCP_OAUTH_AUTHORIZATION_SERVERS", "")),

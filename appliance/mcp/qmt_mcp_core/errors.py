@@ -15,7 +15,11 @@ ERROR_TYPES = {
     "not_authorized",
     "disabled",
     "capacity",
+    "capability",
     "dependency",
+    "not_found",
+    "timeout",
+    "cancelled",
     "persistence",
     "internal",
 }

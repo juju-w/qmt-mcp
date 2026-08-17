@@ -54,6 +54,7 @@ immutable base image  ghcr.io/juju-w/qmt-mcp           mounted at runtime
 | Market data `xtdata` (snapshot/bars/instruments/sectors/calendar) | ✅ ready | MCP tools return structured JSON (11/11 verified live) |
 | Interactive MCP App | ✅ ready | single-instrument K-line, volume, MA5/10/20, hover values, zoom, period/adjustment controls; text fallback elsewhere |
 | **Fuzzy instrument search** (name/pinyin/alias/sector/theme) | ✅ ready | the agent locates instruments without knowing QMT codes |
+| Intelligent stock / ETF screening | ✅ ready | strict universes, point-in-time factors, hard filters, explainable percentile ranks, captured results |
 | Read-only account queries `xttrade` | ⚠️ needs broker permission | degrades to `not_authorized` (no crash) when not enabled |
 | Database persistence (PostgreSQL, optional) | ✅ ready | market-data warehouse, read/write-through, off by default |
 | `qmtctl` CLI | ✅ ready | compiled Go CLI client for health/search/quotes/account queries |
@@ -80,6 +81,7 @@ front; it searches by Chinese name / pinyin initials / alias / sector / theme
 | `qmt_xtdata_search_instruments` ✨ | **fuzzy-search** instruments by name/code/alias/pinyin/sector/theme, ranked by relevance + liquidity |
 | `qmt_xtdata_resolve_instrument` ✨ | **resolve** a phrase to the best code + alternates (`resolved=false` when low-confidence) |
 | `qmt_xtdata_search_sectors` | fuzzy-search sector names |
+| `qmt_factor_catalog` · `qmt_screen_instruments` · `qmt_explain_screen_result` | discover valid factors, screen one comparable universe, and explain a captured candidate |
 | `qmt_xtdata_instrument_detail` | metadata for one instrument |
 | `qmt_xtdata_snapshot` | real-time snapshot (last price / bid-ask / …) |
 | `qmt_xtdata_bars` | OHLC bars (tick / minute / day / week / month…) |
@@ -114,6 +116,46 @@ All trading and account tools are **read-only**, authenticated, audited, and
 return structured JSON (no order/cancel/transfer tools). Managed sectors and
 formula output are non-trading mutations that are off by default and require
 explicit feature gates, a namespace/sandbox, and OAuth `qmt:manage`.
+
+### Intelligent stock and ETF screening
+
+Screening targets a private QMT instance. It is read-only but keeps bounded,
+short-lived in-memory state. Call `qmt_factor_catalog` first to discover the
+active terminal's factor IDs, windows, decimal units, profiles, presets, ETF
+exposure aliases, and unavailable capabilities. Then call
+`qmt_screen_instruments` for one strict comparable universe and use its
+`screen_id` with `qmt_explain_screen_result` to inspect filter decisions, raw
+values, percentiles, weights, and score contributions without refetching data.
+
+An exposure such as `csi_500` is resolved before ranking, so S&P 500 or
+technology ETFs that merely contain “500” cannot leak into the candidates.
+Stocks and ETFs never cross-rank; ordinary-company fundamentals never apply to
+banks, brokers, or insurers. Financial data is cut off by announcement time,
+and `0.10` means 10% for ratio inputs.
+Historical market-cap and turnover factors use share capital announced by the
+explicit `as_of`; missing `Capital` data never falls back to current shares.
+P1 benchmark, IOPV, and ETF-component factors remain visible but unavailable
+until both server implementation and terminal capabilities are present.
+
+`qmt_screen_instruments` is MCP `2026-07-28` Task-capable. Captured results use
+a TTL/count/64-MiB bounded process-local LRU (15 minutes by default), disappear
+on restart, and do not require PostgreSQL. Completed daily/financial observations
+may be reused within one session; live spread observations use a five-second TTL
+and source errors use a shorter negative cache. Screening never triggers history,
+financial, or ETF downloads and never trades; missing local data returns an
+explicit capability and repair path. Results remain host-native text plus
+structured content. Use the separate K-line MCP App when a candidate needs a
+visual chart.
+
+```env
+QMT_SCREEN_MAX_UNIVERSE_CODES=5000
+QMT_SCREEN_MAX_FACTOR_REFS=24
+QMT_SCREEN_MAX_RESULTS=100
+QMT_SCREEN_RESULT_TTL_SECONDS=900
+QMT_SCREEN_RESULT_CACHE_MAX=100
+QMT_SCREEN_RESULT_CACHE_MAX_BYTES=67108864
+QMT_SCREEN_FACTOR_CACHE_MAX=50000
+```
 
 ### Interactive K-line MCP App
 

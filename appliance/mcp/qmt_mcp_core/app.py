@@ -27,7 +27,7 @@ from .health import HealthState
 from .pagination import InvalidPaginationCursor, paginate_by_key
 from .readiness import ReadinessProbe
 from .registry import ToolRegistry
-from .runtime_paths import runtime_path
+from .runtime_paths import append_runtime_path, runtime_path
 from .task_notifications import TaskListenHandler, TaskSubscriptionsListenRequestParams
 from .task_store import TaskStore
 from .tasks_extension import (
@@ -45,9 +45,7 @@ def log(*parts: Any) -> None:
 
 
 def _add_xtquant_path(config: CoreConfig) -> None:
-    xtq = runtime_path(config.xtquant_dir_win)
-    if xtq and xtq not in sys.path:
-        sys.path.insert(0, xtq)
+    append_runtime_path(config.xtquant_dir_win)
 
 
 async def _json_response(

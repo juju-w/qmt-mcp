@@ -89,6 +89,30 @@ Future Apps follow the repository's
 complete host conversation in one offline HTML artifact before registering a
 production tool or `ui://` resource, and keep simple answers host-native.
 
+## Intelligent screening runtime
+
+The xtdata family also registers `qmt_factor_catalog`,
+`qmt_screen_instruments`, and `qmt_explain_screen_result`. Screening is a
+private, read-only, stateful research workflow: the catalog is synchronous,
+large screens are eligible for stable MCP `2026-07-28` Tasks, and explanations
+read the exact captured result without new xtdata calls.
+
+Universes and factor observations are bounded. Captured results live only in a
+TTL/count/byte-limited in-process LRU, so no database or migration is required;
+container restart and expiry intentionally invalidate `screen_id`. PostgreSQL
+remains an optional bar warehouse and is not a screening identity/result store.
+Completed daily and announced-financial observations are session-keyed; live
+spread observations expire after five seconds. Explicit historical stock-size
+factors require announcement-filtered `Capital` rows and never use current
+shares as a fallback. Unimplemented P1 ETF factors stay catalogued but unavailable.
+The runtime never invokes download, formula, filesystem, network, xttrade, or
+order functions on behalf of a screen. Operators must use an explicit existing
+download tool and rerun when local QMT data is incomplete.
+
+The screener publishes concise text and `structuredContent`, not an MCP App.
+Agents can open the existing K-line App for a returned code when visual price
+inspection is useful.
+
 ## Durable MCP Tasks
 
 For stable MCP `2026-07-28` clients declaring

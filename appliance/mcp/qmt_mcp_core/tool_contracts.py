@@ -8,7 +8,7 @@ import inspect
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, get_type_hints
 
 VALID_TOOL_PROFILES = frozenset({"full", "readonly", "market", "account", "core", "custom"})
 OAUTH_BASE_SCOPE = "qmt:read"
@@ -169,9 +169,18 @@ def register_mcp_tool(
             isError=payload.get("ok") is False,
         )
 
-    signature = inspect.signature(wrapped, follow_wrapped=True)
-    adapter.__signature__ = signature.replace(return_annotation=output_annotation)  # type: ignore[attr-defined]
-    adapter.__annotations__ = dict(getattr(wrapped, "__annotations__", {}))
+    original = inspect.unwrap(wrapped)
+    signature = inspect.signature(original)
+    resolved_annotations = get_type_hints(original, include_extras=True)
+    parameters = [
+        parameter.replace(annotation=resolved_annotations.get(parameter.name, parameter.annotation))
+        for parameter in signature.parameters.values()
+    ]
+    adapter.__signature__ = signature.replace(  # type: ignore[attr-defined]
+        parameters=parameters,
+        return_annotation=output_annotation,
+    )
+    adapter.__annotations__ = resolved_annotations
     adapter.__annotations__["return"] = output_annotation
     annotations = ToolAnnotations(
         title=title,

@@ -236,7 +236,14 @@ def test_modern_discover_is_stateless_and_cache_hinted(fake_xtquant, tmp_path):
 
 def test_modern_tool_contracts_and_structured_results(fake_xtquant, tmp_path):
     app, _cfg, _health, registry = create_app(
-        _config(tmp_path, "", host="127.0.0.1", allow_unauth_loopback=True, enable_xtdata=True)
+        _config(
+            tmp_path,
+            "",
+            host="127.0.0.1",
+            allow_unauth_loopback=True,
+            enable_xtdata=True,
+            mcp_list_page_size=1000,
+        )
     )
     list_payload, list_headers = _modern_request("tools/list", 10)
     success_payload, success_headers = _modern_request(
@@ -254,9 +261,18 @@ def test_modern_tool_contracts_and_structured_results(fake_xtquant, tmp_path):
         listed = client.post("/mcp", json=list_payload, headers=list_headers)
         success = client.post("/mcp", json=success_payload, headers=success_headers)
         refused = client.post("/mcp", json=error_payload, headers=error_headers)
+        listed_result = _response_json(listed)["result"]
+        tools = list(listed_result["tools"])
+        cursor = listed_result.get("nextCursor")
+        page = 1
+        while cursor:
+            next_payload, next_headers = _modern_request("tools/list", 100 + page, {"cursor": cursor})
+            next_result = _response_json(client.post("/mcp", json=next_payload, headers=next_headers))["result"]
+            tools.extend(next_result["tools"])
+            cursor = next_result.get("nextCursor")
+            page += 1
 
     assert listed.status_code == 200
-    tools = _response_json(listed)["result"]["tools"]
     assert tools
     assert registry.tool_names() == registry.tool_names(visible_only=False)
     for tool in tools:
@@ -265,6 +281,19 @@ def test_modern_tool_contracts_and_structured_results(fake_xtquant, tmp_path):
     assert by_name["qmt_health"]["annotations"]["openWorldHint"] is False
     assert by_name["qmt_xtdata_snapshot"]["annotations"]["readOnlyHint"] is True
     assert by_name["qmt_xtdata_download_history"]["annotations"]["readOnlyHint"] is False
+    assert by_name["qmt_factor_catalog"]["annotations"]["readOnlyHint"] is True
+    assert "qmt_screen_instruments" in by_name, {
+        "registered": registry.tool_names(),
+        "listed": sorted(by_name),
+        "mcp_callable": registry._tools["qmt_screen_instruments"]["mcp_callable"] is not None,
+    }
+    screen_tool = by_name["qmt_screen_instruments"]
+    assert "_meta" not in screen_tool
+    universe_schema = screen_tool["inputSchema"]["properties"]["universe"]
+    universe_definition = screen_tool["inputSchema"]["$defs"][universe_schema["$ref"].rsplit("/", 1)[-1]]
+    assert set(universe_definition["properties"]) >= {"kind", "values", "policy", "include_suspended"}
+    assert registry.required_scopes("qmt_screen_instruments") == ("qmt:read", "qmt:market")
+    assert "qmt_screen_instruments" in _cfg.task_tools
 
     assert success.status_code == 200
     success_result = _response_json(success)["result"]

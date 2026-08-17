@@ -1,7 +1,7 @@
 # Verification: Intelligent Instrument Screening
 
 **Feature**: 033
-**Date**: 2026-08-17
+**Date**: 2026-08-18
 **Status**: Automated, fake-runtime, and read-only Windows QMT verification complete.
 
 ## Automated Gates
@@ -12,8 +12,8 @@ Run from `appliance/mcp` unless noted otherwise:
 |---|---|
 | `ruff check .` | passed |
 | `ruff format --check .` | passed after formatting the new files |
-| `pytest -q` | 390 passed, 1 optional PostgreSQL test skipped, 2 dependency deprecation warnings |
-| `pytest -q -m 'not integration and not db'` | 329 passed, 61 deselected; PostgreSQL module skipped at collection because `asyncpg` is absent |
+| `pytest -q` | 391 passed, 1 optional PostgreSQL test skipped, 2 dependency deprecation warnings |
+| `pytest -q -m 'not integration and not db'` | 330 passed, 61 deselected; PostgreSQL module skipped at collection because `asyncpg` is absent |
 | Official-SDK screening/App/Tasks/OAuth integration selection | 52 passed |
 | `go test ./...` | passed |
 | `go vet ./...` | passed |
@@ -73,6 +73,8 @@ The feature source was staged independently at
 `%LOCALAPPDATA%\QMT-MCP\smoke\033`; the installed 1.3.0 deployment and port
 18765 were not changed. The reusable `windows-live-smoke.py` runner performs no
 downloads, QMT process management, xttrade calls, or account access.
+It supports `--suite core`, `--suite complex`, and `--suite all` so the narrow
+regression and broader scenario checks can be run independently.
 
 The isolated preflight passed on the inspected Windows host with Python 3.11.9
 and the broker-provided xtquant package under the installed Guangda QMT client. It
@@ -82,7 +84,7 @@ and 25 available stock factors.
 
 The first live attempt correctly failed with `无法连接行情服务！` while QMT was
 stopped. After the user opened and logged in to QMT, the same isolated runner
-connected successfully without starting or restarting the GUI. Two broker SDK
+connected successfully without starting or restarting the GUI. Three broker SDK
 compatibility findings were fixed before the final run:
 
 - This xtdata build exposes the legacy one-argument
@@ -93,6 +95,10 @@ compatibility findings were fixed before the final run:
   incompatible with the packaged Python 3.11. The MCP runtime now appends the
   xtquant directory after its own NumPy 2.4.6 and pandas 3.0.5 packages instead
   of allowing the broker directory to shadow them.
+- Point-in-time daily reads now send `completed_through` to xtdata as the query
+  `end_time` as well as filtering normalized rows afterward. This preserves the
+  as-of boundary in the broker call itself and is covered for both the direct
+  adapter and shared `read_bars` paths.
 
 The final live evidence was:
 
@@ -119,6 +125,35 @@ The final live evidence was:
 - The final run reported no source errors. Its explicit call surface was limited
   to instrument details, exact sector memberships, and market-data reads; there
   were no download, formula, filesystem, account, xttrade, or order calls.
+
+The complex suite then exercised different instruments and failure modes:
+
+- Strict `HSTECH` resolution selected exactly `159740.SZ`, `513130.SH`, and
+  `513180.SH`. The candidate set deliberately also contained `159920.SZ`
+  (Hang Seng ETF), `513330.SH` (Hang Seng Internet ETF), and `513500.SH`
+  (S&P 500 ETF); all three lookalikes were excluded before factor reads.
+- The cross-border ETF request combined listing age, 20/60-day returns,
+  20-day volatility, 60-day drawdown, and 20-day average amount. The current
+  QMT session supplied instrument details but no local daily rows for those
+  three ETFs, so the service disclosed 0.10 overall coverage, treated the five
+  optional market factors neutrally, and ranked only on the fully available
+  listing-age factor. No market value was fabricated.
+- A six-stock basket spanning liquor, batteries, mining, autos, and healthcare
+  combined listing age, ROE, revenue growth, leverage, momentum, volatility,
+  and liquidity. All six candidates remained explainable, but the current
+  session supplied neither daily rows nor comparable announced-financial
+  denominators. The result therefore disclosed 0.10 overall coverage and made
+  its temporary ordering depend only on listing age; it is not an investment
+  ranking.
+- Immediate repeats reported 18/18 ETF and 42/42 stock factor-cache hits.
+  Captured explanations reconstructed every neutral and available contribution
+  for the first and last candidates without new source access.
+- A historical bid/ask-spread request failed with `capability`, and a fictional
+  exposure alias failed with `validation`; both failures occurred with zero
+  source-call delta. Across the successful complex run, the only observed
+  methods were instrument detail, sector membership, market-data, and financial
+  reads. There were no source errors or forbidden download/formula/xttrade/order
+  calls.
 
 The broker advertises a financial-data method, but the smoke did not download
 or manufacture missing local stock history, so an announced-financial live rank

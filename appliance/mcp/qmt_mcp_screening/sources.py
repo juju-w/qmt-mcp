@@ -122,6 +122,7 @@ class ScreeningSource:
         completed_through: str = "",
     ) -> dict[str, tuple[dict[str, Any], ...]]:
         result: dict[str, tuple[dict[str, Any], ...]] = {code: () for code in codes}
+        query_end_time = end_time or completed_through
         for batch in _chunks(codes, 50):
             try:
                 if self.read_bars is not None:
@@ -130,7 +131,7 @@ class ScreeningSource:
                         period="1d",
                         fields=DAILY_FIELDS,
                         start_time=start_time,
-                        end_time=end_time,
+                        end_time=query_end_time,
                         count=count,
                         dividend_type=dividend_type,
                         fill_data=True,
@@ -144,7 +145,7 @@ class ScreeningSource:
                         batch,
                         "1d",
                         start_time,
-                        end_time,
+                        query_end_time,
                         count,
                         dividend_type,
                         True,

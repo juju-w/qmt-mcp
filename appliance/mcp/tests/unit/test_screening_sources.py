@@ -54,10 +54,24 @@ def test_daily_bars_are_batched_by_50_and_keep_adjustment_separate():
 
     market_calls = [call for call in fake.calls if call[0] == "get_market_data_ex"]
     assert [len(call[1][1]) for call in market_calls] == [50, 50, 1, 1]
+    assert [call[1][4] for call in market_calls] == ["20240103", "20240103", "20240103", ""]
     assert [call[1][6] for call in market_calls] == ["front_ratio", "front_ratio", "front_ratio", "none"]
     assert len(adjusted[codes[0]]) == 2
     assert adjusted[codes[0]][-1]["time"] == "20240103"
     assert unadjusted[codes[0]][0]["close"] == 10.0
+
+
+def test_completed_through_is_sent_as_read_bars_end_time():
+    calls = []
+
+    def read_bars(**kwargs):
+        calls.append(kwargs)
+        return {"ok": True, "rows": []}
+
+    source = ScreeningSource(lambda *_args: None, read_bars=read_bars)
+    source.daily_bars(["600001.SH"], count=20, completed_through="20260814")
+
+    assert calls[0]["end_time"] == "20260814"
 
 
 def test_snapshots_are_batched_and_fresh_two_sided_quotes_are_normalized():
